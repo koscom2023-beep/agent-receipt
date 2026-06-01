@@ -1,0 +1,64 @@
+id: gate-3a-p0-visible-blocked-scheduled
+title: Gate 3A P0 visible_blocked_form_collision 보완
+mode: patch_only
+
+branch:
+  expected: novel-engine/unified-foundation
+
+scope:
+  # 이 파일들만 수정 허용
+  allowed_paths:
+    - src/lib/studio/contract/disclosure-resolver.ts
+    - src/lib/studio/contract/__tests__/disclosure-resolver.test.ts
+
+  # 절대 건드리면 안 되는 영역 (glob 패턴 사용 가능: ** 등)
+  denied_paths:
+    - docs/arch/json/**
+    - docs/analysis-f-rank-ep21-30.md
+    - src/app/**
+    - src/components/**
+    - supabase/migrations/**
+    - src/lib/studio/chat/**
+    - src/lib/studio/webtoon/**
+    - src/lib/studio/creator/**
+
+forbidden_actions:
+  - push
+  - deploy
+  - db_write
+  - migration
+  - production_route_wiring
+  - api_call_generation
+  - memory_file_write
+  - tmp_report_write
+
+required_checks:
+  # 깨진 NUL 바이트가 있으면 안 되는 파일들
+  nul:
+    paths:
+      - src/lib/studio/contract/disclosure-resolver.ts
+      - src/lib/studio/contract/__tests__/disclosure-resolver.test.ts
+
+  # exit 코드가 required_exit 와 다르면 검증 실패
+  commands:
+    - name: tsc
+      command: pnpm tsc --noEmit
+      required_exit: 0
+    - name: disclosure_resolver_tests
+      command: pnpm test src/lib/studio/contract/__tests__/disclosure-resolver.test.ts
+      required_exit: 0
+
+git:
+  require_no_staged_untracked: true
+  require_only_allowed_files_staged: true
+  require_no_denied_path_diff: true
+  require_no_push: true
+
+report:
+  required_items:
+    - changed_files
+    - nul_result
+    - test_results
+    - local_commit_hash
+    - out_of_scope_changes
+    - untracked_docs_status
