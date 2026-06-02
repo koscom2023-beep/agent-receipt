@@ -1,9 +1,9 @@
-# agent-guard — 이 저장소의 작업 규칙
+# agent-receipt — 이 저장소의 작업 규칙
 
 이 디렉터리(`.agent-guard/`)에는 AI 에이전트가 지켜야 할 **작업계약**이 있습니다.
 
 - 계약 파일: `.agent-guard/contract.yaml`
-- 스키마 정의(SSOT): agent-guard 의 `CONTRACT.md`
+- 스키마 정의(SSOT): agent-receipt 의 `CONTRACT.md`
 
 ## 에이전트가 지킬 것
 
@@ -15,10 +15,10 @@
 
 ```
 # 변경 상태(브랜치/범위/금지/NUL) 검사 — 명령은 실행하지 않음
-agent-guard verify
+agent-receipt verify
 
 # required_checks.commands(tsc/test 등) 실행
-agent-guard check
+agent-receipt check
 ```
 
 `--contract` 를 생략하면 `.agent-guard/contract.yaml` 을 자동으로 찾습니다.

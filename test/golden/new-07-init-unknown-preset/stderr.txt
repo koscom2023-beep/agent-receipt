@@ -1,1 +1,1 @@
-알 수 없는 preset: bogus — 사용: agent-guard init --preset <generic|nextjs-supabase>
+알 수 없는 preset: bogus — 사용: agent-receipt init --preset <generic|nextjs-supabase>

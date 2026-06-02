@@ -27,16 +27,20 @@ function requireRepo(): void {
 
 function printHelp(): void {
   console.log(`
-agent-guard — AI 작업계약 검수 CLI
+agent-receipt — AI 작업계약 검수 CLI
 
 사용법:
-  guard verify  --contract <path.yaml>   변경 diff/범위/금지/NUL 상태 검사 (실패 시 exit 1)
-                                         (명령은 실행 안 함 — 테스트/빌드는 guard check)
-        [--json]                         사람용 보고서 대신 기계용 stable JSON을 stdout에 단독 출력
-  guard check   --contract <path.yaml>   required_checks.commands(tsc/test 등)만 실행 (git 불필요)
-  guard report  --contract <path.yaml>   verify + 마크다운 보고서 저장 (--out 으로 경로 지정)
-  guard pre     --contract <path.yaml>   작업 시작 전 안전 점검
-  guard prompt  --contract <path.yaml>   Cursor/Claude에 붙여넣을 지시문 생성
+  agent-receipt init   --preset <generic|nextjs-supabase>   시작용 계약 + 안내 생성(.agent-guard/)
+  agent-receipt start  --contract <path.yaml>   작업 시작 baseline 기록(.agent-guard/session.json)
+  agent-receipt verify --contract <path.yaml>   변경 diff/범위/금지/NUL 상태 검사 (실패 시 exit 1)
+                                                (명령은 실행 안 함 — 테스트/빌드는 agent-receipt check)
+        [--json]                                사람용 보고서 대신 기계용 stable JSON을 stdout에 단독 출력
+  agent-receipt check  --contract <path.yaml>   required_checks.commands(tsc/test 등)만 실행 (git 불필요)
+  agent-receipt report --contract <path.yaml>   verify + 마크다운 보고서 저장 (--out 으로 경로 지정)
+  agent-receipt pre    --contract <path.yaml>   작업 시작 전 안전 점검
+  agent-receipt prompt --contract <path.yaml>   Cursor/Claude에 붙여넣을 지시문 생성
+
+  --contract 생략 시 .agent-guard/contract.yaml 등을 자동 탐색
 `);
 }
 
@@ -79,7 +83,7 @@ function main(): void {
 
   const contractPath = getArg("--contract") ?? getArg("-c") ?? discoverContract();
   if (!contractPath) {
-    console.error("계약서 경로가 필요함:  guard <command> --contract <path.yaml>");
+    console.error("계약서 경로가 필요함:  agent-receipt <command> --contract <path.yaml>");
     process.exit(2);
   }
 
@@ -102,7 +106,7 @@ function main(): void {
         printReport(r);
         // verify는 commands를 실행하지 않는다 — 사람이 "테스트도 통과"로 오인하지 않도록 알림(stderr).
         process.stderr.write(
-          "note: verify는 상태만 검사하고 명령(commands)을 실행하지 않습니다 — 테스트/빌드 검증은 `guard check`.\n"
+          "note: verify는 상태만 검사하고 명령(commands)을 실행하지 않습니다 — 테스트/빌드 검증은 `agent-receipt check`.\n"
         );
       }
       process.exit(r.ok ? 0 : 1);

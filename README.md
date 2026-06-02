@@ -260,7 +260,7 @@ node dist/cli.js verify --contract .agent-guard/contract.yaml
 npm run guard -- verify --contract .agent-guard/contract.yaml
 ```
 
-> The CLI's own `--help` text and some messages still print the legacy name (`agent-guard` / `guard`); aligning those output strings — and the license choice — is tracked in [`docs/publish-prep.md`](docs/publish-prep.md) and lands before the first publish.
+> The CLI output now prints the `agent-receipt` name. The control directory `.agent-guard/` and the auto-discovered filenames `agent-guard.yaml` / `agent-guard.json` are **intentionally kept** (renaming them would break existing setups). See [`docs/publish-prep.md`](docs/publish-prep.md).
 
 ---
 

@@ -27,12 +27,7 @@
 
 ## 연기 (실제 publish 전 별도 작업 — 각각 golden/코드 영향)
 
-1. **CLI 내부 출력 문자열 정렬** (golden 재기준화 필요):
-   - `src/cli.ts` `printHelp` ("agent-guard — … CLI", "guard verify/check/report/pre/prompt …"), `requireRepo`/--contract 메시지 ("guard <command>"), 기본 리포트 파일명 `agent-guard-report-<id>.md`
-   - `src/init.ts` unknown-preset 메시지 ("agent-guard init --preset …")
-   - `src/output.ts` stale 경고 ("`agent-guard start` 로 새 baseline")
-   - `templates/agent-readme.md` ("agent-guard verify/check", 제목)
-   → 이들은 verify/init 출력이라 바꾸면 golden(new-07, p1b-08, new-04/05·p1a created-README 등) 변동. 코드+golden 재캡처 단계로 분리.
+1. ~~CLI 내부 출력 문자열 정렬~~ → **완료**: `printHelp`(init/start 추가 + agent-receipt), `--contract` 누락 메시지, verify note(`agent-receipt check`), `init.ts` unknown-preset, `output.ts` stale 경고(`agent-receipt start`), `templates/agent-readme.md`(제목·SSOT·verify/check) 를 `agent-receipt` 로 정렬. golden 의도적 갱신(stderr note·new-07·p1a-04·p1b-08·new-04/05 created-README). **유지(미변경)**: 기본 리포트 파일명 `agent-guard-report-<id>.md`(내부 파일명+.gitignore 연동), `.agent-guard/` 디렉터리, `agent-guard.yaml`/`.json` 자동탐색.
 2. **제어 디렉터리/자동탐색 파일명**: `.agent-guard/` 와 `agent-guard.yaml`/`agent-guard.json`(discover.ts `DEFAULT_CONTRACT_PATHS`). 브랜드 일치를 위해 `.agent-receipt/`·`agent-receipt.yaml` 로 갈지 = **열린 결정**(breaking + 코드+golden). 현재 유지.
 3. ~~LICENSE 결정~~ → **확정: MIT** (오너 결정, 무료 공개 CLI/채택 유도; Promptia 본진 코드와 별개). `license: "MIT"` + `LICENSE` 파일(저작권자 `Promptia`, 2026 — 필요시 법인명 조정) 적용 완료. npm 은 LICENSE 를 tarball 에 자동 포함.
 4. **`repository`/`author`/`homepage`**: git remote(origin) 미설정(push 0)이라 URL 없음 → remote 생기면 추가.
@@ -46,7 +41,7 @@
 - [x] `prepack` 빌드훅
 - [x] description/engines
 - [x] README 설치·명령 반영
-- [ ] CLI 출력 문자열 정렬 (연기 1)
+- [x] CLI 출력 문자열 정렬 — `agent-receipt` (golden 갱신 완료)
 - [x] LICENSE 확정 — **MIT** (license:MIT + LICENSE 파일)
 - [ ] repository/author (연기 4)
 - [ ] (선택) 제어 디렉터리/discover 파일명 리브랜드 결정 (연기 2)

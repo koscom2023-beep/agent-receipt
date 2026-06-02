@@ -24,7 +24,7 @@ function templatePath(name: string): string {
 export function runInit(preset: string | undefined, cwd: string = process.cwd()): never {
   if (!preset || !(preset in PRESETS)) {
     console.error(
-      `알 수 없는 preset: ${preset ?? "(없음)"} — 사용: agent-guard init --preset <generic|nextjs-supabase>`
+      `알 수 없는 preset: ${preset ?? "(없음)"} — 사용: agent-receipt init --preset <generic|nextjs-supabase>`
     );
     process.exit(2);
   }
