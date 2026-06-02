@@ -5,6 +5,7 @@ import { runVerify, runCheck } from "./checks.js";
 import { printReport, toMarkdown, buildPrompt, toJsonReport, printCheckReport } from "./output.js";
 import * as g from "./git.js";
 import { discoverContract } from "./discover.js";
+import { runInit } from "./init.js";
 
 function getArg(flag: string): string | undefined {
   const i = process.argv.indexOf(flag);
@@ -68,6 +69,11 @@ function main(): void {
   if (!command || command === "help" || command === "--help" || command === "-h") {
     printHelp();
     process.exit(0);
+  }
+
+  // init 은 계약을 "만드는" 명령이라 계약 해석 전에 분리 처리한다(기존 명령 흐름 불변).
+  if (command === "init") {
+    runInit(getArg("--preset"));
   }
 
   const contractPath = getArg("--contract") ?? getArg("-c") ?? discoverContract();

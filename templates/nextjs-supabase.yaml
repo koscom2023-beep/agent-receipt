@@ -1,0 +1,31 @@
+# agent-guard nextjs-supabase preset — Next.js + Supabase 프로젝트용 patch-only 계약.
+# 스키마 정의(SSOT)는 agent-guard 의 CONTRACT.md 를 보세요. 프로젝트에 맞게 수정하세요.
+id: nextjs-supabase
+title: Next.js + Supabase patch-only guard
+mode: patch_only
+scope:
+  # allowed_paths 가 비어 있으면 positive 범위검사는 비활성 — denied_paths 로 보호합니다(CONTRACT.md §3).
+  allowed_paths: []
+  denied_paths:
+    - ".env*"
+    - "supabase/migrations/**"
+    - "package.json"
+    - "package-lock.json"
+    - "pnpm-lock.yaml"
+    - "vercel.json"
+    - ".vercel/**"
+forbidden_actions: # 권고용 — verify 가 기계적으로 막지 않습니다(CONTRACT.md §7).
+  - push
+  - deploy
+  - db_write
+  - schema_change
+required_checks:
+  commands:
+    - name: typecheck
+      command: "npx tsc --noEmit"
+      required_exit: 0
+git:
+  require_no_staged_untracked: false
+  require_only_allowed_files_staged: false
+  require_no_denied_path_diff: true
+  require_no_push: true
