@@ -181,6 +181,7 @@ Slice A 의 원칙은 **"출력 0 변경"** 이다. 아래 5개 명령의 **stdo
 
 | 명령 | git repo 필요? | 한 일 | 종료코드 |
 |---|---|---|---|
+| `init --preset <generic\|nextjs-supabase>` | 불필요 | `.agent-guard/contract.yaml`(preset) + `.agent-guard/README.md` 생성(§11.4). 기존 파일 있으면 덮어쓰지 않고 실패. preset 없음/모름은 사용오류. | 0/1/2 |
 | `verify [--json]` | **필요**(`requireRepo`) | 상태검사만(브랜치/범위/금지/stage/untracked/NUL/ahead-behind). **commands 실행 안 함.** 사람모드=박스 리포트(stdout)+note(stderr). `--json`=stable JSON 한 줄만(stdout), note 억제. | 0/1 |
 | `check` | 불필요 | `required_checks.commands` 만 `/bin/sh` 로 실행. 전부 통과해야 0. | 0/1 |
 | `report [--out]` | **필요** | verify + 마크다운 보고서 저장(`--out`, 기본 `agent-guard-report-<id>.md`). | 0/1 |
@@ -188,6 +189,15 @@ Slice A 의 원칙은 **"출력 0 변경"** 이다. 아래 5개 명령의 **stdo
 | `start` | **필요** | 작업 시작 baseline 을 `.agent-guard/session.json` 에 기록(§11.5). denied 가 이미 dirty 거나 session 이 이미 있으면 실패. | 0/1 |
 | `prompt` | 불필요 | 에이전트에 붙일 지시문 출력(여기서 `forbidden_actions` 가 표시됨 — §7). | 0 |
 | `help` / 인자없음 | 불필요 | 사용법 출력. | 0 |
+
+### 11.4 init — 계약 스캐폴딩 (`init`)
+
+`init --preset <generic|nextjs-supabase>` 는 시작용 설정을 만든다(계약·git repo 불필요):
+
+- 생성물: `.agent-guard/contract.yaml`(선택 preset 의 계약) + `.agent-guard/README.md`(에이전트 안내).
+- **안전조건 — 덮어쓰기 금지**: 둘 중 하나라도 이미 있으면 **실패(exit 1), 아무것도 안 씀.** 모르는/없는 `--preset` = 사용오류(exit 2).
+- 생성된 `contract.yaml` 은 이후 모든 명령이 기본 위치에서 자동탐색한다(`--contract` 생략 가능).
+- **관계**: `init`(계약 생성) → (선택) `start`(baseline 기록, §11.5) → `verify`/`check`(계약 기준 평가). init/start 의 생성물(`contract.yaml`/`README.md`)은 `.agent-guard/session.json` 과 달리 verify 에서 제외되지 않는다(사용자가 커밋할 수 있는 실제 파일이므로).
 
 ### verify 상태검사 의미 (요약)
 

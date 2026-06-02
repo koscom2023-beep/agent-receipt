@@ -158,6 +158,32 @@ scope: {}
 
 ---
 
+## Scaffolding a contract (`init`)
+
+`agent-guard init --preset <generic|nextjs-supabase>` creates a starter setup so you don't write a contract from scratch (it needs neither a contract nor a git repo):
+
+- **`.agent-guard/contract.yaml`** — a starter contract from the chosen preset (see Presets below).
+- **`.agent-guard/README.md`** — a short agent-facing note describing the rules and how to run `verify` / `check`.
+
+After it runs, the new `contract.yaml` is auto-discovered by every other command, so you can run `agent-guard verify` with no `--contract`.
+
+**Safety: `init` never overwrites.** If either `.agent-guard/contract.yaml` or `.agent-guard/README.md` already exists, `init` fails (exit `1`) and writes nothing — remove the existing file(s) first if you really want to regenerate. An unknown or missing `--preset` is a usage error (exit `2`).
+
+Typical flow:
+
+```bash
+npx agent-guard init --preset generic   # scaffold .agent-guard/{contract.yaml,README.md}
+# edit .agent-guard/contract.yaml for your project
+npx agent-guard start                    # (optional) record a baseline — see Baseline mode
+# … let the agent work …
+npx agent-guard verify                   # state checks (auto-discovers the contract)
+npx agent-guard check                    # run required_checks.commands
+```
+
+In short: **`init` creates the contract; `start` (optional) records a baseline on top of it; `verify` / `check` evaluate against it.**
+
+---
+
 ## Presets
 
 - **`generic`** — a starter patch-only contract: empty `allowed_paths` with protective `denied_paths` (`.env*`, key/cert files).
