@@ -1,0 +1,1 @@
+guard verify --json --contract contract.yaml   (no start)

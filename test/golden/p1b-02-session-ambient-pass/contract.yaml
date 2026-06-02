@@ -1,0 +1,6 @@
+id: p1b-session-pass
+scope:
+  allowed_paths:
+    - "src/**"
+  denied_paths:
+    - ".env*"

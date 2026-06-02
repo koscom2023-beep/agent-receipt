@@ -1,0 +1,1 @@
+guard start … ; (new file) ; guard verify --json

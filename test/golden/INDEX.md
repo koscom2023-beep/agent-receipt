@@ -1,7 +1,7 @@
 # agent-guard v0.1 golden baseline (A0.5)
 
 - branch: v0.1-verify-check-split
-- 캡처 케이스: 26개
+- 캡처 케이스: 33개
 - 결정론: 고정 git identity(ci/ci@local) + 고정 DATE(2025-01-01T00:00:00 +0000) → headHash 재현
 - 정규화(스냅샷 한정): $HOME→<HOME>, /tmp/claude-1000/ag-gold-*→<FIXTURE>
 
@@ -33,3 +33,10 @@
 | p1a-02-start-denied-fail | `guard start --contract contract.yaml` | 1 |
 | p1a-03-start-exists-fail | `guard start --contract contract.yaml   (재실행: 덮어쓰기 거부)` | 1 |
 | p1a-04-start-no-contract | `guard start   (no --contract, none discoverable)` | 2 |
+| p1b-01-no-session-ambient-fail | `guard verify --json --contract contract.yaml   (no start)` | 1 |
+| p1b-02-session-ambient-pass | `guard start … ; guard verify --json --contract contract.yaml` | 0 |
+| p1b-03-session-new-oos-fail | `guard start … ; (new file) ; guard verify --json` | 1 |
+| p1b-04-session-new-denied-fail | `guard start … ; (new .env.local) ; guard verify --json` | 1 |
+| p1b-05-session-json-excluded | `guard start … ; guard verify --json   (session.json 제외)` | 0 |
+| p1b-06-stale-branch-degrade | `guard start (main) … checkout other ; guard verify --json` | 1 |
+| p1b-07-session-json-14keys | `guard start … ; guard verify --json   (14키 유지)` | 0 |

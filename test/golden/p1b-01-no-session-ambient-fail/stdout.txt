@@ -1,0 +1,1 @@
+{"ok":false,"contractId":"p1b-no-session","title":null,"branch":{"current":"main","expected":null,"ok":true},"touched":["ambient.txt"],"staged":[],"untracked":["ambient.txt"],"outOfScope":["ambient.txt"],"deniedHits":[],"stagedOutOfScope":[],"nulBad":[],"violations":["허용 범위 밖 변경 1건: ambient.txt"],"headHash":"06f4e1cfbd6a5a4019d7d182ee6f61f757a6354e","aheadBehind":null}

@@ -1,0 +1,6 @@
+id: p1b-stale-branch
+scope:
+  allowed_paths:
+    - "src/**"
+  denied_paths:
+    - ".env*"

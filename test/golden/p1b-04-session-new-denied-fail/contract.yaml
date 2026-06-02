@@ -1,0 +1,5 @@
+id: p1b-new-denied
+scope:
+  allowed_paths: []
+  denied_paths:
+    - ".env*"

@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { minimatch } from "minimatch";
 import type { Contract } from "./schema.js";
 import * as g from "./git.js";
+import { resolveSession, SESSION_REL_PATH } from "./session.js";
 
 export type CommandResult = {
   name: string;
@@ -60,34 +61,60 @@ export function runVerify(contract: Contract): VerifyResult {
     violations.push(`브랜치 불일치: 현재 '${current}', 계약은 '${expected}'`);
   }
 
-  // 2) AI가 건드린 파일 전부 모으기 (unstaged + staged + 새 파일)
-  const unstaged = g.unstagedFiles();
-  const staged = g.stagedFiles();
-  const untracked = g.untrackedFiles();
-  const touched = unique([...unstaged, ...staged, ...untracked]);
+  // 2) AI가 건드린 파일 모으기.
+  //    제어 파일 .agent-guard/session.json 은 항상 제외(전체 .agent-guard/** 제외는 아님).
+  //    유효 session(baseline) 이 있으면 scope 검사는 baseline 이후 신규 변경만 본다.
+  //    denied 검사는 안전을 위해 항상 full touched 기준(baseline 으로 절대 안 묻음).
+  const ex = (arr: string[]): string[] => arr.filter((f) => f !== SESSION_REL_PATH);
+  const curUnstaged = ex(g.unstagedFiles());
+  const curStaged = ex(g.stagedFiles());
+  const curUntracked = ex(g.untrackedFiles());
+
+  const sess = resolveSession();
+  const notInSnap = (snap: string[]) => (f: string): boolean => !snap.includes(f);
+
+  let unstaged: string[];
+  let staged: string[];
+  let untracked: string[];
+  let committed: string[] = [];
+  if (sess.applied) {
+    const s = sess.session;
+    unstaged = curUnstaged.filter(notInSnap(s.unstagedAtStart));
+    staged = curStaged.filter(notInSnap(s.stagedAtStart));
+    untracked = curUntracked.filter(notInSnap(s.untrackedAtStart));
+    committed = ex(g.committedSince(s.baselineHead));
+  } else {
+    unstaged = curUnstaged;
+    staged = curStaged;
+    untracked = curUntracked;
+  }
+
+  // scope 검사 기준(baseline-relative) / denied 검사 기준(full)
+  const touched = unique([...unstaged, ...staged, ...untracked, ...committed]);
+  const touchedFull = unique([...curUnstaged, ...curStaged, ...curUntracked]);
 
   const allowed = contract.scope.allowed_paths;
   const denied = contract.scope.denied_paths;
 
-  // 3) 허용 목록 밖 변경
+  // 3) 허용 목록 밖 변경 (baseline-relative)
   const outOfScope = allowed.length ? touched.filter((f) => !matchesAny(f, allowed)) : [];
   if (outOfScope.length) {
     violations.push(`허용 범위 밖 변경 ${outOfScope.length}건: ${outOfScope.join(", ")}`);
   }
 
-  // 4) 금지 목록에 닿은 변경
-  const deniedHits = touched.filter((f) => matchesAny(f, denied));
+  // 4) 금지 목록에 닿은 변경 (full touched — baseline 으로 안 묻음)
+  const deniedHits = touchedFull.filter((f) => matchesAny(f, denied));
   if (deniedHits.length && contract.git.require_no_denied_path_diff) {
     violations.push(`금지 파일 변경 ${deniedHits.length}건: ${deniedHits.join(", ")}`);
   }
 
-  // 5) 허용 밖 파일이 stage됨
+  // 5) 허용 밖 파일이 stage됨 (baseline-relative)
   const stagedOutOfScope = allowed.length ? staged.filter((f) => !matchesAny(f, allowed)) : [];
   if (stagedOutOfScope.length && contract.git.require_only_allowed_files_staged) {
     violations.push(`허용 밖 파일이 stage됨 ${stagedOutOfScope.length}건: ${stagedOutOfScope.join(", ")}`);
   }
 
-  // 6) 정리 안 된 새 파일(untracked)
+  // 6) 정리 안 된 새 파일(untracked) (baseline-relative)
   if (contract.git.require_no_staged_untracked && untracked.length) {
     violations.push(`정리 안 된 새 파일(untracked) ${untracked.length}건: ${untracked.join(", ")}`);
   }

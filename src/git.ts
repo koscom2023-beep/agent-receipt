@@ -68,3 +68,24 @@ export function aheadBehind(upstream: string): { ahead: number; behind: number }
     return null;
   }
 }
+
+// ancestor 가 descendant 의 조상인지 (merge-base --is-ancestor: exit 0 = 조상). baseline 유효성 검사용.
+export function isAncestor(ancestor: string, descendant: string): boolean {
+  try {
+    execFileSync("git", ["merge-base", "--is-ancestor", ancestor, descendant], {
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// baseline..HEAD 사이에 커밋된 변경 파일 (patch_only 면 보통 빈 배열). -z/NUL 파싱.
+export function committedSince(baseline: string): string[] {
+  try {
+    return gitPaths(["diff", "--name-only", `${baseline}..HEAD`]);
+  } catch {
+    return [];
+  }
+}

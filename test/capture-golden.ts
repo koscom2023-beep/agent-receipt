@@ -427,6 +427,88 @@ function saveSession(name: string, repo: string): void {
     run(c.repo, "start", []), null);
 }
 
+// ───────────────────────────── P1-B: verify baseline 적용 ─────────────────────────────
+// 유효 session 있으면 baseline 이후 신규 변경만 scope 검사. denied 는 full touched. session.json 제외. stale → degrade.
+
+const P1B_DENIED = `  denied_paths:\n    - ".env*"\n`;
+
+// p1b-01: session 없음 + ambient untracked + allowed src/** → ambient 가 outOfScope 로 FAIL (v0.1 동작)
+{
+  const c = track(newCase());
+  writeFileSync(join(c.repo, "ambient.txt"), "ambient\n");
+  const contract = `id: p1b-no-session\nscope:\n  allowed_paths:\n    - "src/**"\n${P1B_DENIED}`;
+  writeFileSync(c.contract, contract);
+  emit("p1b-01-no-session-ambient-fail", "guard verify --json --contract contract.yaml   (no start)",
+    run(c.repo, "verify", ["--json", "--contract", c.contract]), contract);
+}
+
+// p1b-02: start → ambient 는 baseline 으로 제외 → verify PASS
+{
+  const c = track(newCase());
+  writeFileSync(join(c.repo, "ambient.txt"), "ambient\n");
+  const contract = `id: p1b-session-pass\nscope:\n  allowed_paths:\n    - "src/**"\n${P1B_DENIED}`;
+  writeFileSync(c.contract, contract);
+  run(c.repo, "start", ["--contract", c.contract]); // baseline: untrackedAtStart=[ambient.txt]
+  emit("p1b-02-session-ambient-pass", "guard start … ; guard verify --json --contract contract.yaml",
+    run(c.repo, "verify", ["--json", "--contract", c.contract]), contract);
+}
+
+// p1b-03: start 이후 신규 범위 밖 파일 → outOfScope FAIL (ambient 는 계속 무시)
+{
+  const c = track(newCase());
+  writeFileSync(join(c.repo, "ambient.txt"), "ambient\n");
+  const contract = `id: p1b-new-oos\nscope:\n  allowed_paths:\n    - "src/**"\n${P1B_DENIED}`;
+  writeFileSync(c.contract, contract);
+  run(c.repo, "start", ["--contract", c.contract]);
+  writeFileSync(join(c.repo, "newfile.txt"), "new out-of-scope\n"); // start 이후 신규
+  emit("p1b-03-session-new-oos-fail", "guard start … ; (new file) ; guard verify --json",
+    run(c.repo, "verify", ["--json", "--contract", c.contract]), contract);
+}
+
+// p1b-04: start 이후 신규 denied 파일 → deniedHits FAIL (allowed:[] 로 denied 만 격리)
+{
+  const c = track(newCase());
+  writeFileSync(join(c.repo, "ambient.txt"), "ambient\n");
+  const contract = `id: p1b-new-denied\nscope:\n  allowed_paths: []\n${P1B_DENIED}`;
+  writeFileSync(c.contract, contract);
+  run(c.repo, "start", ["--contract", c.contract]);
+  writeFileSync(join(c.repo, ".env.local"), "SECRET=1\n"); // start 이후 신규 denied
+  emit("p1b-04-session-new-denied-fail", "guard start … ; (new .env.local) ; guard verify --json",
+    run(c.repo, "verify", ["--json", "--contract", c.contract]), contract);
+}
+
+// p1b-05: .agent-guard/session.json 자체는 verify 에 안 잡힘 (allowed src/** 인데도 PASS)
+{
+  const c = track(newCase());
+  const contract = `id: p1b-session-excluded\nscope:\n  allowed_paths:\n    - "src/**"\n${P1B_DENIED}`;
+  writeFileSync(c.contract, contract);
+  run(c.repo, "start", ["--contract", c.contract]); // session.json = 유일 untracked
+  emit("p1b-05-session-json-excluded", "guard start … ; guard verify --json   (session.json 제외)",
+    run(c.repo, "verify", ["--json", "--contract", c.contract]), contract);
+}
+
+// p1b-06: stale session(branch 변경) → baseline 무시 + full-tree degrade (ambient 재등장 → FAIL)
+{
+  const c = track(newCase());
+  writeFileSync(join(c.repo, "ambient.txt"), "ambient\n");
+  const contract = `id: p1b-stale-branch\nscope:\n  allowed_paths:\n    - "src/**"\n${P1B_DENIED}`;
+  writeFileSync(c.contract, contract);
+  run(c.repo, "start", ["--contract", c.contract]); // session.gitBranch = main
+  git(c.repo, ["checkout", "-q", "-b", "other"]); // branch 변경 → stale
+  emit("p1b-06-stale-branch-degrade", "guard start (main) … checkout other ; guard verify --json",
+    run(c.repo, "verify", ["--json", "--contract", c.contract]), contract);
+}
+
+// p1b-07: 유효 session + verify --json → stable 14키 유지 (clean fixture)
+{
+  const c = track(newCase());
+  const contract = `id: p1b-json-keys\nscope:\n  allowed_paths: []\n${P1B_DENIED}`;
+  writeFileSync(c.contract, contract);
+  run(c.repo, "start", ["--contract", c.contract]);
+  emit("p1b-07-session-json-14keys", "guard start … ; guard verify --json   (14키 유지)",
+    run(c.repo, "verify", ["--json", "--contract", c.contract]), contract);
+}
+
 // ───────────────────────────── 인덱스 + 정리 ─────────────────────────────
 
 const indexLines = [
