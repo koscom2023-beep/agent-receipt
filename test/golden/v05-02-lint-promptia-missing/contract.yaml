@@ -1,0 +1,12 @@
+id: promptia
+title: Promptia (denied 누락)
+scope:
+  allowed_paths:
+    - "src/**"
+  denied_paths:
+    - ".env*"
+required_checks:
+  commands:
+    - name: t
+      command: 'echo ok'
+      required_exit: 0

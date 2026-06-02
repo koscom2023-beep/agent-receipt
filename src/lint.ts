@@ -24,6 +24,25 @@ export function runLint(contract: Contract): never {
     warns.push("required_checks.commands 가 비어 있음 → 'check' 는 항상 통과(vacuous). tsc/test 등을 추가하면 좋습니다.");
   }
 
+  // Promptia preset(id: promptia) 감지 → 핵심 denied_paths 누락을 사실로만 경고(점수화 없음).
+  if (contract.id === "promptia") {
+    const denied = new Set(contract.scope.denied_paths);
+    const essentials: Array<{ glob: string; why: string }> = [
+      { glob: ".env*", why: "비밀/환경변수" },
+      { glob: "supabase/migrations/**", why: "DB 스키마 마이그레이션" },
+      { glob: "vercel.json", why: "배포 설정" },
+      { glob: ".vercel/**", why: "배포 산출물" },
+      { glob: "exports/**", why: "내보내기 산출물" },
+      { glob: "docs/arch/json/**", why: "아키텍처 JSON 산출물" },
+    ];
+    for (const e of essentials) {
+      if (!denied.has(e.glob)) warns.push(`[promptia] denied_paths 에 '${e.glob}' 없음 (${e.why}) — 추가 권장.`);
+    }
+    if (!denied.has("package-lock.json") && !denied.has("pnpm-lock.yaml")) {
+      warns.push("[promptia] denied_paths 에 lockfile(package-lock.json / pnpm-lock.yaml) 없음 — 추가 권장.");
+    }
+  }
+
   console.log("");
   console.log(line);
   console.log(`agent-receipt lint: ${contract.id}`);

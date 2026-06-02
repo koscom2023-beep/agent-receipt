@@ -4,18 +4,24 @@
 sprint2 src-only
 ────────────────────────────────────────────────────────
 브랜치        : main (기대: main) OK
-변경한 파일   : 0개
+변경한 파일   : 1개
+   - newfile.txt  [범위밖]
 stage된 파일  : 0개
-새 파일(untracked): 0개
+새 파일(untracked): 1개
+   - newfile.txt
 NUL 검사      : (대상 없음)
 로컬 커밋     : 06f4e1cfbd6a5a4019d7d182ee6f61f757a6354e
 ────────────────────────────────────────────────────────
-결과: PASS ✅  계약을 지켰습니다.
+결과: FAIL ❌  위반 1건
+   ! 허용 범위 밖 변경 1건: newfile.txt
 ────────────────────────────────────────────────────────
 
-다음 단계:
-  → agent-receipt check     (required_checks 실행 — 테스트/빌드)
-  → agent-receipt receipt   (AI Work Receipt 저장: 규모/critical/contentHash)
-  → agent-receipt claims --file <claim.json>   (AI 완료보고 ↔ git 대조)
-  통과하면 직접 stage/commit 하세요.
+다음 조치:
+   → 범위 밖 변경: 검토 후 되돌리거나(git restore/checkout) 계약의 allowed_paths 를 넓히세요. (자동 revert 안 함)
+
+진단 / 복구:
+  → agent-receipt explain   (왜 FAIL 인지 + 규모/critical + 다음 조치)
+  → agent-receipt status    (브랜치/baseline/현재 변경 요약)
+  → agent-receipt reset     (baseline 제거 후 재시작하려면)
+  (자동 수정은 하지 않습니다 — 위 '다음 조치' 참고.)
 

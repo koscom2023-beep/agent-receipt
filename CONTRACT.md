@@ -181,7 +181,7 @@ Slice A 의 원칙은 **"출력 0 변경"** 이다. 아래 5개 명령의 **stdo
 
 | 명령 | git repo 필요? | 한 일 | 종료코드 |
 |---|---|---|---|
-| `init --preset <generic\|nextjs-supabase>` | 불필요 | `.agent-guard/contract.yaml`(preset) + `.agent-guard/README.md` 생성(§11.4). 기존 파일 있으면 덮어쓰지 않고 실패. preset 없음/모름은 사용오류. | 0/1/2 |
+| `init --preset <generic\|nextjs-supabase\|promptia>` | 불필요 | `.agent-guard/contract.yaml`(preset) + `.agent-guard/README.md` 생성(§11.4). 기존 파일 있으면 덮어쓰지 않고 실패. preset 없음/모름은 사용오류. | 0/1/2 |
 | `verify [--json]` | **필요**(`requireRepo`) | 상태검사만(브랜치/범위/금지/stage/untracked/NUL/ahead-behind). **commands 실행 안 함.** 사람모드=박스 리포트(stdout)+note(stderr). `--json`=stable JSON 한 줄만(stdout), note 억제. | 0/1 |
 | `check` | 불필요 | `required_checks.commands` 만 `/bin/sh` 로 실행. 전부 통과해야 0. | 0/1 |
 | `report [--out]` | **필요** | verify + 마크다운 보고서 저장(`--out`, 기본 `agent-guard-report-<id>.md`). | 0/1 |
@@ -196,14 +196,17 @@ Slice A 의 원칙은 **"출력 0 변경"** 이다. 아래 5개 명령의 **stdo
 | `reset` | 불필요 | baseline `.agent-guard/session.json` 제거(`contract.yaml`/`README.md` 는 유지). | 0 |
 | `prompt` | 불필요 | 에이전트에 붙일 지시문 출력(`forbidden_actions` 표시 + scope-밖 중단/추가개선 금지/commit·push·deploy 금지 + completion claim JSON 형식 — §7). | 0 |
 | `help` / `--help` | 불필요 | 사용법 출력. | 0 |
-| (인자 없음) | 상황별 | 단일명령 라우팅: 계약 없음→init / git 아님→check·lint / session 없음→start / session 있음→verify 실행 후 안내. | 0/1/2 |
+| `run` | 상황별 | (인자 없음)과 동일한 단일명령 라우팅 별칭. | 0/1/2 |
+| (인자 없음) | 상황별 | 단일명령 라우팅: 계약 없음→init(promptia/generic 선택) / git 아님→check·lint / session 없음→start / session 있음→verify 실행 후 안내(PASS→check·receipt·claims / FAIL→explain·status·reset). | 0/1/2 |
 
 > **check 환경 실패 구분**: command 가 **exit 127**(셸의 command-not-found 관례)로 끝나면 코드 실패가 아니라 "command not found / 환경 문제"로 표시한다. **exit code 규칙(0/1)은 불변** — 표시만 구분.
 > **verify FAIL recovery hint**: `verify`(사람 모드)/`explain` 은 FAIL 시 위반 카테고리별 "다음 조치" 힌트를 덧붙인다(표시 전용 — 판정/`--json`/exit 불변, **자동 revert 없음**).
 
 ### 11.4 init — 계약 스캐폴딩 (`init`)
 
-`init --preset <generic|nextjs-supabase>` 는 시작용 설정을 만든다(계약·git repo 불필요):
+`init --preset <generic|nextjs-supabase|promptia>` 는 시작용 설정을 만든다(계약·git repo 불필요):
+
+- **preset `promptia`**: Promptia(Next.js + Supabase + Vercel) 전용. `denied_paths` = `.env*`/`package-lock.json`/`pnpm-lock.yaml`/`supabase/migrations/**`/`vercel.json`/`.vercel/**`/`exports/**`/`docs/arch/json/**`. `allowed_paths` 는 일상 소스 트리를 넓게 허용(범위검사는 켜되 거슬리지 않게), `required_checks.commands` 는 비워두고 주석으로 예시만 둔다. `lint`/`doctor` 는 `id: promptia` 를 감지해 핵심 denied_paths 누락을 사실로 경고한다(점수화 없음).
 
 - 생성물: `.agent-guard/contract.yaml`(선택 preset 의 계약) + `.agent-guard/README.md`(에이전트 안내).
 - **안전조건 — 덮어쓰기 금지**: 둘 중 하나라도 이미 있으면 **실패(exit 1), 아무것도 안 씀.** 모르는/없는 `--preset` = 사용오류(exit 2).
@@ -337,3 +340,4 @@ report:
 4. 이 문서와 `src/schema.ts` 가 충돌하면 **`src/schema.ts` 가 SSOT** 다.
 5. **`start`(P1)는 `.agent-guard/session.json`(별도 session 스키마, §11.5)을 쓴다 — 계약 스키마(§1–§13)와 무관.** baseline 적용 후에도 `verify --json` 14키는 동결 유지.
 6. **v0.4 추가(`claims`/`explain` 명령, receipt 확장 필드 §11.6, exit127 구분, recovery hint, prompt 강화)는 계약 스키마(§2–§8)와 `verify --json` 14키(§12)를 바꾸지 않는다.** 새 증거(magnitude/critical/contentHash)는 **receipt 스키마 한정**이고, critical paths 는 계약 필드가 아니라 코드 상수다. 단, `verify`(사람 모드)/`prompt` 의 **사람용 stdout 은 의도적으로 확장**됐다(recovery hint·완료보고 JSON 형식) — `test/golden/` baseline 을 그에 맞게 갱신했다(기계용 `--json` 은 불변).
+7. **v0.5 추가(`promptia` preset, `run` 별칭, promptia 감지 `lint`/`doctor` 경고, router PASS/FAIL 안내 강화)도 계약 스키마와 `verify --json` 14키를 바꾸지 않는다.** `promptia` 는 새 template 파일(`templates/promptia.yaml`)일 뿐 스키마 확장이 아니다(기존 필드만 사용). promptia 감지는 `id: promptia` 기반 advisory 경고로 점수화하지 않는다. `run` 은 (인자 없음) 라우팅의 별칭이며 새 판정 로직이 아니다. 라우팅/lint/doctor 의 **사람용 stdout 확장**은 `test/golden/` 에 반영했다(v04-06/v04-08 갱신 + v05-01~06 추가).

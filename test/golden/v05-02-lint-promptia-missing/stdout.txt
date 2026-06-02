@@ -1,0 +1,13 @@
+
+────────────────────────────────────────────────────────
+agent-receipt lint: promptia
+────────────────────────────────────────────────────────
+  ⚠ [promptia] denied_paths 에 'supabase/migrations/**' 없음 (DB 스키마 마이그레이션) — 추가 권장.
+  ⚠ [promptia] denied_paths 에 'vercel.json' 없음 (배포 설정) — 추가 권장.
+  ⚠ [promptia] denied_paths 에 '.vercel/**' 없음 (배포 산출물) — 추가 권장.
+  ⚠ [promptia] denied_paths 에 'exports/**' 없음 (내보내기 산출물) — 추가 권장.
+  ⚠ [promptia] denied_paths 에 'docs/arch/json/**' 없음 (아키텍처 JSON 산출물) — 추가 권장.
+  ⚠ [promptia] denied_paths 에 lockfile(package-lock.json / pnpm-lock.yaml) 없음 — 추가 권장.
+────────────────────────────────────────────────────────
+결과: 경고 6건 (advisory)
+

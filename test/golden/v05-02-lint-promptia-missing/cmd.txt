@@ -1,0 +1,1 @@
+guard lint --contract contract.yaml   (promptia, denied 누락)

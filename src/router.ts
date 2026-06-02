@@ -15,10 +15,11 @@ import { printReport } from "./output.js";
 export function runDefault(): never {
   const cPath = discoverContract();
 
-  // 1) 계약 없음 → init 안내
+  // 1) 계약 없음 → init 안내 (preset 선택지 제시)
   if (!cPath) {
-    console.log("\nagent-receipt — 시작하려면 계약이 필요합니다.");
-    console.log("  → agent-receipt init --preset generic    (.agent-guard/contract.yaml 생성)");
+    console.log("\nagent-receipt — 시작하려면 계약이 필요합니다. preset 을 골라 생성하세요:");
+    console.log("  → agent-receipt init --preset promptia   (Promptia: .env/락파일/migrations/vercel/exports 보호)");
+    console.log("  → agent-receipt init --preset generic    (범용 patch-only)");
     console.log("  자세히: agent-receipt help\n");
     process.exit(0);
   }
@@ -51,9 +52,17 @@ export function runDefault(): never {
   const r = runVerify(contract);
   printReport(r, contract);
   if (r.ok) {
-    console.log("다음: `agent-receipt check` (테스트/빌드) → 통과하면 직접 stage/commit. 증빙은 `agent-receipt receipt`.\n");
+    console.log("다음 단계:");
+    console.log("  → agent-receipt check     (required_checks 실행 — 테스트/빌드)");
+    console.log("  → agent-receipt receipt   (AI Work Receipt 저장: 규모/critical/contentHash)");
+    console.log("  → agent-receipt claims --file <claim.json>   (AI 완료보고 ↔ git 대조)");
+    console.log("  통과하면 직접 stage/commit 하세요.\n");
   } else {
-    console.log("원인 설명: `agent-receipt explain`.  (자동 수정은 하지 않습니다 — 위 '다음 조치' 참고.)\n");
+    console.log("진단 / 복구:");
+    console.log("  → agent-receipt explain   (왜 FAIL 인지 + 규모/critical + 다음 조치)");
+    console.log("  → agent-receipt status    (브랜치/baseline/현재 변경 요약)");
+    console.log("  → agent-receipt reset     (baseline 제거 후 재시작하려면)");
+    console.log("  (자동 수정은 하지 않습니다 — 위 '다음 조치' 참고.)\n");
   }
   process.exit(r.ok ? 0 : 1);
 }

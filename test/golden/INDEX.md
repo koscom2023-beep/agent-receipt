@@ -1,7 +1,7 @@
 # agent-guard v0.1 golden baseline (A0.5)
 
 - branch: v0.1-verify-check-split
-- 캡처 케이스: 54개
+- 캡처 케이스: 60개
 - 결정론: 고정 git identity(ci/ci@local) + 고정 DATE(2025-01-01T00:00:00 +0000) → headHash 재현
 - 정규화(스냅샷 한정): $HOME→<HOME>, /tmp/claude-1000/ag-gold-*→<FIXTURE>
 
@@ -61,3 +61,9 @@
 | v04-07-router-no-session | `guard   (no command; contract, no session)` | 0 |
 | v04-08-router-verify | `guard start … ; guard   (no command → verify)` | 0 |
 | v04-09-check-127 | `guard check --contract contract.yaml   (exit 127 = env problem)` | 1 |
+| v05-01-init-promptia | `guard init --preset promptia` | 0 |
+| v05-02-lint-promptia-missing | `guard lint --contract contract.yaml   (promptia, denied 누락)` | 0 |
+| v05-03-lint-promptia-complete | `guard lint --contract contract.yaml   (promptia, denied 완비)` | 0 |
+| v05-04-doctor-promptia | `guard doctor   (promptia preset 감지)` | 0 |
+| v05-05-router-fail | `guard start … ; (new oos) ; guard   (no command → verify FAIL)` | 1 |
+| v05-06-run-alias-no-contract | `guard run   (no contract → init 안내, run 별칭)` | 0 |

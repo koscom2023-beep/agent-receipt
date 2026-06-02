@@ -1,0 +1,55 @@
+# agent-guard promptia preset — Promptia(Next.js + Supabase + Vercel) 프로젝트용 patch-only 계약.
+# 스키마 정의(SSOT)는 agent-guard 의 CONTRACT.md 를 보세요. 프로젝트 구조에 맞게 수정하세요.
+id: promptia
+title: Promptia patch-only guard
+mode: patch_only
+branch:
+  expected: main
+scope:
+  # allowed_paths: 일상 개발에서 건드리는 소스 트리는 넓게 허용(범위검사는 켜되 거슬리지 않게).
+  # 프로젝트 구조에 맞게 추가/삭제하세요. denied_paths 가 항상 우선합니다(full-tree).
+  allowed_paths:
+    - "app/**"
+    - "src/**"
+    - "components/**"
+    - "lib/**"
+    - "hooks/**"
+    - "styles/**"
+    - "public/**"
+    - "docs/**"
+    - "scripts/**"
+    - "tests/**"
+    - "e2e/**"
+    - "packages/**"
+    - "database/**"
+    - "extensions/**"
+  denied_paths:
+    # 비밀 / 락파일 / DB 마이그레이션 / 배포 설정·산출물 — AI 가 만지면 안 되는 핵심 경로.
+    - ".env*"
+    - "package-lock.json"
+    - "pnpm-lock.yaml"
+    - "supabase/migrations/**"
+    - "vercel.json"
+    - ".vercel/**"
+    - "exports/**"
+    - "docs/arch/json/**"
+forbidden_actions: # 권고용 — verify 가 기계적으로 막지 않습니다(CONTRACT.md §7).
+  - push
+  - deploy
+  - db_write
+  - schema_change
+required_checks:
+  # 안전한 기본: 비어 있음 → check 는 vacuous PASS. 실제 명령은 프로젝트에 맞게 주석 해제/추가하세요.
+  # commands:
+  #   - name: typecheck
+  #     command: "pnpm tsc --noEmit"
+  #     required_exit: 0
+  #   - name: lint
+  #     command: "pnpm lint"
+  #     required_exit: 0
+  commands: []
+git:
+  require_no_staged_untracked: false
+  require_only_allowed_files_staged: false
+  require_no_denied_path_diff: true
+  require_no_push: true

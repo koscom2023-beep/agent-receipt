@@ -74,3 +74,22 @@ agent-receipt status     # branch / baseline / current changes
 agent-receipt explain    # why PASS/FAIL + magnitude + critical paths + next steps
 agent-receipt doctor     # environment (git / contract / baseline)
 ```
+
+## 6. Promptia daily loop
+
+The `promptia` preset is tuned for the Promptia app (Next.js + Supabase + Vercel): it denies `.env*`, lockfiles, `supabase/migrations/**`, `vercel.json`, `.vercel/**`, `exports/**`, and `docs/arch/json/**`, while leaving `allowed_paths` broad enough for everyday source edits.
+
+```bash
+agent-receipt init --preset promptia    # once: scaffold the Promptia contract
+agent-receipt lint                       # confirm the key denied paths are present
+agent-receipt                            # (bare) state-aware next step — points to `start`
+agent-receipt start                      # baseline before the agent works
+agent-receipt prompt                     # paste into the agent (Cursor/Claude)
+# … agent edits app/, src/, components/ … then pastes a completion-claim JSON …
+agent-receipt                            # (bare) runs verify; on PASS suggests check/receipt/claims
+agent-receipt claims --file claim.json   # reconcile the agent's claim with git
+agent-receipt check                      # run tsc/lint (uncomment them in the contract)
+agent-receipt receipt                    # save the AI Work Receipt
+```
+
+`agent-receipt` with no command (or `agent-receipt run`) is the everyday entry point: it inspects state and tells you the next step — `init` → `start` → `verify`, suggesting `check`/`receipt`/`claims` on PASS and `explain`/`status`/`reset` on FAIL.

@@ -62,7 +62,7 @@ If you omit `--contract`, the contract is auto-discovered (see below).
 
 | Command | What it does | Needs git repo |
 |---|---|---|
-| `init --preset <generic\|nextjs-supabase>` | Create `.agent-guard/contract.yaml` + `.agent-guard/README.md`. Refuses to overwrite existing files. | no |
+| `init --preset <generic\|nextjs-supabase\|promptia>` | Create `.agent-guard/contract.yaml` + `.agent-guard/README.md`. Refuses to overwrite existing files. | no |
 | `start` | Record a baseline of the current working tree to `.agent-guard/session.json` (see Baseline mode). Refuses if a denied path is already dirty, or if a session already exists. | yes |
 | `status` | Print a read-only summary: contract scope, baseline (session) state, branch, current changes. | yes |
 | `reset` | Remove the baseline `.agent-guard/session.json` (leaves `contract.yaml`/`README.md` intact). | no |
@@ -77,7 +77,8 @@ If you omit `--contract`, the contract is auto-discovered (see below).
 | `doctor` | Environment/setup health check (git / contract / baseline). | no |
 | `lint` | Advisory contract-quality checks (scope / denied / forbidden_actions). | no |
 | `help` | Usage. | no |
-| *(no args)* | Single-command routing: inspects state and points to the next step (`init` / `start` / `check`), or runs `verify` when a baseline exists. | — |
+| `run` | Alias for the no-args single-command routing below. | — |
+| *(no args)* | Single-command routing: inspects state and points to the next step (`init` / `start` / `check`), or runs `verify` when a baseline exists; on PASS it suggests `check` / `receipt` / `claims`, on FAIL it suggests `explain` / `status` / `reset`. | — |
 
 ### Contract discovery
 
@@ -201,8 +202,9 @@ In short: **`init` creates the contract; `start` (optional) records a baseline o
 
 - **`generic`** — a starter patch-only contract: empty `allowed_paths` with protective `denied_paths` (`.env*`, key/cert files).
 - **`nextjs-supabase`** — adds denied paths typical for a Next.js + Supabase app (migrations, lockfiles, `vercel.json`) and a `tsc --noEmit` check.
+- **`promptia`** — tuned for the Promptia app (Next.js + Supabase + Vercel). Denies `.env*`, lockfiles, `supabase/migrations/**`, `vercel.json`, `.vercel/**`, `exports/**`, and `docs/arch/json/**`; uses a **broad `allowed_paths`** (`app/`, `src/`, `components/`, `lib/`, …) so everyday source edits pass; `required_checks.commands` is left empty with commented examples (uncomment `pnpm tsc --noEmit` / `pnpm lint` for your project). `lint` and `doctor` recognize this preset and warn if a key denied path is missing.
 
-Both are starting points — edit the generated `.agent-guard/contract.yaml` for your project.
+All three are starting points — edit the generated `.agent-guard/contract.yaml` for your project.
 
 ---
 
@@ -283,7 +285,7 @@ The claim file is plain JSON; every field is optional and only provided fields a
 
 ## Package status
 
-Early preview, published on npm as **`@promptia-labs/agent-receipt`** (latest published `0.2.1`; `0.4.x` is in local development and adds `claims` / `explain`, receipt magnitude + critical-path attestation + `contentHash`, and single-command routing). For local development:
+Early preview, published on npm as **`@promptia-labs/agent-receipt`** (latest published `0.2.1`; `0.5.x` is in local development and adds the `promptia` preset, the `run` routing alias, Promptia-aware `lint`/`doctor` warnings, plus the `0.4.x` work — `claims` / `explain`, receipt magnitude + critical-path attestation + `contentHash`, and single-command routing). For local development:
 
 ```bash
 npm run build           # emit dist/  (also runs via prepack on npm pack/publish)

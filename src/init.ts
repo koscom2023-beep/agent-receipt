@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 const PRESETS = {
   generic: "generic.yaml",
   "nextjs-supabase": "nextjs-supabase.yaml",
+  promptia: "promptia.yaml",
 } as const;
 type Preset = keyof typeof PRESETS;
 
@@ -15,7 +16,7 @@ function templatePath(name: string): string {
 }
 
 /**
- * `agent-guard init --preset <generic|nextjs-supabase>`
+ * `agent-guard init --preset <generic|nextjs-supabase|promptia>`
  * - .agent-guard/contract.yaml (선택한 preset)
  * - .agent-guard/README.md (에이전트 안내)
  * 둘 중 하나라도 이미 있으면 아무것도 쓰지 않고 실패(덮어쓰기 금지).
@@ -24,7 +25,7 @@ function templatePath(name: string): string {
 export function runInit(preset: string | undefined, cwd: string = process.cwd()): never {
   if (!preset || !(preset in PRESETS)) {
     console.error(
-      `알 수 없는 preset: ${preset ?? "(없음)"} — 사용: agent-receipt init --preset <generic|nextjs-supabase>`
+      `알 수 없는 preset: ${preset ?? "(없음)"} — 사용: agent-receipt init --preset <generic|nextjs-supabase|promptia>`
     );
     process.exit(2);
   }

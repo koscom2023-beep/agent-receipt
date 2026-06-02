@@ -728,6 +728,63 @@ function runBare(cwd: string, args: string[]): RunRes {
     run(c.repo, "check", ["--contract", c.contract]), contract);
 }
 
+// ───────────────────────────── V1 Integrated Sprint 3 (v0.5): promptia preset / run alias / promptia-aware lint·doctor / router FAIL ─────────────────────────────
+// 새 preset(promptia) + `run` 별칭 + promptia 감지 lint·doctor 경고 + router FAIL 안내. 기존 케이스는 위에서 동결.
+const PROMPTIA_FULL_DENIED =
+  `id: promptia\ntitle: Promptia patch-only guard\nbranch:\n  expected: main\n` +
+  `scope:\n  allowed_paths:\n    - "src/**"\n  denied_paths:\n` +
+  `    - ".env*"\n    - "package-lock.json"\n    - "pnpm-lock.yaml"\n    - "supabase/migrations/**"\n` +
+  `    - "vercel.json"\n    - ".vercel/**"\n    - "exports/**"\n    - "docs/arch/json/**"\n` +
+  `required_checks:\n  commands: []\n`;
+const PROMPTIA_MISSING_DENIED =
+  `id: promptia\ntitle: Promptia (denied 누락)\nscope:\n  allowed_paths:\n    - "src/**"\n  denied_paths:\n    - ".env*"\n` +
+  `required_checks:\n  commands:\n    - name: t\n      command: 'echo ok'\n      required_exit: 0\n`;
+
+// v05-01: init --preset promptia → 생성물(promptia 계약) 캡처
+{
+  const base = initBase();
+  const r = run(base, "init", ["--preset", "promptia"]);
+  emit("v05-01-init-promptia", "guard init --preset promptia", r, null, base);
+  saveCreated("v05-01-init-promptia", base);
+}
+// v05-02: lint — promptia preset, 핵심 denied_paths 누락 → [promptia] 경고 다수
+{
+  const c = track(newCase());
+  writeFileSync(c.contract, PROMPTIA_MISSING_DENIED);
+  emit("v05-02-lint-promptia-missing", "guard lint --contract contract.yaml   (promptia, denied 누락)",
+    run(c.repo, "lint", ["--contract", c.contract]), PROMPTIA_MISSING_DENIED);
+}
+// v05-03: lint — promptia preset, denied_paths 완비 → [promptia] 경고 0 (vacuous commands 경고만)
+{
+  const c = track(newCase());
+  writeFileSync(c.contract, PROMPTIA_FULL_DENIED);
+  emit("v05-03-lint-promptia-complete", "guard lint --contract contract.yaml   (promptia, denied 완비)",
+    run(c.repo, "lint", ["--contract", c.contract]), PROMPTIA_FULL_DENIED);
+}
+// v05-04: doctor — promptia preset 감지 라인
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, ".agent-guard"), { recursive: true });
+  writeFileSync(join(c.repo, ".agent-guard", "contract.yaml"), PROMPTIA_FULL_DENIED);
+  emit("v05-04-doctor-promptia", "guard doctor   (promptia preset 감지)", run(c.repo, "doctor", []), null);
+}
+// v05-05: router(bare) — session 있음 + start 이후 신규 oos → verify FAIL → 진단/복구 안내(explain/status/reset)
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, ".agent-guard"), { recursive: true });
+  writeFileSync(join(c.repo, ".agent-guard", "contract.yaml"), S2_SRC);
+  run(c.repo, "start", []); // baseline (contract.yaml 은 ambient 로 묻힘)
+  writeFileSync(join(c.repo, "newfile.txt"), "new out-of-scope\n"); // start 이후 신규 oos
+  emit("v05-05-router-fail", "guard start … ; (new oos) ; guard   (no command → verify FAIL)",
+    runBare(c.repo, []), null, c.base);
+}
+// v05-06: run 별칭 — 계약 없음 → init 안내(promptia/generic). `run` 명령이 bare 와 동일 경로임을 고정.
+{
+  const c = track(newCase());
+  emit("v05-06-run-alias-no-contract", "guard run   (no contract → init 안내, run 별칭)",
+    run(c.repo, "run", []), null);
+}
+
 // ───────────────────────────── 인덱스 + 정리 ─────────────────────────────
 
 const indexLines = [

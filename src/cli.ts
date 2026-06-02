@@ -38,7 +38,7 @@ function printHelp(): void {
 agent-receipt — AI 작업계약 검수 CLI
 
 사용법:
-  agent-receipt init   --preset <generic|nextjs-supabase>   시작용 계약 + 안내 생성(.agent-guard/)
+  agent-receipt init   --preset <generic|nextjs-supabase|promptia>   시작용 계약 + 안내 생성(.agent-guard/)
   agent-receipt start  --contract <path.yaml>   작업 시작 baseline 기록(.agent-guard/session.json)
   agent-receipt status --contract <path.yaml>   계약/세션/git 상태 요약 (read-only)
   agent-receipt reset                           baseline(session.json) 제거
@@ -54,6 +54,8 @@ agent-receipt — AI 작업계약 검수 CLI
   agent-receipt prompt --contract <path.yaml>   Cursor/Claude에 붙여넣을 지시문 생성
   agent-receipt doctor                          환경/설정 건강 점검 (git/계약/baseline)
   agent-receipt lint   --contract <path.yaml>   계약 품질 조언 (advisory)
+
+  agent-receipt run                             agent-receipt(인자 없음)와 동일 — 상태 기반 다음 명령 안내
 
   --contract 생략 시 .agent-guard/contract.yaml 등을 자동 탐색
   agent-receipt        (인자 없이 실행)         현재 상태를 보고 다음 명령을 안내(준비됐으면 verify 실행)
@@ -92,8 +94,9 @@ function main(): void {
     process.exit(0);
   }
 
-  // 인자 없이 실행 → 단일명령 라우팅(상태 기반 안내 / 준비됐으면 verify). help 는 위에서 이미 가로챔.
-  if (!command) {
+  // 인자 없이 실행(또는 명시적 `run`) → 단일명령 라우팅(상태 기반 안내 / 준비됐으면 verify).
+  // help 는 위에서 이미 가로챔. runDefault 가 계약/세션을 직접 탐색하므로 계약 해석 전에 분기한다.
+  if (!command || command === "run") {
     runDefault();
   }
 

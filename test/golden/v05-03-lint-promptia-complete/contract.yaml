@@ -1,0 +1,18 @@
+id: promptia
+title: Promptia patch-only guard
+branch:
+  expected: main
+scope:
+  allowed_paths:
+    - "src/**"
+  denied_paths:
+    - ".env*"
+    - "package-lock.json"
+    - "pnpm-lock.yaml"
+    - "supabase/migrations/**"
+    - "vercel.json"
+    - ".vercel/**"
+    - "exports/**"
+    - "docs/arch/json/**"
+required_checks:
+  commands: []

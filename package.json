@@ -1,6 +1,6 @@
 {
   "name": "@promptia-labs/agent-receipt",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Task-level work-contract verifier for AI coding agents — proves what an agent actually changed in your local git tree.",
   "license": "MIT",
   "type": "module",

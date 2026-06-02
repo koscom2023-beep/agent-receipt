@@ -1,0 +1,1 @@
+guard run   (no contract → init 안내, run 별칭)

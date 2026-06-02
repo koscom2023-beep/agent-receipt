@@ -26,9 +26,13 @@ export function runDoctor(cwd: string = process.cwd()): never {
   } else {
     const rel = DEFAULT_CONTRACT_PATHS.find((p) => existsSync(join(cwd, p))) ?? cPath;
     try {
-      loadContract(cPath);
+      const c = loadContract(cPath);
       hasContract = true;
       f.push({ level: "ok", msg: `계약 발견: ${rel}` });
+      // Promptia preset 감지(id: promptia) → denied_paths 핵심 누락은 lint 가 점검.
+      if (c.id === "promptia") {
+        f.push({ level: "ok", msg: "preset: promptia 감지 — denied_paths 핵심 누락은 'agent-receipt lint' 가 점검" });
+      }
     } catch (e) {
       f.push({ level: "err", msg: `계약 형식 오류: ${(e as Error).message.split("\n")[0]}` });
     }
