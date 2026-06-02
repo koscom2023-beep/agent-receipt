@@ -4,6 +4,7 @@ import { loadContract, type Contract } from "./schema.js";
 import { runVerify, runCheck } from "./checks.js";
 import { printReport, toMarkdown, buildPrompt, toJsonReport, printCheckReport } from "./output.js";
 import * as g from "./git.js";
+import { discoverContract } from "./discover.js";
 
 function getArg(flag: string): string | undefined {
   const i = process.argv.indexOf(flag);
@@ -69,7 +70,7 @@ function main(): void {
     process.exit(0);
   }
 
-  const contractPath = getArg("--contract") ?? getArg("-c");
+  const contractPath = getArg("--contract") ?? getArg("-c") ?? discoverContract();
   if (!contractPath) {
     console.error("계약서 경로가 필요함:  guard <command> --contract <path.yaml>");
     process.exit(2);
