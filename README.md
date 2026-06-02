@@ -1,6 +1,6 @@
 # agent-receipt
 
-> npm package **`@promptia/agent-receipt`** · CLI command **`agent-receipt`**
+> npm package **`@promptia-labs/agent-receipt`** · CLI command **`agent-receipt`**
 
 **A task-level work-contract verifier for AI coding agents.** You write a small contract describing what an agent is allowed to touch; after the agent finishes, `agent-receipt` inspects your local git working tree and proves whether the contract was kept.
 
@@ -30,7 +30,7 @@ It is local-first by design:
 Once published, install and run via `npx`:
 
 ```bash
-npm install -D @promptia/agent-receipt
+npm install -D @promptia-labs/agent-receipt
 npx agent-receipt init --preset generic
 npx agent-receipt prompt
 npx agent-receipt verify
@@ -251,7 +251,7 @@ For CI/automation, `verify --json` prints a single stable JSON line to stdout an
 
 ## Package status
 
-Early preview (`0.2.0`). Package name **`@promptia/agent-receipt`** is chosen but **not yet published to npm**. Until release:
+Early preview (`0.2.0`). Package name **`@promptia-labs/agent-receipt`** is chosen but **not yet published to npm**. Until release:
 
 ```bash
 npm run build           # emit dist/  (also runs via prepack on npm pack/publish)

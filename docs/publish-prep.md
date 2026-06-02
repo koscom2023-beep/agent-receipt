@@ -4,8 +4,9 @@
 
 ## 결정 (확정)
 
-- **패키지명: `@promptia/agent-receipt`** (scoped).
-  - 근거: unscoped `agent-guard` 는 npm 점유됨(`npm view agent-guard` = `1.2.2`, 무관한 패키지 → 탈취 금지). scoped 로 충돌 회피 + `@promptia` 브랜드 자산.
+- **패키지명: `@promptia-labs/agent-receipt`** (scoped).
+  - 근거: unscoped `agent-guard` 는 npm 점유됨(`npm view agent-guard` = `1.2.2`, 무관한 패키지 → 탈취 금지). scoped 로 충돌 회피 + 브랜드 자산.
+  - **npm 조직 확인됨**: `npm whoami`=`promptia`, org **`promptia-labs`** 존재·`owner` 권한, `@promptia-labs` scope 접근 가능. (초기 후보 `@promptia` 가 아닌 실제 보유 org `@promptia-labs` 로 확정.)
   - 정체성: "AI Work Receipt"(증명/영수증). guard(차단) 오해 감소.
 - **CLI 명령(bin): `agent-receipt`** (단일). 기존 `agent-guard`·`ag` bin 제거.
   - `ag` 제거 근거: silver-searcher 등 기존 `ag` 명령과 전역 설치 충돌 위험.
@@ -14,14 +15,14 @@
 ## 이번 단계(publish 2단계 경량)에서 한 변경
 
 `package.json`:
-- `name` → `@promptia/agent-receipt`
+- `name` → `@promptia-labs/agent-receipt`
 - `private: true` **제거** (private 면 publish 거부)
 - `bin` → `{ "agent-receipt": "dist/cli.js" }` (agent-guard·ag 제거)
 - `prepack: "npm run build"` 추가 (pack·publish 시 dist 자동 빌드 → tarball 항상 최신)
 - `description`, `license`, `engines.node >=18`, `publishConfig.access: public` 추가
 - 유지: `version 0.2.0`, `files`(dist/templates/README/CONTRACT), deps, `scripts.build`/`guard`
 
-`README.md`: 제목·설치(`npm install -D @promptia/agent-receipt`)·명령(`agent-receipt …`)·바이너리 줄 반영. `.agent-guard/`(제어 디렉터리)·`agent-guard.yaml`(자동탐색 파일명)·`npm run guard`(dev)는 코드명이라 유지.
+`README.md`: 제목·설치(`npm install -D @promptia-labs/agent-receipt`)·명령(`agent-receipt …`)·바이너리 줄 반영. `.agent-guard/`(제어 디렉터리)·`agent-guard.yaml`(자동탐색 파일명)·`npm run guard`(dev)는 코드명이라 유지.
 
 **런타임 출력/판정/golden 변화 0** — 패키징·문서 변경만. golden 34케이스 byte-identical 재검증.
 
@@ -35,7 +36,7 @@
 
 ## 배포 전 체크리스트
 
-- [x] name scoped 확정 (`@promptia/agent-receipt`)
+- [x] name scoped 확정 (`@promptia-labs/agent-receipt`)
 - [x] `private` 제거 / `publishConfig.access: public`
 - [x] bin 단일화(`agent-receipt`), `ag` 제거
 - [x] `prepack` 빌드훅
