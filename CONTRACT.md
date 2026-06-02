@@ -198,6 +198,7 @@ Slice A 의 원칙은 **"출력 0 변경"** 이다. 아래 5개 명령의 **stdo
 - **안전조건 — 덮어쓰기 금지**: 둘 중 하나라도 이미 있으면 **실패(exit 1), 아무것도 안 씀.** 모르는/없는 `--preset` = 사용오류(exit 2).
 - 생성된 `contract.yaml` 은 이후 모든 명령이 기본 위치에서 자동탐색한다(`--contract` 생략 가능).
 - **관계**: `init`(계약 생성) → (선택) `start`(baseline 기록, §11.5) → `verify`/`check`(계약 기준 평가). init/start 의 생성물(`contract.yaml`/`README.md`)은 `.agent-guard/session.json` 과 달리 verify 에서 제외되지 않는다(사용자가 커밋할 수 있는 실제 파일이므로).
+- **주의 — start 전 verify**: 위와 같이 `init` 산출물(`.agent-guard/contract.yaml`/`README.md`)은 untracked 이고 verify 에서 제외되지 않으므로(**`session.json` 만 제외** — §11.5), restrictive `allowed_paths` 에서 **start 전에 verify** 하면 outOfScope 로 잡힐 수 있다. **이는 정상 동작이다.** 권장 순서(`init`→edit→**`start`**→`verify`/`check`)를 따르면 baseline 에 묻혀 사라진다. 또는 그 두 경로를 `allowed_paths` 에 포함하거나, 계약 파일을 커밋/관리 대상으로 다뤄라.
 
 ### verify 상태검사 의미 (요약)
 

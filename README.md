@@ -182,6 +182,8 @@ npx agent-guard check                    # run required_checks.commands
 
 In short: **`init` creates the contract; `start` (optional) records a baseline on top of it; `verify` / `check` evaluate against it.**
 
+> **Note — running `verify` before `start`:** the files `init` writes (`.agent-guard/contract.yaml`, `.agent-guard/README.md`) are themselves untracked, and `verify` does **not** exclude them — **only `.agent-guard/session.json` is excluded**. So with a restrictive `allowed_paths`, running `verify` *before* `start` may report them as `outOfScope`. **This is normal.** Avoid it by following the recommended order (`init` → edit → **`start`** → `verify`/`check`, which baselines them away), or by adding `.agent-guard/contract.yaml` / `.agent-guard/README.md` to `allowed_paths` (or committing / gitignoring them).
+
 ---
 
 ## Presets
