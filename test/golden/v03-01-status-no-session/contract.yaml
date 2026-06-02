@@ -1,0 +1,9 @@
+id: v03
+title: v0.3 usability
+branch:
+  expected: main
+scope:
+  allowed_paths:
+    - "src/**"
+  denied_paths:
+    - ".env*"

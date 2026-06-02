@@ -65,7 +65,7 @@ export function printReport(r: VerifyResult): void {
     } else {
       console.log(`   이유: 기록된 baselineHead(${st.session.baselineHead}) 가 현재 HEAD 의 조상이 아님 (rebase/checkout?)`);
     }
-    console.log("   해결: .agent-guard/session.json 제거 후 `agent-receipt start` 로 새 baseline 을 찍으세요.");
+    console.log("   해결: `agent-receipt reset` 후 `agent-receipt start` 로 새 baseline 을 찍으세요.");
   }
 
   console.log("");

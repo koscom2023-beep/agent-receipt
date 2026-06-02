@@ -47,7 +47,7 @@ export function runStart(contract: Contract): never {
     console.error(
       "start 중단: denied_paths 에 걸리는 변경이 이미 있습니다 (baseline 으로 묻지 않습니다):\n" +
         deniedDirty.map((f) => `  - ${f}`).join("\n") +
-        "\ndenied 경로를 정리한 뒤 다시 start 하세요.",
+        "\n해결: 위 파일을 정리(되돌리기/commit/gitignore)하거나, 계약의 denied_paths 글롭을 좁힌 뒤 다시 'agent-receipt start'.",
     );
     process.exit(1);
   }
@@ -58,7 +58,7 @@ export function runStart(contract: Contract): never {
   // 안전조건 2: 기존 baseline 을 덮어쓰지 않는다.
   if (existsSync(sessionPath)) {
     console.error(
-      "start 중단: 이미 .agent-guard/session.json 이 있습니다. 새 baseline 을 찍으려면 먼저 제거하세요.",
+      "start 중단: 이미 baseline(.agent-guard/session.json)이 있습니다. 새로 찍으려면 먼저 'agent-receipt reset' 으로 제거하세요.",
     );
     process.exit(1);
   }

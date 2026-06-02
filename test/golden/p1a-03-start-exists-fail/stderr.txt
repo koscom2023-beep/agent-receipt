@@ -1,1 +1,1 @@
-start 중단: 이미 .agent-guard/session.json 이 있습니다. 새 baseline 을 찍으려면 먼저 제거하세요.
+start 중단: 이미 baseline(.agent-guard/session.json)이 있습니다. 새로 찍으려면 먼저 'agent-receipt reset' 으로 제거하세요.

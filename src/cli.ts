@@ -7,6 +7,8 @@ import * as g from "./git.js";
 import { discoverContract } from "./discover.js";
 import { runInit } from "./init.js";
 import { runStart } from "./start.js";
+import { runStatus } from "./status.js";
+import { runReset } from "./reset.js";
 
 function getArg(flag: string): string | undefined {
   const i = process.argv.indexOf(flag);
@@ -32,6 +34,8 @@ agent-receipt — AI 작업계약 검수 CLI
 사용법:
   agent-receipt init   --preset <generic|nextjs-supabase>   시작용 계약 + 안내 생성(.agent-guard/)
   agent-receipt start  --contract <path.yaml>   작업 시작 baseline 기록(.agent-guard/session.json)
+  agent-receipt status --contract <path.yaml>   계약/세션/git 상태 요약 (read-only)
+  agent-receipt reset                           baseline(session.json) 제거
   agent-receipt verify --contract <path.yaml>   변경 diff/범위/금지/NUL 상태 검사 (실패 시 exit 1)
                                                 (명령은 실행 안 함 — 테스트/빌드는 agent-receipt check)
         [--json]                                사람용 보고서 대신 기계용 stable JSON을 stdout에 단독 출력
@@ -76,9 +80,12 @@ function main(): void {
     process.exit(0);
   }
 
-  // init 은 계약을 "만드는" 명령이라 계약 해석 전에 분리 처리한다(기존 명령 흐름 불변).
+  // init/reset 은 계약이 필요 없는 명령이라 계약 해석 전에 분리 처리한다(기존 명령 흐름 불변).
   if (command === "init") {
     runInit(getArg("--preset"));
+  }
+  if (command === "reset") {
+    runReset();
   }
 
   const contractPath = getArg("--contract") ?? getArg("-c") ?? discoverContract();
@@ -139,6 +146,13 @@ function main(): void {
       // 작업 시작 baseline 기록. verify 동작은 바꾸지 않는다(baseline 적용은 별도 단계).
       requireRepo();
       runStart(contract);
+      break;
+    }
+
+    case "status": {
+      // 계약/세션/git 상태 요약(read-only).
+      requireRepo();
+      runStatus(contract);
       break;
     }
 

@@ -1,0 +1,1 @@
+baseline 제거됨: .agent-guard/session.json (이제 verify 는 full-tree 로 검사)

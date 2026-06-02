@@ -521,6 +521,53 @@ const P1B_DENIED = `  denied_paths:\n    - ".env*"\n`;
     run(c.repo, "verify", ["--contract", c.contract]), contract); // human 모드 → 경고
 }
 
+// ───────────────────────────── v0.3: status / reset ─────────────────────────────
+const V03_CONTRACT =
+  `id: v03\ntitle: v0.3 usability\nbranch:\n  expected: main\n` +
+  `scope:\n  allowed_paths:\n    - "src/**"\n  denied_paths:\n    - ".env*"\n`;
+
+// v03-01: status — session 없음
+{
+  const c = track(newCase());
+  writeFileSync(join(c.repo, "ambient.txt"), "ambient\n");
+  writeFileSync(c.contract, V03_CONTRACT);
+  emit("v03-01-status-no-session", "guard status --contract contract.yaml",
+    run(c.repo, "status", ["--contract", c.contract]), V03_CONTRACT);
+}
+// v03-02: status — session 활성
+{
+  const c = track(newCase());
+  writeFileSync(join(c.repo, "ambient.txt"), "ambient\n");
+  writeFileSync(c.contract, V03_CONTRACT);
+  run(c.repo, "start", ["--contract", c.contract]);
+  emit("v03-02-status-with-session", "guard start … ; guard status --contract contract.yaml",
+    run(c.repo, "status", ["--contract", c.contract]), V03_CONTRACT);
+}
+// v03-03: status — session stale(branch 변경 → 무효 표시)
+{
+  const c = track(newCase());
+  writeFileSync(join(c.repo, "ambient.txt"), "ambient\n");
+  writeFileSync(c.contract, V03_CONTRACT);
+  run(c.repo, "start", ["--contract", c.contract]);
+  git(c.repo, ["checkout", "-q", "-b", "other"]);
+  emit("v03-03-status-stale", "guard start (main) … checkout other ; guard status",
+    run(c.repo, "status", ["--contract", c.contract]), V03_CONTRACT);
+}
+// v03-04: reset — session 있음 → 제거
+{
+  const c = track(newCase());
+  writeFileSync(c.contract, V03_CONTRACT);
+  run(c.repo, "start", ["--contract", c.contract]);
+  emit("v03-04-reset-with-session", "guard start … ; guard reset",
+    run(c.repo, "reset", []), null);
+}
+// v03-05: reset — session 없음
+{
+  const c = track(newCase());
+  emit("v03-05-reset-no-session", "guard reset   (no session)",
+    run(c.repo, "reset", []), null);
+}
+
 // ───────────────────────────── 인덱스 + 정리 ─────────────────────────────
 
 const indexLines = [

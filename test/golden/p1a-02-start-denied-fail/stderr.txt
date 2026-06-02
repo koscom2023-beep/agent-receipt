@@ -1,3 +1,3 @@
 start 중단: denied_paths 에 걸리는 변경이 이미 있습니다 (baseline 으로 묻지 않습니다):
   - .env.local
-denied 경로를 정리한 뒤 다시 start 하세요.
+해결: 위 파일을 정리(되돌리기/commit/gitignore)하거나, 계약의 denied_paths 글롭을 좁힌 뒤 다시 'agent-receipt start'.

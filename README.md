@@ -64,6 +64,8 @@ If you omit `--contract`, the contract is auto-discovered (see below).
 |---|---|---|
 | `init --preset <generic\|nextjs-supabase>` | Create `.agent-guard/contract.yaml` + `.agent-guard/README.md`. Refuses to overwrite existing files. | no |
 | `start` | Record a baseline of the current working tree to `.agent-guard/session.json` (see Baseline mode). Refuses if a denied path is already dirty, or if a session already exists. | yes |
+| `status` | Print a read-only summary: contract scope, baseline (session) state, branch, current changes. | yes |
+| `reset` | Remove the baseline `.agent-guard/session.json` (leaves `contract.yaml`/`README.md` intact). | no |
 | `verify [--json]` | State checks only (no commands run). Human report, or a stable one-line JSON with `--json`. | yes |
 | `check` | Run `required_checks.commands`; all must match their `required_exit`. | no |
 | `prompt` | Print a paste-in instruction block for the agent. | no |
@@ -99,7 +101,7 @@ Real repos are rarely clean — there are often pre-existing untracked files (do
 - **New violations are still caught.** A new out-of-scope or denied file created after `start` is flagged normally.
 - **`denied_paths` is never hidden by a baseline.** Denied matching runs against the **full** current working tree, not the baseline-relative subset. You cannot bury a denied path by baselining it.
 - **Only `.agent-guard/session.json` is ignored by `verify`** — the rest of `.agent-guard/` (e.g. `contract.yaml`) is treated normally.
-- **Stale baselines are ignored, safely.** If you switch branches, or the recorded `baselineHead` is no longer an ancestor of `HEAD`, the baseline is dropped and `verify` falls back to full-tree checking (noisier, but it never hides changes).
+- **Stale baselines are ignored, safely.** If you switch branches, or the recorded `baselineHead` is no longer an ancestor of `HEAD`, the baseline is dropped and `verify` falls back to full-tree checking (noisier, but it never hides changes). Run `agent-receipt reset` then `agent-receipt start` to re-baseline. Use `agent-receipt status` to see the current baseline state.
 
 ### `start` refuses when a denied path is already dirty
 

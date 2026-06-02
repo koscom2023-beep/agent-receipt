@@ -1,0 +1,10 @@
+
+────────────────────────────────────────────────────────
+agent-receipt status: v03
+────────────────────────────────────────────────────────
+브랜치        : other (기대: main) ✗
+계약 범위     : allowed 1개 / denied 1개
+baseline      : ⚠️ 무효(branch-mismatch) → full-tree 로 검사함. 'agent-receipt reset' 후 'agent-receipt start' 권장
+변경(현재)    : 1개 (unstaged 0, staged 0, untracked 1)
+────────────────────────────────────────────────────────
+

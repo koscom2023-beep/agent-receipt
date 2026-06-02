@@ -1,0 +1,1 @@
+제거할 baseline 없음 (.agent-guard/session.json 이 없습니다)

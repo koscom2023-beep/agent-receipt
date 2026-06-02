@@ -187,6 +187,8 @@ Slice A 의 원칙은 **"출력 0 변경"** 이다. 아래 5개 명령의 **stdo
 | `report [--out]` | **필요** | verify + 마크다운 보고서 저장(`--out`, 기본 `agent-guard-report-<id>.md`). | 0/1 |
 | `pre` | **필요** | 시작 전 점검(브랜치 불일치 / 이미 stage 된 파일). | 0/1 |
 | `start` | **필요** | 작업 시작 baseline 을 `.agent-guard/session.json` 에 기록(§11.5). denied 가 이미 dirty 거나 session 이 이미 있으면 실패. | 0/1 |
+| `status` | **필요** | 계약 범위 / baseline(session) 상태 / 브랜치 / 현재 변경 요약(read-only). | 0 |
+| `reset` | 불필요 | baseline `.agent-guard/session.json` 제거(`contract.yaml`/`README.md` 는 유지). | 0 |
 | `prompt` | 불필요 | 에이전트에 붙일 지시문 출력(여기서 `forbidden_actions` 가 표시됨 — §7). | 0 |
 | `help` / 인자없음 | 불필요 | 사용법 출력. | 0 |
 
