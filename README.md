@@ -27,7 +27,7 @@ It is local-first by design:
 
 ## Quick Start
 
-Once published, install and run via `npx`:
+Install and run via `npx`:
 
 ```bash
 npm install -D @promptia-labs/agent-receipt
@@ -37,8 +37,7 @@ npx agent-receipt verify
 npx agent-receipt check
 ```
 
-> **Early preview.** Not yet on npm — the package name and publish target are not final until release.
-> Until then, use the local-development commands below (`npm run build` + `node dist/cli.js ...`).
+> **Early preview (`0.2.x`).** Published on npm as `@promptia-labs/agent-receipt`. For local development you can also run from source (`npm run build` + `node dist/cli.js ...`).
 
 Once installed, the CLI is invoked as `agent-receipt`. (The single-letter `ag` alias was dropped to avoid clashing with other tools.)
 
@@ -251,7 +250,7 @@ For CI/automation, `verify --json` prints a single stable JSON line to stdout an
 
 ## Package status
 
-Early preview (`0.2.0`). Package name **`@promptia-labs/agent-receipt`** is chosen but **not yet published to npm**. Until release:
+Early preview (`0.2.x`), published on npm as **`@promptia-labs/agent-receipt`**. For local development:
 
 ```bash
 npm run build           # emit dist/  (also runs via prepack on npm pack/publish)

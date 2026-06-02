@@ -44,6 +44,12 @@
 - [x] README 설치·명령 반영
 - [x] CLI 출력 문자열 정렬 — `agent-receipt` (golden 갱신 완료)
 - [x] LICENSE 확정 — **MIT** (license:MIT + LICENSE 파일)
+- [x] scope 확정 — `@promptia-labs/agent-receipt` (org `promptia-labs`, owner 권한 확인)
+- [x] **0.2.0 npm publish 완료** (`@promptia-labs/agent-receipt`, public)
 - [ ] repository/author (연기 4)
 - [ ] (선택) 제어 디렉터리/discover 파일명 리브랜드 결정 (연기 2)
-- [ ] `npm pack` 산출물 최종 점검 → `npm publish --access public` (연기 5, 최종 승인)
+
+## 릴리스 이력
+
+- **`0.2.0`** — npm 최초 publish 완료 (`@promptia-labs/agent-receipt`, `--access public`).
+- **`0.2.1`** — README publish-state 문구 패치: "not yet published to npm / Once published / not final until release" 제거 → 공개 상태 반영. **코드/기능 변경 없음**(문서 + version bump만). golden 무영향.
