@@ -1,0 +1,8 @@
+id: gold-check-fail
+scope:
+  allowed_paths: []
+required_checks:
+  commands:
+    - name: echo-fail
+      command: 'echo "check failed"; exit 1'
+      required_exit: 0

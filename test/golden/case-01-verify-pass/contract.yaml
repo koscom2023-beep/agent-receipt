@@ -1,0 +1,4 @@
+id: gold-verify-pass
+scope:
+  allowed_paths:
+    - "f.txt"

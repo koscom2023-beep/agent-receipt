@@ -1,0 +1,4 @@
+id: gold-verify-json-pass
+scope:
+  allowed_paths:
+    - "f.txt"

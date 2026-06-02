@@ -1,0 +1,1 @@
+guard pre --contract contract.yaml

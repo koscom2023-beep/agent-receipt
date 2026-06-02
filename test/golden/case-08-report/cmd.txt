@@ -1,0 +1,1 @@
+guard report --contract contract.yaml --out report.generated.md

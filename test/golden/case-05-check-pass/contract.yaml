@@ -1,0 +1,8 @@
+id: gold-check-pass
+scope:
+  allowed_paths: []
+required_checks:
+  commands:
+    - name: echo-ok
+      command: 'echo "check ok"'
+      required_exit: 0

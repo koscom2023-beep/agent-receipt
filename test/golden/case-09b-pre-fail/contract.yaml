@@ -1,0 +1,6 @@
+id: gold-pre-fail
+branch:
+  expected: dev
+scope:
+  allowed_paths:
+    - "**"

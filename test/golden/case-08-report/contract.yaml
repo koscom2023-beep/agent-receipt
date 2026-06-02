@@ -1,0 +1,7 @@
+id: gold-report
+title: golden report
+branch:
+  expected: main
+scope:
+  allowed_paths:
+    - "f.txt"

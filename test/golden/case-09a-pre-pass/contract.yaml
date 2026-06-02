@@ -1,0 +1,6 @@
+id: gold-pre-pass
+branch:
+  expected: main
+scope:
+  allowed_paths:
+    - "**"

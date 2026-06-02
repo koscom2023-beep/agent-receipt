@@ -1,0 +1,278 @@
+// agent-guard A0.5 — golden baseline 캡처기 (read-only against src; subprocess only).
+//
+// 목적: v0.1 현재 상태의 stdout / stderr / exit code / 사용 contract 기준선을 test/golden/ 에 봉인.
+//        기능 구현·출력 변경 0. src/cli/schema/checks/git/output·package·tsconfig·README·CONTRACT 무수정.
+//
+// 실행: node_modules/.bin/tsx test/capture-golden.ts
+//
+// 설계(run-fixtures.ts 패턴 계승):
+//  - 각 케이스는 OS tmpdir 에 격리된 git repo 를 새로 만든다(전역상태 오염 0).
+//  - 실제 CLI 를 서브프로세스로 띄워 stdout/stderr/exit 를 그대로 캡처(in-process chdir 배제).
+//  - tsx 는 node_modules/.bin 절대경로로만 호출. src 에서 import 하지 않는다(결합 0).
+//  - 계약 YAML 은 repo *밖*(case base) 에 둬서 repo git 상태를 오염시키지 않는다.
+//  - 결정론: 고정 git identity + 고정 author/committer DATE → headHash 재현 가능.
+//  - 정규화는 *캡처 스냅샷* 한정($HOME→<HOME>, tmp fixture 경로→<FIXTURE>). CLI 출력은 불변.
+
+import { spawnSync, execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const repoRoot = dirname(here);
+const tsxBin = join(repoRoot, "node_modules", ".bin", "tsx");
+const cli = join(repoRoot, "src", "cli.ts");
+const goldenDir = join(here, "golden");
+
+if (!existsSync(tsxBin)) {
+  console.error(`ENV ERROR: tsx 없음 (${tsxBin}). 먼저 'npm install'.`);
+  process.exit(1);
+}
+mkdirSync(goldenDir, { recursive: true });
+
+const HOME = process.env["HOME"] ?? "";
+const TMP = tmpdir();
+const FIXED_DATE = "2025-01-01T00:00:00 +0000";
+
+// 호스트 git config·GIT_* 차단 + 고정 DATE 로 결정론화.
+const ENV: NodeJS.ProcessEnv = {
+  PATH: process.env["PATH"] ?? "",
+  HOME,
+  GIT_CONFIG_GLOBAL: "/dev/null",
+  GIT_CONFIG_SYSTEM: "/dev/null",
+  GIT_TERMINAL_PROMPT: "0",
+  GIT_AUTHOR_DATE: FIXED_DATE,
+  GIT_COMMITTER_DATE: FIXED_DATE,
+};
+
+function git(cwd: string, args: string[]): void {
+  execFileSync(
+    "git",
+    ["-c", "user.email=ci@local", "-c", "user.name=ci", "-c", "commit.gpgsign=false", ...args],
+    { cwd, env: ENV, stdio: ["ignore", "ignore", "ignore"] }
+  );
+}
+
+function newCase(): { base: string; repo: string; contract: string } {
+  const base = mkdtempSync(join(tmpdir(), "ag-gold-"));
+  const repo = join(base, "repo");
+  mkdirSync(repo);
+  git(repo, ["init", "-q"]);
+  git(repo, ["symbolic-ref", "HEAD", "refs/heads/main"]);
+  writeFileSync(join(repo, "f.txt"), "base content\n");
+  git(repo, ["add", "f.txt"]);
+  git(repo, ["commit", "-q", "-m", "base"]);
+  return { base, repo, contract: join(base, "contract.yaml") };
+}
+
+function escapeRe(x: string): string {
+  return x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+function norm(s: string): string {
+  if (!s) return s;
+  let out = s;
+  out = out.replace(new RegExp(escapeRe(TMP) + "/ag-gold-[^\\s\"']*", "g"), "<FIXTURE>");
+  if (HOME) out = out.split(HOME).join("<HOME>");
+  return out;
+}
+
+type RunRes = { status: number | null; stdout: string; stderr: string };
+function run(cwd: string, command: string, args: string[]): RunRes {
+  const res = spawnSync(tsxBin, [cli, command, ...args], { cwd, env: ENV, encoding: "utf8" });
+  if (res.error) throw new Error(`서브프로세스 spawn 실패(${command}): ${res.error.message}`);
+  return { status: res.status, stdout: res.stdout, stderr: res.stderr };
+}
+
+const captures: Array<{ name: string; cmdline: string; exit: number | null }> = [];
+
+function emit(
+  name: string,
+  cmdline: string,
+  res: RunRes,
+  contractText: string | null,
+): void {
+  const dir = join(goldenDir, name);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "cmd.txt"), cmdline + "\n");
+  writeFileSync(join(dir, "exit_code.txt"), `${res.status}\n`);
+  writeFileSync(join(dir, "stdout.txt"), norm(res.stdout ?? ""));
+  const e = norm(res.stderr ?? "");
+  const stderrPath = join(dir, "stderr.txt");
+  if (e.length) writeFileSync(stderrPath, e);
+  else rmSync(stderrPath, { force: true }); // 재캡처 시 이전 실행의 stderr 잔재 제거
+  if (contractText != null) writeFileSync(join(dir, "contract.yaml"), contractText);
+  captures.push({ name, cmdline, exit: res.status });
+}
+
+const bases: string[] = [];
+function track<T extends { base: string }>(c: T): T {
+  bases.push(c.base);
+  return c;
+}
+
+// ───────────────────────────── 케이스 ─────────────────────────────
+
+// 1) verify PASS (human): 허용 범위 안 변경.
+{
+  const c = track(newCase());
+  const contract = `id: gold-verify-pass\nscope:\n  allowed_paths:\n    - "f.txt"\n`;
+  writeFileSync(c.contract, contract);
+  writeFileSync(join(c.repo, "f.txt"), "edited within allowed scope\n");
+  const r = run(c.repo, "verify", ["--contract", c.contract]);
+  emit("case-01-verify-pass", "guard verify --contract contract.yaml", r, contract);
+}
+
+// 2) verify FAIL (human): 금지 경로 변경.
+{
+  const c = track(newCase());
+  writeFileSync(join(c.repo, "secret.txt"), "secret base\n");
+  git(c.repo, ["add", "secret.txt"]);
+  git(c.repo, ["commit", "-q", "-m", "add secret"]);
+  const contract =
+    `id: gold-verify-denied\ntitle: denied path test\nbranch:\n  expected: main\n` +
+    `scope:\n  allowed_paths:\n    - "**"\n  denied_paths:\n    - "secret.txt"\n`;
+  writeFileSync(c.contract, contract);
+  writeFileSync(join(c.repo, "secret.txt"), "secret MODIFIED\n");
+  const r = run(c.repo, "verify", ["--contract", c.contract]);
+  emit("case-02-verify-denied-fail", "guard verify --contract contract.yaml", r, contract);
+}
+
+// 3) verify FAIL (human): untracked 존재 (require_no_staged_untracked).
+{
+  const c = track(newCase());
+  const contract =
+    `id: gold-verify-untracked\nscope:\n  allowed_paths:\n    - "**"\n` +
+    `git:\n  require_no_staged_untracked: true\n`;
+  writeFileSync(c.contract, contract);
+  writeFileSync(join(c.repo, "u.txt"), "untracked file\n");
+  const r = run(c.repo, "verify", ["--contract", c.contract]);
+  emit("case-03-verify-untracked-fail", "guard verify --contract contract.yaml", r, contract);
+}
+
+// 4a) verify --json 대표 PASS.
+{
+  const c = track(newCase());
+  const contract = `id: gold-verify-json-pass\nscope:\n  allowed_paths:\n    - "f.txt"\n`;
+  writeFileSync(c.contract, contract);
+  writeFileSync(join(c.repo, "f.txt"), "edited within allowed scope\n");
+  const r = run(c.repo, "verify", ["--json", "--contract", c.contract]);
+  emit("case-04a-verify-json-pass", "guard verify --json --contract contract.yaml", r, contract);
+}
+
+// 4b) verify --json 대표 FAIL (denied).
+{
+  const c = track(newCase());
+  writeFileSync(join(c.repo, "secret.txt"), "secret base\n");
+  git(c.repo, ["add", "secret.txt"]);
+  git(c.repo, ["commit", "-q", "-m", "add secret"]);
+  const contract =
+    `id: gold-verify-json-denied\ntitle: denied path test\nbranch:\n  expected: main\n` +
+    `scope:\n  allowed_paths:\n    - "**"\n  denied_paths:\n    - "secret.txt"\n`;
+  writeFileSync(c.contract, contract);
+  writeFileSync(join(c.repo, "secret.txt"), "secret MODIFIED\n");
+  const r = run(c.repo, "verify", ["--json", "--contract", c.contract]);
+  emit("case-04b-verify-json-denied-fail", "guard verify --json --contract contract.yaml", r, contract);
+}
+
+// 5) check PASS: required_checks.commands 통과 (git 불필요).
+{
+  const c = track(newCase());
+  const contract =
+    `id: gold-check-pass\nscope:\n  allowed_paths: []\n` +
+    `required_checks:\n  commands:\n` +
+    `    - name: echo-ok\n      command: 'echo "check ok"'\n      required_exit: 0\n`;
+  writeFileSync(c.contract, contract);
+  const r = run(c.repo, "check", ["--contract", c.contract]);
+  emit("case-05-check-pass", "guard check --contract contract.yaml", r, contract);
+}
+
+// 6) check FAIL: 명령이 required_exit 와 불일치.
+{
+  const c = track(newCase());
+  const contract =
+    `id: gold-check-fail\nscope:\n  allowed_paths: []\n` +
+    `required_checks:\n  commands:\n` +
+    `    - name: echo-fail\n      command: 'echo "check failed"; exit 1'\n      required_exit: 0\n`;
+  writeFileSync(c.contract, contract);
+  const r = run(c.repo, "check", ["--contract", c.contract]);
+  emit("case-06-check-fail", "guard check --contract contract.yaml", r, contract);
+}
+
+// 7) prompt 출력 (git 불필요 — 지시문 생성).
+{
+  const c = track(newCase());
+  const contract =
+    `id: gold-prompt\ntitle: prompt block test\nbranch:\n  expected: main\n` +
+    `scope:\n  allowed_paths:\n    - "src/**"\n  denied_paths:\n    - "package.json"\n` +
+    `forbidden_actions:\n  - push\n  - deploy\n` +
+    `required_checks:\n  commands:\n    - name: tsc\n      command: 'tsc --noEmit'\n      required_exit: 0\n` +
+    `report:\n  required_items:\n    - 변경 요약\n`;
+  writeFileSync(c.contract, contract);
+  const r = run(c.repo, "prompt", ["--contract", c.contract]);
+  emit("case-07-prompt", "guard prompt --contract contract.yaml", r, contract);
+}
+
+// 8) report 출력: verify + 마크다운 저장 (--out 으로 golden md 직접 생성).
+{
+  const c = track(newCase());
+  const contract =
+    `id: gold-report\ntitle: golden report\nbranch:\n  expected: main\n` +
+    `scope:\n  allowed_paths:\n    - "f.txt"\n`;
+  writeFileSync(c.contract, contract);
+  writeFileSync(join(c.repo, "f.txt"), "edited for report\n");
+  const dir = join(goldenDir, "case-08-report");
+  mkdirSync(dir, { recursive: true });
+  const outMd = join(dir, "report.generated.md");
+  const r = run(c.repo, "report", ["--contract", c.contract, "--out", outMd]);
+  emit("case-08-report", "guard report --contract contract.yaml --out report.generated.md", r, contract);
+  // 생성된 마크다운도 golden 산출물 — 휘발 경로만 정규화(내용/문구 불변).
+  if (existsSync(outMd)) writeFileSync(outMd, norm(readFileSync(outMd, "utf8")));
+}
+
+// 9a) pre PASS: clean + 브랜치 일치.
+{
+  const c = track(newCase());
+  const contract =
+    `id: gold-pre-pass\nbranch:\n  expected: main\nscope:\n  allowed_paths:\n    - "**"\n`;
+  writeFileSync(c.contract, contract);
+  const r = run(c.repo, "pre", ["--contract", c.contract]);
+  emit("case-09a-pre-pass", "guard pre --contract contract.yaml", r, contract);
+}
+
+// 9b) pre FAIL: 브랜치 불일치 + 이미 stage 된 파일.
+{
+  const c = track(newCase());
+  const contract =
+    `id: gold-pre-fail\nbranch:\n  expected: dev\nscope:\n  allowed_paths:\n    - "**"\n`;
+  writeFileSync(c.contract, contract);
+  writeFileSync(join(c.repo, "g.txt"), "staged before start\n");
+  git(c.repo, ["add", "g.txt"]);
+  const r = run(c.repo, "pre", ["--contract", c.contract]);
+  emit("case-09b-pre-fail", "guard pre --contract contract.yaml", r, contract);
+}
+
+// ───────────────────────────── 인덱스 + 정리 ─────────────────────────────
+
+const indexLines = [
+  "# agent-guard v0.1 golden baseline (A0.5)",
+  "",
+  `- branch: v0.1-verify-check-split`,
+  `- 캡처 케이스: ${captures.length}개`,
+  `- 결정론: 고정 git identity(ci/ci@local) + 고정 DATE(${FIXED_DATE}) → headHash 재현`,
+  `- 정규화(스냅샷 한정): $HOME→<HOME>, ${TMP}/ag-gold-*→<FIXTURE>`,
+  "",
+  "| case | command | exit |",
+  "|---|---|---|",
+  ...captures.map((c) => `| ${c.name} | \`${c.cmdline}\` | ${c.exit} |`),
+  "",
+];
+writeFileSync(join(goldenDir, "INDEX.md"), indexLines.join("\n"));
+
+for (const b of bases) {
+  try { rmSync(b, { recursive: true, force: true }); } catch { /* tmp 정리 best-effort */ }
+}
+
+console.log(`\ngolden 캡처 완료: ${captures.length} cases → test/golden/`);
+for (const c of captures) console.log(`  ${c.name.padEnd(34)} exit=${c.exit}  ${c.cmdline}`);
+console.log("");

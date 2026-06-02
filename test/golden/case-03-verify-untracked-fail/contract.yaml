@@ -1,0 +1,6 @@
+id: gold-verify-untracked
+scope:
+  allowed_paths:
+    - "**"
+git:
+  require_no_staged_untracked: true

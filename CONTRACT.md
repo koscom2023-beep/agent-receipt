@@ -1,0 +1,268 @@
+# agent-guard — 작업계약 스키마 (CONTRACT)
+
+이 문서는 agent-guard 가 읽는 **작업계약(contract) 파일의 스키마를 동결**한다.
+
+- **SSOT 는 `src/schema.ts`** 다. 이 문서가 코드와 어긋나면 **코드(`src/schema.ts`)가 맞다.** 이 문서를 고쳐라.
+- 여기 적힌 내용은 v0.1 (branch `v0.1-verify-check-split`, HEAD `94b5271`) 의 실제 동작이며, **Slice A / v0.2 동안 변경하지 않는다**(아래 §11 동결 선언).
+- 예시 값이 아니라 **실제 zod 스키마 기준**으로 작성됐다. 다른 문서의 예시 값과 다르면 이 문서/코드가 우선이다.
+
+---
+
+## 1. 파일 형식 — YAML 과 JSON 은 같은 스키마로 파싱된다
+
+`loadContract(path)` 는 파일을 읽어 `yaml.parse()` 로 파싱한 뒤 **하나의 zod 스키마**(`ContractSchema`)로 검증한다.
+
+- **JSON 은 YAML 의 부분집합**이므로 `.json` 계약도 같은 `yaml.parse()` 가 그대로 파싱한다.
+- 따라서 **`.yaml` 과 `.json` 은 동일한 스키마·동일한 기본값·동일한 검증**을 받는다. 확장자는 자유다.
+- 파싱 실패(파일 없음 / 스키마 위반)는 CLI 에서 **exit 2** 로 끝난다(§9, §10).
+
+---
+
+## 2. 최상위 필드
+
+| 필드 | 타입 | 필수? | 기본값 | 비고 |
+|---|---|---|---|---|
+| `id` | string | **필수** | — | 계약 식별자 |
+| `title` | string | optional | (없음 → JSON 출력 시 `null`) | 사람용 제목 |
+| `mode` | string | optional | `"patch_only"` | 자유 문자열, 현재 동작 분기 없음 |
+| `branch` | object | optional | (없음) | `branch.expected?: string` |
+| `scope` | object | **필수** | — (§3) | 객체 자체는 생략 불가 |
+| `forbidden_actions` | string[] | optional | `[]` | **enforce 안 함 — advisory (§7)** |
+| `required_checks` | object | optional | `{ commands: [] }` | §6 |
+| `git` | object | optional | `{}` → 각 불리언 기본값 적용 (§5) | |
+| `report` | object | optional | (없음) | `report.required_items: string[]` (기본 `[]`) |
+
+> **알 수 없는 필드는 조용히 버려진다(§8).** 위 표에 없는 키(예: `version`)는 추가하지 마라.
+
+---
+
+## 3. `scope` — **필수 키** (가장 흔한 실수)
+
+```ts
+scope: z.object({
+  allowed_paths: z.array(z.string()).default([]),
+  denied_paths:  z.array(z.string()).default([]),
+})   // ← .optional() 도 .default() 도 없음 → scope 객체 자체는 필수
+```
+
+- **`scope` 키는 필수다.** 생략하면 계약 로드가 실패하고 CLI 는 **exit 2** 로 끝난다.
+- 다만 **`scope.allowed_paths` / `scope.denied_paths` 는 생략 시 `[]` 로 기본 처리**된다.
+- 따라서 **최소 유효 계약에는 `scope: {}` 가 필요**하다. (`scope` 줄을 통째로 빼면 안 된다.)
+
+```yaml
+# ❌ 잘못됨 — scope 누락 → load error → exit 2
+id: x
+required_checks:
+  commands:
+    - { name: t, command: "true" }
+```
+
+```yaml
+# ✅ 올바름 — scope: {} 로 최소 충족 (allowed/denied 는 [] 기본)
+id: x
+scope: {}
+required_checks:
+  commands:
+    - { name: t, command: "true" }
+```
+
+### scope 의미 (verify 동작)
+
+- **`allowed_paths` 가 비어 있으면(`[]`) 범위-밖(out-of-scope) 양성 검사는 비활성**이다.
+  - 즉 `allowed_paths: []` 는 "아무 파일이나 허용"이 아니라 **"allowed 기반 positive 검사를 끈다"** 는 뜻이다.
+  - 이 경우 보호는 **`denied_paths`(금지 경로) + git 검사 + diff 증빙**으로 한다.
+- `allowed_paths` 가 1개 이상이면, 변경된 파일 중 어떤 allowed 글롭에도 안 맞는 것이 `outOfScope` 위반이 된다.
+- 경로 매칭은 `minimatch(file, glob, { dot: true })` (점파일 포함).
+
+---
+
+## 4. `branch`
+
+```yaml
+branch:
+  expected: main      # optional. 현재 브랜치와 다르면 verify/pre 가 위반/경고로 본다.
+```
+
+- `branch` 와 `branch.expected` 모두 optional.
+- `expected` 가 있고 현재 브랜치와 다르면: `verify` 는 `branch.ok=false`(위반), `pre` 는 시작 전 경고(§11).
+
+---
+
+## 5. `git` — 실제 기본값 (문서 예시 아님)
+
+```ts
+git: z.object({
+  require_no_staged_untracked:      z.boolean().default(false),
+  require_only_allowed_files_staged: z.boolean().default(false),
+  require_no_denied_path_diff:       z.boolean().default(true),
+  require_no_push:                   z.boolean().default(false),
+}).default({})
+```
+
+| 키 | **실제 기본값** | true 일 때 검사 |
+|---|---|---|
+| `require_no_staged_untracked` | **`false`** | untracked 파일이 있으면 위반 |
+| `require_only_allowed_files_staged` | **`false`** | allowed 밖 파일이 stage 되면 위반(`stagedOutOfScope`) |
+| `require_no_denied_path_diff` | **`true`** | denied 경로가 변경되면 위반(`deniedHits`) — **기본 켜짐** |
+| `require_no_push` | **`false`** | (push 관련 — verify 상태검사 범위) |
+
+> `git` 블록을 생략하면 위 기본값(`false / false / true / false`)이 적용된다. **`require_no_denied_path_diff` 만 기본 `true`** 라는 점을 기억하라.
+
+---
+
+## 6. `required_checks` — `commands` 와 `nul`
+
+```ts
+required_checks: z.object({
+  nul:      z.object({ paths: z.array(z.string()).default([]) }).optional(),
+  commands: z.array(CommandCheck).default([]),
+}).default({ commands: [] })
+
+CommandCheck = z.object({
+  name:          z.string(),              // 필수
+  command:       z.string(),              // 필수
+  required_exit: z.number().default(0),   // 기본 0
+})
+```
+
+- `commands` 는 **`guard check`** 가 실행한다(§11). `guard verify` 는 commands 를 **실행하지 않는다**.
+- 각 command 는 `/bin/sh` 로 실행되며, 실제 종료코드가 `required_exit`(기본 0)와 같아야 통과.
+- `commands` 가 비어 있으면 `check` 는 **공허하게 PASS**(실행할 게 없음 = 통과).
+- `nul.paths` 는 `verify` 가 NUL 바이트(파일 깨짐) 검사 대상으로 본다(`nulBad`).
+
+---
+
+## 7. `forbidden_actions` — **현재 verify 에서 enforce 되지 않는다**
+
+```yaml
+forbidden_actions:
+  - push
+  - deploy
+```
+
+- `forbidden_actions` 는 스키마에 존재하지만, **`runVerify` 는 이 필드를 참조하지 않는다.**
+- 즉 **기계적으로 차단하는 필드가 아니다.** 현재는 **advisory(권고) / `guard prompt` 출력용 정보**에 가깝다.
+- 이 필드에 `push`, `deploy` 등을 적어도 verify/check 가 그 행동을 막아주지 않는다. **막아준다고 설명하면 안 된다.**
+- (실제 차단은 `git.*` 상태검사 + `denied_paths` + 사람/외부 게이트로 한다.)
+
+---
+
+## 8. 알 수 없는 필드 — 조용히 버려진다 (`version` 등 추가 금지)
+
+- `ContractSchema` 는 기본(non-strict) zod 객체다. **스키마에 없는 키는 검증 없이 그냥 제거(strip)된다.**
+- 따라서 `version: 0`, `schema_version` 같은 **새 필드를 적어도 오류는 안 나지만, 파서가 인식하지 않고 그냥 무시**한다(아무 효과 없음).
+- **이런 미지 필드는 추가하지 마라.** 효과가 없을 뿐 아니라, "있는 것처럼" 의존하면 사고가 난다.
+- 스키마 버전 필드는 v0.1 에 **존재하지 않는다.** v0.2 동안 스키마는 변경하지 않으므로(§11) 버전 필드도 도입하지 않는다.
+
+---
+
+## 9. Exit code 의미 (동결)
+
+| code | 의미 |
+|---|---|
+| **0** | PASS — `verify` 위반 없음 / `check` 전 명령 통과 / `pre` 문제 없음 / `prompt`·`report` 정상 |
+| **1** | 위반 — `verify` 상태 위반 / `check` 명령 실패 / `pre` 시작전 문제 |
+| **2** | 로딩·환경 오류 — `--contract` 누락 / 계약 파일 없음 / 스키마 형식 오류 / git 저장소 아님(`verify`·`report`·`pre`) / 모르는 명령 |
+
+---
+
+## 10. `loadContract` 동작
+
+1. 파일 읽기 실패 → `Error("계약서 파일을 못 찾음: <path>")` → CLI **exit 2**.
+2. `yaml.parse()` 후 `ContractSchema.safeParse()`.
+3. 검증 실패 → `Error("계약서 형식 오류 (<path>):\n  - <필드경로>: <메시지>")` → CLI **exit 2**.
+4. 성공 → 기본값이 채워진 정규화 객체 반환.
+
+---
+
+## 11. 명령별 동작 + 출력 동결
+
+Slice A 의 원칙은 **"출력 0 변경"** 이다. 아래 5개 명령의 **stdout / stderr / `--json` / exit code 는 Slice A 동안 동결 대상**이며, 회귀는 `test/golden/` baseline 으로 잡는다(A0.5 에서 11개 케이스 캡처 완료).
+
+| 명령 | git repo 필요? | 한 일 | 종료코드 |
+|---|---|---|---|
+| `verify [--json]` | **필요**(`requireRepo`) | 상태검사만(브랜치/범위/금지/stage/untracked/NUL/ahead-behind). **commands 실행 안 함.** 사람모드=박스 리포트(stdout)+note(stderr). `--json`=stable JSON 한 줄만(stdout), note 억제. | 0/1 |
+| `check` | 불필요 | `required_checks.commands` 만 `/bin/sh` 로 실행. 전부 통과해야 0. | 0/1 |
+| `report [--out]` | **필요** | verify + 마크다운 보고서 저장(`--out`, 기본 `agent-guard-report-<id>.md`). | 0/1 |
+| `pre` | **필요** | 시작 전 점검(브랜치 불일치 / 이미 stage 된 파일). | 0/1 |
+| `prompt` | 불필요 | 에이전트에 붙일 지시문 출력(여기서 `forbidden_actions` 가 표시됨 — §7). | 0 |
+| `help` / 인자없음 | 불필요 | 사용법 출력. | 0 |
+
+### verify 상태검사 의미 (요약)
+
+- `touched` = unstaged ∪ staged ∪ untracked (중복 제거).
+- `outOfScope` = `allowed_paths` 가 1개 이상일 때만 계산(비면 `[]` — §3).
+- `deniedHits` = `git.require_no_denied_path_diff`(기본 true)일 때 denied 경로 변경.
+- `stagedOutOfScope` = `git.require_only_allowed_files_staged`(기본 false)일 때.
+- untracked 위반 = `git.require_no_staged_untracked`(기본 false)일 때.
+- `aheadBehind` = `origin/main` 기준. upstream 없으면 `null`.
+
+---
+
+## 12. `verify --json` 출력 — stable 14 키 (동결)
+
+기계용 출력은 **stdout 에 JSON 한 줄만** 나오고, 사람용 note 는 나오지 않는다. 키 집합은 정확히 다음 14개로 동결한다.
+
+```
+ok, contractId, title, branch{current,expected,ok},
+touched, staged, untracked, outOfScope, deniedHits,
+stagedOutOfScope, nulBad, violations, headHash, aheadBehind
+```
+
+- 누락 가능한 값은 키를 유지하고 값만 `null` 로 정규화한다(`title`, `branch.expected`, `aheadBehind`).
+- **의도적으로 제외**된 내부 필드: `commands`, `nulPaths`, `changed`. (출력에 넣지 않는다.)
+
+---
+
+## 13. 계약 예시
+
+### 최소 유효 계약
+
+```yaml
+id: minimal
+scope: {}
+```
+
+### 일반적인 patch-only 계약
+
+```yaml
+id: gate-example
+title: 예시 게이트
+mode: patch_only
+branch:
+  expected: main
+scope:
+  allowed_paths:
+    - "src/**"
+  denied_paths:
+    - "package.json"
+    - "supabase/migrations/**"
+forbidden_actions:        # advisory — verify 가 막지 않음 (§7)
+  - push
+  - deploy
+required_checks:
+  nul:
+    paths:
+      - "src/**"
+  commands:
+    - name: tsc
+      command: "tsc --noEmit"
+      required_exit: 0
+git:
+  require_no_staged_untracked: false
+  require_only_allowed_files_staged: false
+  require_no_denied_path_diff: true     # 기본 켜짐
+  require_no_push: false
+report:
+  required_items:
+    - 변경 요약
+```
+
+---
+
+## 14. 동결 선언
+
+1. **이 스키마는 v0.2 동안 변경하지 않는다.** 필드 추가/삭제/의미 변경 금지.
+2. **`verify` / `check` / `prompt` / `report` / `pre` 의 stdout / stderr / `--json` / exit code 는 Slice A 동안 동결**이다. 회귀는 `test/golden/` 로 검출한다.
+3. 스키마에 없는 새 필드(`version` 등)는 도입하지 않는다(§8).
+4. 이 문서와 `src/schema.ts` 가 충돌하면 **`src/schema.ts` 가 SSOT** 다.

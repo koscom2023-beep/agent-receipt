@@ -1,0 +1,20 @@
+# agent-guard v0.1 golden baseline (A0.5)
+
+- branch: v0.1-verify-check-split
+- 캡처 케이스: 11개
+- 결정론: 고정 git identity(ci/ci@local) + 고정 DATE(2025-01-01T00:00:00 +0000) → headHash 재현
+- 정규화(스냅샷 한정): $HOME→<HOME>, /tmp/claude-1000/ag-gold-*→<FIXTURE>
+
+| case | command | exit |
+|---|---|---|
+| case-01-verify-pass | `guard verify --contract contract.yaml` | 0 |
+| case-02-verify-denied-fail | `guard verify --contract contract.yaml` | 1 |
+| case-03-verify-untracked-fail | `guard verify --contract contract.yaml` | 1 |
+| case-04a-verify-json-pass | `guard verify --json --contract contract.yaml` | 0 |
+| case-04b-verify-json-denied-fail | `guard verify --json --contract contract.yaml` | 1 |
+| case-05-check-pass | `guard check --contract contract.yaml` | 0 |
+| case-06-check-fail | `guard check --contract contract.yaml` | 1 |
+| case-07-prompt | `guard prompt --contract contract.yaml` | 0 |
+| case-08-report | `guard report --contract contract.yaml --out report.generated.md` | 0 |
+| case-09a-pre-pass | `guard pre --contract contract.yaml` | 0 |
+| case-09b-pre-fail | `guard pre --contract contract.yaml` | 1 |

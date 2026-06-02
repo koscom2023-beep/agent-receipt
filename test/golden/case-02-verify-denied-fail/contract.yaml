@@ -1,0 +1,9 @@
+id: gold-verify-denied
+title: denied path test
+branch:
+  expected: main
+scope:
+  allowed_paths:
+    - "**"
+  denied_paths:
+    - "secret.txt"
