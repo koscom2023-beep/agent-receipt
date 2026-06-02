@@ -1,0 +1,1 @@
+guard start --contract contract.yaml   (재실행: 덮어쓰기 거부)

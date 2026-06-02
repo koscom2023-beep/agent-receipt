@@ -1,0 +1,5 @@
+id: p1a-start
+scope:
+  allowed_paths: []
+  denied_paths:
+    - ".env*"

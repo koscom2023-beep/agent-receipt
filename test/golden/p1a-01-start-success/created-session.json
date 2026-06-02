@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "baselineHead": "06f4e1cfbd6a5a4019d7d182ee6f61f757a6354e",
+  "createdAt": "<TS>",
+  "contractId": "p1a-start",
+  "gitBranch": "main",
+  "unstagedAtStart": [],
+  "stagedAtStart": [],
+  "untrackedAtStart": [
+    "ambient-doc.txt"
+  ]
+}

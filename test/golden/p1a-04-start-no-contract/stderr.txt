@@ -1,0 +1,1 @@
+계약서 경로가 필요함:  guard <command> --contract <path.yaml>

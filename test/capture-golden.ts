@@ -373,6 +373,60 @@ function saveCreated(name: string, base: string): void {
     run(c.repo, "verify", ["--json", "--contract", c.contract]), contract);
 }
 
+// ───────────────────────────── P1-A: start / session 작성 ─────────────────────────────
+// `agent-guard start` 가 baseline snapshot 을 .agent-guard/session.json 에 쓰는지 + 안전조건(denied dirty / 기존 존재) 고정.
+// verify 의 baseline 적용은 아직 없음(P1-B). createdAt 만 비결정적이라 <TS> 로 정규화.
+
+function saveSession(name: string, repo: string): void {
+  const sp = join(repo, ".agent-guard", "session.json");
+  if (!existsSync(sp)) return;
+  // createdAt 타임스탬프만 정규화(baselineHead 등 나머지는 고정 git date 로 결정론).
+  const normed = readFileSync(sp, "utf8").replace(/"createdAt": "[^"]*"/, '"createdAt": "<TS>"');
+  writeFileSync(join(goldenDir, name, "created-session.json"), normed);
+}
+
+// p1a-01: start 성공 — non-denied ambient untracked 스냅샷, session.json 생성, exit 0
+{
+  const c = track(newCase());
+  writeFileSync(join(c.repo, "ambient-doc.txt"), "ambient untracked\n");
+  const contract = `id: p1a-start\nscope:\n  allowed_paths: []\n  denied_paths:\n    - ".env*"\n`;
+  writeFileSync(c.contract, contract);
+  emit("p1a-01-start-success", "guard start --contract contract.yaml",
+    run(c.repo, "start", ["--contract", c.contract]), contract);
+  saveSession("p1a-01-start-success", c.repo);
+}
+
+// p1a-02: start 실패 — denied(.env*) dirty → exit 1, session 미작성
+{
+  const c = track(newCase());
+  writeFileSync(join(c.repo, ".env.local"), "SECRET=1\n");
+  const contract = `id: p1a-start-denied\nscope:\n  allowed_paths: []\n  denied_paths:\n    - ".env*"\n`;
+  writeFileSync(c.contract, contract);
+  emit("p1a-02-start-denied-fail", "guard start --contract contract.yaml",
+    run(c.repo, "start", ["--contract", c.contract]), contract);
+  // 안전 단언: denied dirty 면 session 이 절대 생기면 안 된다(거짓이면 BUG → golden 으로 고정).
+  writeFileSync(join(goldenDir, "p1a-02-start-denied-fail", "session-written.txt"),
+    existsSync(join(c.repo, ".agent-guard", "session.json")) ? "WRITTEN(BUG)\n" : "not-written\n");
+}
+
+// p1a-03: start 실패 — 이미 session 존재 → 덮어쓰기 거부, exit 1
+{
+  const c = track(newCase());
+  writeFileSync(join(c.repo, "ambient-doc.txt"), "ambient untracked\n");
+  const contract = `id: p1a-start-exists\nscope:\n  allowed_paths: []\n  denied_paths:\n    - ".env*"\n`;
+  writeFileSync(c.contract, contract);
+  run(c.repo, "start", ["--contract", c.contract]); // 1차 성공(출력 버림)
+  emit("p1a-03-start-exists-fail", "guard start --contract contract.yaml   (재실행: 덮어쓰기 거부)",
+    run(c.repo, "start", ["--contract", c.contract]), contract);
+}
+
+// p1a-04: start — 계약 없음 → exit 2 (기존 계약 해석 경로와 일관)
+{
+  const c = track(newCase());
+  emit("p1a-04-start-no-contract", "guard start   (no --contract, none discoverable)",
+    run(c.repo, "start", []), null);
+}
+
 // ───────────────────────────── 인덱스 + 정리 ─────────────────────────────
 
 const indexLines = [

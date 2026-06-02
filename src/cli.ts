@@ -6,6 +6,7 @@ import { printReport, toMarkdown, buildPrompt, toJsonReport, printCheckReport } 
 import * as g from "./git.js";
 import { discoverContract } from "./discover.js";
 import { runInit } from "./init.js";
+import { runStart } from "./start.js";
 
 function getArg(flag: string): string | undefined {
   const i = process.argv.indexOf(flag);
@@ -127,6 +128,13 @@ function main(): void {
     case "pre": {
       requireRepo();
       runPre(contract);
+      break;
+    }
+
+    case "start": {
+      // 작업 시작 baseline 기록. verify 동작은 바꾸지 않는다(baseline 적용은 별도 단계).
+      requireRepo();
+      runStart(contract);
       break;
     }
 
