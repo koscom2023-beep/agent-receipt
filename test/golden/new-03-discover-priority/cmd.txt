@@ -1,0 +1,1 @@
+guard verify   (priority: .agent-guard/contract.yaml > .json > agent-guard.yaml > agent-guard.json)

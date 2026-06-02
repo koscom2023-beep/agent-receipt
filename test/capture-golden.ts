@@ -91,13 +91,16 @@ function emit(
   cmdline: string,
   res: RunRes,
   contractText: string | null,
+  fixtureBase?: string,
 ): void {
+  // fixtureBase 가 주어지면 그 절대경로만 <FIXTURE> 로 치환(접미사 보존). 없으면 기존 동작 그대로.
+  const pre = (s: string): string => (fixtureBase ? s.split(fixtureBase).join("<FIXTURE>") : s);
   const dir = join(goldenDir, name);
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "cmd.txt"), cmdline + "\n");
   writeFileSync(join(dir, "exit_code.txt"), `${res.status}\n`);
-  writeFileSync(join(dir, "stdout.txt"), norm(res.stdout ?? ""));
-  const e = norm(res.stderr ?? "");
+  writeFileSync(join(dir, "stdout.txt"), norm(pre(res.stdout ?? "")));
+  const e = norm(pre(res.stderr ?? ""));
   const stderrPath = join(dir, "stderr.txt");
   if (e.length) writeFileSync(stderrPath, e);
   else rmSync(stderrPath, { force: true }); // 재캡처 시 이전 실행의 stderr 잔재 제거
@@ -250,6 +253,89 @@ function track<T extends { base: string }>(c: T): T {
   git(c.repo, ["add", "g.txt"]);
   const r = run(c.repo, "pre", ["--contract", c.contract]);
   emit("case-09b-pre-fail", "guard pre --contract contract.yaml", r, contract);
+}
+
+// ───────────────────────────── A6 신규 케이스: A3 자동탐색 + A4 init ─────────────────────────────
+// 기존 11케이스(위)는 그대로. 아래는 A3/A4 신규 동작만 추가 캡처한다(기존 출력 동결 + 증거 확장).
+
+// 자동탐색: 기본 위치에 계약을 두고 --contract 없이 verify. layout = [[상대경로, 내용], ...].
+function discoverProbe(name: string, cmdline: string, layout: Array<[string, string]>): void {
+  const c = track(newCase());
+  writeFileSync(join(c.repo, "f.txt"), "edited under discovered contract\n");
+  for (const [rel, body] of layout) {
+    const p = join(c.repo, rel);
+    mkdirSync(dirname(p), { recursive: true });
+    writeFileSync(p, body);
+  }
+  const r = run(c.repo, "verify", []); // --contract 없음 → discoverContract()
+  emit(name, cmdline, r, null, c.base);
+}
+
+const Y = (id: string): string => `id: ${id}\nscope: {}\n`;
+const J = (id: string): string => `{"id":"${id}","scope":{}}\n`;
+
+discoverProbe(
+  "new-01-discover-agdir-yaml",
+  "guard verify   (auto-discover .agent-guard/contract.yaml)",
+  [[".agent-guard/contract.yaml", Y("discover-agdir-yaml")]],
+);
+discoverProbe(
+  "new-02-discover-agdir-json",
+  "guard verify   (auto-discover .agent-guard/contract.json)",
+  [[".agent-guard/contract.json", J("discover-agdir-json")]],
+);
+discoverProbe(
+  "new-03-discover-priority",
+  "guard verify   (priority: .agent-guard/contract.yaml > .json > agent-guard.yaml > agent-guard.json)",
+  [
+    [".agent-guard/contract.yaml", Y("discover-prio-1-agdir-yaml")],
+    [".agent-guard/contract.json", J("discover-prio-2-agdir-json")],
+    ["agent-guard.yaml", Y("discover-prio-3-root-yaml")],
+    ["agent-guard.json", J("discover-prio-4-root-json")],
+  ],
+);
+
+// init: 비-repo 임시 디렉터리에서 실행(init 은 git repo 불필요). 생성물도 함께 보관.
+function initBase(): string {
+  const base = mkdtempSync(join(tmpdir(), "ag-gold-"));
+  bases.push(base);
+  return base;
+}
+function saveCreated(name: string, base: string): void {
+  const dir = join(goldenDir, name);
+  const cy = join(base, ".agent-guard", "contract.yaml");
+  const rm = join(base, ".agent-guard", "README.md");
+  if (existsSync(cy)) writeFileSync(join(dir, "created-contract.yaml"), readFileSync(cy, "utf8"));
+  if (existsSync(rm)) writeFileSync(join(dir, "created-README.md"), readFileSync(rm, "utf8"));
+}
+
+{
+  const base = initBase();
+  const r = run(base, "init", ["--preset", "generic"]);
+  emit("new-04-init-generic", "guard init --preset generic", r, null, base);
+  saveCreated("new-04-init-generic", base);
+}
+{
+  const base = initBase();
+  const r = run(base, "init", ["--preset", "nextjs-supabase"]);
+  emit("new-05-init-nextjs-supabase", "guard init --preset nextjs-supabase", r, null, base);
+  saveCreated("new-05-init-nextjs-supabase", base);
+}
+{
+  const base = initBase();
+  run(base, "init", ["--preset", "generic"]); // 1차 생성(출력 버림)
+  const r = run(base, "init", ["--preset", "generic"]); // 2차 → 덮어쓰기 거부
+  emit("new-06-init-overwrite-fail", "guard init --preset generic   (재실행: 덮어쓰기 거부)", r, null, base);
+}
+{
+  const base = initBase();
+  const r = run(base, "init", ["--preset", "bogus"]);
+  emit("new-07-init-unknown-preset", "guard init --preset bogus", r, null, base);
+}
+{
+  const base = initBase();
+  const r = run(base, "init", []);
+  emit("new-08-init-no-preset", "guard init", r, null, base);
 }
 
 // ───────────────────────────── 인덱스 + 정리 ─────────────────────────────

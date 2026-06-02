@@ -1,7 +1,7 @@
 # agent-guard v0.1 golden baseline (A0.5)
 
 - branch: v0.1-verify-check-split
-- 캡처 케이스: 11개
+- 캡처 케이스: 19개
 - 결정론: 고정 git identity(ci/ci@local) + 고정 DATE(2025-01-01T00:00:00 +0000) → headHash 재현
 - 정규화(스냅샷 한정): $HOME→<HOME>, /tmp/claude-1000/ag-gold-*→<FIXTURE>
 
@@ -18,3 +18,11 @@
 | case-08-report | `guard report --contract contract.yaml --out report.generated.md` | 0 |
 | case-09a-pre-pass | `guard pre --contract contract.yaml` | 0 |
 | case-09b-pre-fail | `guard pre --contract contract.yaml` | 1 |
+| new-01-discover-agdir-yaml | `guard verify   (auto-discover .agent-guard/contract.yaml)` | 0 |
+| new-02-discover-agdir-json | `guard verify   (auto-discover .agent-guard/contract.json)` | 0 |
+| new-03-discover-priority | `guard verify   (priority: .agent-guard/contract.yaml > .json > agent-guard.yaml > agent-guard.json)` | 0 |
+| new-04-init-generic | `guard init --preset generic` | 0 |
+| new-05-init-nextjs-supabase | `guard init --preset nextjs-supabase` | 0 |
+| new-06-init-overwrite-fail | `guard init --preset generic   (재실행: 덮어쓰기 거부)` | 1 |
+| new-07-init-unknown-preset | `guard init --preset bogus` | 2 |
+| new-08-init-no-preset | `guard init` | 2 |

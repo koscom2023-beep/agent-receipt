@@ -1,0 +1,1 @@
+guard init --preset generic   (재실행: 덮어쓰기 거부)

@@ -1,0 +1,1 @@
+이미 존재함: <FIXTURE>/.agent-guard/contract.yaml — 덮어쓰지 않습니다. 먼저 제거 후 다시 실행하세요.

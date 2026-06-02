@@ -1,0 +1,1 @@
+guard verify   (auto-discover .agent-guard/contract.yaml)
