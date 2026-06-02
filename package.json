@@ -1,11 +1,11 @@
 {
-  "name": "agent-guard",
+  "name": "@promptia/agent-receipt",
   "version": "0.2.0",
-  "private": true,
+  "description": "Task-level work-contract verifier for AI coding agents — proves what an agent actually changed in your local git tree.",
+  "license": "UNLICENSED",
   "type": "module",
   "bin": {
-    "agent-guard": "dist/cli.js",
-    "ag": "dist/cli.js"
+    "agent-receipt": "dist/cli.js"
   },
   "files": [
     "dist",
@@ -13,8 +13,15 @@
     "README.md",
     "CONTRACT.md"
   ],
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc",
+    "prepack": "npm run build",
     "guard": "tsx src/cli.ts"
   },
   "dependencies": {

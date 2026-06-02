@@ -1,6 +1,8 @@
-# agent-guard
+# agent-receipt
 
-**A task-level work-contract verifier for AI coding agents.** You write a small contract describing what an agent is allowed to touch; after the agent finishes, `agent-guard` inspects your local git working tree and proves whether the contract was kept.
+> npm package **`@promptia/agent-receipt`** · CLI command **`agent-receipt`**
+
+**A task-level work-contract verifier for AI coding agents.** You write a small contract describing what an agent is allowed to touch; after the agent finishes, `agent-receipt` inspects your local git working tree and proves whether the contract was kept.
 
 > **Hooks prevent. Agent Guard proves.**
 
@@ -28,27 +30,27 @@ It is local-first by design:
 Once published, install and run via `npx`:
 
 ```bash
-npm install -D agent-guard
-npx agent-guard init --preset generic
-npx agent-guard prompt
-npx agent-guard verify
-npx agent-guard check
+npm install -D @promptia/agent-receipt
+npx agent-receipt init --preset generic
+npx agent-receipt prompt
+npx agent-receipt verify
+npx agent-receipt check
 ```
 
 > **Early preview.** Not yet on npm — the package name and publish target are not final until release.
 > Until then, use the local-development commands below (`npm run build` + `node dist/cli.js ...`).
 
-Once installed, the package exposes two equivalent binaries: `agent-guard` and its short alias `ag`.
+Once installed, the CLI is invoked as `agent-receipt`. (The single-letter `ag` alias was dropped to avoid clashing with other tools.)
 
 ---
 
 ## Core workflow
 
-1. **Create a contract** — `agent-guard init --preset generic` writes `.agent-guard/contract.yaml` (and an agent-facing `.agent-guard/README.md`).
-2. **Brief the agent** — `agent-guard prompt` prints a paste-in instruction block listing the allowed/denied paths and rules.
+1. **Create a contract** — `agent-receipt init --preset generic` writes `.agent-guard/contract.yaml` (and an agent-facing `.agent-guard/README.md`).
+2. **Brief the agent** — `agent-receipt prompt` prints a paste-in instruction block listing the allowed/denied paths and rules.
 3. **Let the agent work.**
-4. **Verify state** — `agent-guard verify` checks the working tree (branch / scope / denied paths / staged / untracked / NUL). It does **not** run your tests.
-5. **Run required checks** — `agent-guard check` runs the contract's `required_checks.commands` (tsc/tests/etc.).
+4. **Verify state** — `agent-receipt verify` checks the working tree (branch / scope / denied paths / staged / untracked / NUL). It does **not** run your tests.
+5. **Run required checks** — `agent-receipt check` runs the contract's `required_checks.commands` (tsc/tests/etc.).
 6. Only when **both** pass, stage the allowed files yourself and commit.
 
 `verify` and `check` are deliberately separate: `verify` inspects *state* (fast, no command execution); `check` runs *commands*. A passing `verify` is **not** "tests passed."
@@ -92,7 +94,7 @@ When `--contract` / `-c` is not given, the first existing file wins, in this ord
 
 Real repos are rarely clean — there are often pre-existing untracked files (docs, exports, scratch) unrelated to the current task. Without a baseline, `verify` flags all of them, drowning the real signal.
 
-`agent-guard start` records the working tree at the start of a task into `.agent-guard/session.json` (a baseline). After that:
+`agent-receipt start` records the working tree at the start of a task into `.agent-guard/session.json` (a baseline). After that:
 
 - **Ambient noise is removed.** Files that were already unstaged/staged/untracked at `start` are excluded from scope checks — `verify` reports only what changed *since* the baseline.
 - **New violations are still caught.** A new out-of-scope or denied file created after `start` is flagged normally.
@@ -160,24 +162,24 @@ scope: {}
 
 ## Scaffolding a contract (`init`)
 
-`agent-guard init --preset <generic|nextjs-supabase>` creates a starter setup so you don't write a contract from scratch (it needs neither a contract nor a git repo):
+`agent-receipt init --preset <generic|nextjs-supabase>` creates a starter setup so you don't write a contract from scratch (it needs neither a contract nor a git repo):
 
 - **`.agent-guard/contract.yaml`** — a starter contract from the chosen preset (see Presets below).
 - **`.agent-guard/README.md`** — a short agent-facing note describing the rules and how to run `verify` / `check`.
 
-After it runs, the new `contract.yaml` is auto-discovered by every other command, so you can run `agent-guard verify` with no `--contract`.
+After it runs, the new `contract.yaml` is auto-discovered by every other command, so you can run `agent-receipt verify` with no `--contract`.
 
 **Safety: `init` never overwrites.** If either `.agent-guard/contract.yaml` or `.agent-guard/README.md` already exists, `init` fails (exit `1`) and writes nothing — remove the existing file(s) first if you really want to regenerate. An unknown or missing `--preset` is a usage error (exit `2`).
 
 Typical flow:
 
 ```bash
-npx agent-guard init --preset generic   # scaffold .agent-guard/{contract.yaml,README.md}
+npx agent-receipt init --preset generic   # scaffold .agent-guard/{contract.yaml,README.md}
 # edit .agent-guard/contract.yaml for your project
-npx agent-guard start                    # (optional) record a baseline — see Baseline mode
+npx agent-receipt start                    # (optional) record a baseline — see Baseline mode
 # … let the agent work …
-npx agent-guard verify                   # state checks (auto-discovers the contract)
-npx agent-guard check                    # run required_checks.commands
+npx agent-receipt verify                   # state checks (auto-discovers the contract)
+npx agent-receipt check                    # run required_checks.commands
 ```
 
 In short: **`init` creates the contract; `start` (optional) records a baseline on top of it; `verify` / `check` evaluate against it.**
@@ -249,14 +251,16 @@ For CI/automation, `verify --json` prints a single stable JSON line to stdout an
 
 ## Package status
 
-Early preview (`0.2.0`). Not yet published to npm; the package name and publish target are **not final**. Until release:
+Early preview (`0.2.0`). Package name **`@promptia/agent-receipt`** is chosen but **not yet published to npm**. Until release:
 
 ```bash
-npm run build           # emit dist/
+npm run build           # emit dist/  (also runs via prepack on npm pack/publish)
 node dist/cli.js verify --contract .agent-guard/contract.yaml
 # or, without building:
 npm run guard -- verify --contract .agent-guard/contract.yaml
 ```
+
+> The CLI's own `--help` text and some messages still print the legacy name (`agent-guard` / `guard`); aligning those output strings — and the license choice — is tracked in [`docs/publish-prep.md`](docs/publish-prep.md) and lands before the first publish.
 
 ---
 
