@@ -15,6 +15,8 @@ import { runLint } from "./lint.js";
 import { runClaims } from "./claims.js";
 import { runExplain } from "./explain.js";
 import { runDefault } from "./router.js";
+import { runMode } from "./mode.js";
+import { runReceipts, type ReceiptsMode } from "./receipts.js";
 
 function getArg(flag: string): string | undefined {
   const i = process.argv.indexOf(flag);
@@ -48,6 +50,8 @@ agent-receipt — AI 작업계약 검수 CLI
   agent-receipt check  --contract <path.yaml>   required_checks.commands(tsc/test 등)만 실행 (git 불필요)
   agent-receipt report --contract <path.yaml>   verify + 마크다운 보고서 저장 (--out 으로 경로 지정)
   agent-receipt receipt --contract <path.yaml>  verify+check 결과를 .agent-guard/receipts/ 에 저장 [--format json|md] [--out]
+  agent-receipt receipts                        저장된 receipt 조회 [--latest|--cat|--dir] (없으면 생성 안내)
+  agent-receipt mode                            지금 작업 흐름이 task/daily 인지 설명 + 다음 명령 (read-only)
   agent-receipt claims --file <claim.json>      AI 완료보고(JSON)를 git 실측과 대조 (mismatch 시 exit 1)
   agent-receipt explain --contract <path.yaml>  왜 PASS/FAIL 인지 설명 + 규모/critical 경로 (exit = verify)
   agent-receipt pre    --contract <path.yaml>   작업 시작 전 안전 점검
@@ -110,6 +114,21 @@ function main(): void {
   if (command === "doctor") {
     // 환경 점검 — 계약이 없을 수도 있으니 계약 해석 전에 처리(자체적으로 계약을 탐색).
     runDoctor();
+  }
+  if (command === "mode") {
+    // 작업 흐름(task/daily) 설명 — 계약/git 없어도 안내(자체 탐색). read-only, exit 0.
+    runMode();
+  }
+  if (command === "receipts") {
+    // 저장된 receipt 조회 — 계약/git 불필요(.agent-guard/receipts/ 만 읽음).
+    const sub: ReceiptsMode = hasFlag("--latest")
+      ? "latest"
+      : hasFlag("--cat")
+        ? "cat"
+        : hasFlag("--dir")
+          ? "dir"
+          : "list";
+    runReceipts(sub);
   }
 
   const contractPath = getArg("--contract") ?? getArg("-c") ?? discoverContract();

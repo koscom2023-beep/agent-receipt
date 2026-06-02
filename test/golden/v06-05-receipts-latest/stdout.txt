@@ -1,0 +1,14 @@
+
+────────────────────────────────────────────────────────
+agent-receipt receipts --latest
+────────────────────────────────────────────────────────
+  파일        : .agent-guard/receipts/receipt-B.json
+  ok          : PASS ✅
+  contractId  : v06
+  timestamp   : <TS>
+  contentHash : sha256:685bfa45f1a0d0aed0503bfa49954b831eca3b53f914e6c09990f7c2eee4d47e
+  magnitude   : files 0, +0/-0, new 2
+  critical    : 0 touched
+────────────────────────────────────────────────────────
+  내용: agent-receipt receipts --cat   대조: agent-receipt claims --file <claim.json>
+

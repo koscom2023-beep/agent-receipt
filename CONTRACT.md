@@ -185,7 +185,9 @@ Slice A 의 원칙은 **"출력 0 변경"** 이다. 아래 5개 명령의 **stdo
 | `verify [--json]` | **필요**(`requireRepo`) | 상태검사만(브랜치/범위/금지/stage/untracked/NUL/ahead-behind). **commands 실행 안 함.** 사람모드=박스 리포트(stdout)+note(stderr). `--json`=stable JSON 한 줄만(stdout), note 억제. | 0/1 |
 | `check` | 불필요 | `required_checks.commands` 만 `/bin/sh` 로 실행. 전부 통과해야 0. | 0/1 |
 | `report [--out]` | **필요** | verify + 마크다운 보고서 저장(`--out`, 기본 `agent-guard-report-<id>.md`). | 0/1 |
-| `receipt [--format json\|md] [--out]` | **필요** | verify + check 결과를 `.agent-guard/receipts/` 에 저장(AI Work Receipt, verify --json 14키와 별개 스키마 — §11.6). | 0/1 |
+| `receipt [--format json\|md] [--out]` | **필요** | verify + check 결과를 `.agent-guard/receipts/` 에 저장(AI Work Receipt, verify --json 14키와 별개 스키마 — §11.6). 기본 위치 밖 저장 시 안내(verify 가 제외 안 함). | 0/1 |
+| `receipts [--latest\|--cat\|--dir]` | 불필요 | `.agent-guard/receipts/` 조회(read-only): 최신순 목록 / `--latest` 요약 / `--cat` 최신 내용 / `--dir` 경로. json 은 ok/contractId/timestamp/contentHash/magnitude/critical 요약, md 는 파일명만. 없으면 생성 안내. | 0 |
+| `mode` | 불필요 | task/daily 작업 흐름 설명(read-only, 저장 파일 없음): 계약/session/baseline 상태 + 추천 모드 + 다음 명령. git 아니어도 안내. | 0 |
 | `claims --file <claim.json>` | **필요** | AI 완료보고(JSON)를 git 실측과 대조(§11.7). 파일 없음/파싱실패=2, mismatch=1, 일치=0. | 0/1/2 |
 | `explain` | **필요** | 왜 PASS/FAIL 인지 설명 + 규모/critical 경로 + recovery hint. **exit 는 verify 와 동일**(PASS 0 / FAIL 1). | 0/1 |
 | `doctor` | 불필요 | 환경/설정 건강 점검(git / 계약 발견·유효 / baseline). 오류 시 1. | 0/1 |
@@ -341,3 +343,4 @@ report:
 5. **`start`(P1)는 `.agent-guard/session.json`(별도 session 스키마, §11.5)을 쓴다 — 계약 스키마(§1–§13)와 무관.** baseline 적용 후에도 `verify --json` 14키는 동결 유지.
 6. **v0.4 추가(`claims`/`explain` 명령, receipt 확장 필드 §11.6, exit127 구분, recovery hint, prompt 강화)는 계약 스키마(§2–§8)와 `verify --json` 14키(§12)를 바꾸지 않는다.** 새 증거(magnitude/critical/contentHash)는 **receipt 스키마 한정**이고, critical paths 는 계약 필드가 아니라 코드 상수다. 단, `verify`(사람 모드)/`prompt` 의 **사람용 stdout 은 의도적으로 확장**됐다(recovery hint·완료보고 JSON 형식) — `test/golden/` baseline 을 그에 맞게 갱신했다(기계용 `--json` 은 불변).
 7. **v0.5 추가(`promptia` preset, `run` 별칭, promptia 감지 `lint`/`doctor` 경고, router PASS/FAIL 안내 강화)도 계약 스키마와 `verify --json` 14키를 바꾸지 않는다.** `promptia` 는 새 template 파일(`templates/promptia.yaml`)일 뿐 스키마 확장이 아니다(기존 필드만 사용). promptia 감지는 `id: promptia` 기반 advisory 경고로 점수화하지 않는다. `run` 은 (인자 없음) 라우팅의 별칭이며 새 판정 로직이 아니다. 라우팅/lint/doctor 의 **사람용 stdout 확장**은 `test/golden/` 에 반영했다(v04-06/v04-08 갱신 + v05-01~06 추가).
+8. **v0.6 추가(`mode`, `receipts` 명령)도 계약 스키마와 `verify --json` 14키를 바꾸지 않는다.** 둘 다 read-only 이고 새 저장 스키마를 만들지 않는다 — `mode` 는 task/daily 흐름 설명(저장 파일 없음), `receipts` 는 기존 receipt 파일 조회일 뿐이다(점수화·등급화 없음, AI 진실 간주 없음, 자동 revert 없음). `receipt` 출력에 기본위치-밖 저장 안내 1줄을 추가했다(verify 판정/제외 규칙 불변 — `.agent-guard/receipts/` 만 제외). golden: v1-01~03 갱신(receipt 안내) + v06-01~07 추가. 3문서 기능 매핑은 `docs/coverage.md` 참고.

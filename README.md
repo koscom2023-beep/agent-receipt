@@ -70,7 +70,9 @@ If you omit `--contract`, the contract is auto-discovered (see below).
 | `check` | Run `required_checks.commands`; all must match their `required_exit`. | no |
 | `prompt` | Print a paste-in instruction block for the agent. | no |
 | `report [--out <file>]` | Run `verify` and write a Markdown report. | yes |
-| `receipt [--format json\|md] [--out <file>]` | Run `verify` + `check` and save an **AI Work Receipt** to `.agent-guard/receipts/` (includes change magnitude, critical-path attestation, and an integrity `contentHash`). | yes |
+| `receipt [--format json\|md] [--out <file>]` | Run `verify` + `check` and save an **AI Work Receipt** to `.agent-guard/receipts/` (includes change magnitude, critical-path attestation, and an integrity `contentHash`). Saving outside the default dir warns (verify won't exclude it). | yes |
+| `receipts [--latest\|--cat\|--dir]` | Find saved receipts under `.agent-guard/receipts/`: list newest-first (default), `--latest` summary (ok/contractId/timestamp/contentHash/magnitude), `--cat` latest content, `--dir` directory path. No receipts → guidance, exit `0`. | no |
+| `mode` | Read-only explanation of whether you're in **task** or **daily** flow (contract/session/baseline state + recommended next command). No file written. | no |
 | `claims --file <claim.json>` | Compare an agent's completion report (JSON) against the actual git state — surfaces hidden/over-claimed changes as **AI said / Git says**. Mismatch → exit `1`. | yes |
 | `explain` | Explain *why* the tree is PASS/FAIL (branch / scope / denied / magnitude / critical paths) with recovery hints. Exit mirrors `verify`. | yes |
 | `pre` | Pre-start check (correct branch, nothing already staged). | yes |
@@ -285,7 +287,7 @@ The claim file is plain JSON; every field is optional and only provided fields a
 
 ## Package status
 
-Early preview, published on npm as **`@promptia-labs/agent-receipt`** (latest published `0.2.1`; `0.5.x` is in local development and adds the `promptia` preset, the `run` routing alias, Promptia-aware `lint`/`doctor` warnings, plus the `0.4.x` work — `claims` / `explain`, receipt magnitude + critical-path attestation + `contentHash`, and single-command routing). For local development:
+Early preview, published on npm as **`@promptia-labs/agent-receipt`** (latest published `0.2.1`; `0.6.x` is in local development and adds the `mode` and `receipts` commands, building on `0.5.x` — the `promptia` preset, the `run` routing alias, Promptia-aware `lint`/`doctor` warnings — and `0.4.x` — `claims` / `explain`, receipt magnitude + critical-path attestation + `contentHash`, single-command routing). Feature coverage vs the design docs is tracked in [`docs/coverage.md`](docs/coverage.md). For local development:
 
 ```bash
 npm run build           # emit dist/  (also runs via prepack on npm pack/publish)

@@ -1,7 +1,7 @@
 # agent-guard v0.1 golden baseline (A0.5)
 
 - branch: v0.1-verify-check-split
-- 캡처 케이스: 60개
+- 캡처 케이스: 67개
 - 결정론: 고정 git identity(ci/ci@local) + 고정 DATE(2025-01-01T00:00:00 +0000) → headHash 재현
 - 정규화(스냅샷 한정): $HOME→<HOME>, /tmp/claude-1000/ag-gold-*→<FIXTURE>
 
@@ -67,3 +67,10 @@
 | v05-04-doctor-promptia | `guard doctor   (promptia preset 감지)` | 0 |
 | v05-05-router-fail | `guard start … ; (new oos) ; guard   (no command → verify FAIL)` | 1 |
 | v05-06-run-alias-no-contract | `guard run   (no contract → init 안내, run 별칭)` | 0 |
+| v06-01-mode-no-contract | `guard mode   (no contract)` | 0 |
+| v06-02-mode-active | `guard start … ; guard mode   (task mode active)` | 0 |
+| v06-03-receipts-empty | `guard receipts   (none yet)` | 0 |
+| v06-04-receipts-list | `guard receipts   (2 saved → 최신순 목록)` | 0 |
+| v06-05-receipts-latest | `guard receipts --latest` | 0 |
+| v06-06-receipts-cat | `guard receipts --cat   (최신 receipt 내용)` | 0 |
+| v06-07-receipts-dir | `guard receipts --dir` | 0 |

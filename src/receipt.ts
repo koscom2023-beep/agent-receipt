@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { join, dirname, isAbsolute } from "node:path";
+import { join, dirname, isAbsolute, relative } from "node:path";
 import type { Contract } from "./schema.js";
 import { runVerify, runCheck } from "./checks.js";
 import { resolveSession } from "./session.js";
@@ -141,5 +141,12 @@ export function runReceipt(contract: Contract, format: string | undefined, outAr
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, body);
   console.log(`receipt 저장: ${rel} (ok=${r.ok})`);
+  // verify 는 .agent-guard/receipts/ 만 자동 제외한다. 그 밖에 저장하면 다음 verify 가 이 파일을
+  // 변경(outOfScope/untracked)으로 잡을 수 있으므로 기본 위치 사용을 권한다(자동 revert 아님 — 안내만).
+  const rl = relative(join(process.cwd(), ".agent-guard", "receipts"), out);
+  if (rl.startsWith("..") || isAbsolute(rl)) {
+    console.log("  참고: 기본 위치(.agent-guard/receipts/) 밖이라 다음 verify 가 이 파일을 변경으로 잡을 수 있습니다. 기본 위치 권장.");
+  }
+  console.log("  → 조회: `agent-receipt receipts` (목록) / `--latest` / `--cat`");
   process.exit(r.ok ? 0 : 1);
 }

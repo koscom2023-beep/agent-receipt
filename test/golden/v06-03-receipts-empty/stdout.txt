@@ -1,0 +1,4 @@
+
+receipt 없음 (.agent-guard/receipts 비어있음/없음).
+  → agent-receipt receipt   (verify+check 결과를 저장)
+

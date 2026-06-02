@@ -785,6 +785,60 @@ const PROMPTIA_MISSING_DENIED =
     run(c.repo, "run", []), null);
 }
 
+// ───────────────────────────── V1 Integrated Sprint 4 (v0.6): mode / receipts ─────────────────────────────
+// 새 명령 mode(task/daily 설명) + receipts(저장 receipt 조회). 기존 케이스는 위에서 동결.
+const V06_SRC =
+  `id: v06\ntitle: v0.6 mode/receipts\nbranch:\n  expected: main\n` +
+  `scope:\n  allowed_paths:\n    - "src/**"\n  denied_paths:\n    - ".env*"\nrequired_checks:\n  commands: []\n`;
+// receipt 내용의 wall-clock ISO timestamp 만 <TS> 로 정규화(headHash/contentHash 는 고정 git date 로 결정론적).
+const normTs = (s: string): string => s.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/g, "<TS>");
+
+// v06-01: mode — 계약 없음(모드 이전 → init 안내)
+{
+  const c = track(newCase());
+  emit("v06-01-mode-no-contract", "guard mode   (no contract)", run(c.repo, "mode", []), null);
+}
+// v06-02: mode — 계약 + baseline 활성(task mode 진행 중 → run 안내)
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, ".agent-guard"), { recursive: true });
+  writeFileSync(join(c.repo, ".agent-guard", "contract.yaml"), V06_SRC);
+  run(c.repo, "start", []);
+  emit("v06-02-mode-active", "guard start … ; guard mode   (task mode active)", run(c.repo, "mode", []), null);
+}
+// v06-03: receipts — 비어있음 → 생성 안내, exit 0(read-only 조회)
+{
+  const c = track(newCase());
+  emit("v06-03-receipts-empty", "guard receipts   (none yet)", run(c.repo, "receipts", []), null);
+}
+// v06-04~07: receipts — 고정 파일명으로 2개 저장(이름 내림차순=최신: B>A) 후 list/latest/cat/dir
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, ".agent-guard"), { recursive: true });
+  mkdirSync(join(c.repo, "src"), { recursive: true });
+  writeFileSync(join(c.repo, ".agent-guard", "contract.yaml"), V06_SRC);
+  writeFileSync(join(c.repo, "src", "a.ts"), "export const a = 1;\n");
+  run(c.repo, "start", []); // baseline: contract.yaml + src/a.ts ambient
+  run(c.repo, "receipt", ["--format", "json", "--out", join(".agent-guard", "receipts", "receipt-A.json")]);
+  run(c.repo, "receipt", ["--format", "json", "--out", join(".agent-guard", "receipts", "receipt-B.json")]);
+  {
+    const r = run(c.repo, "receipts", []); r.stdout = normTs(r.stdout);
+    emit("v06-04-receipts-list", "guard receipts   (2 saved → 최신순 목록)", r, null);
+  }
+  {
+    const r = run(c.repo, "receipts", ["--latest"]); r.stdout = normTs(r.stdout);
+    emit("v06-05-receipts-latest", "guard receipts --latest", r, null);
+  }
+  {
+    const r = run(c.repo, "receipts", ["--cat"]); r.stdout = normTs(r.stdout);
+    emit("v06-06-receipts-cat", "guard receipts --cat   (최신 receipt 내용)", r, null);
+  }
+  {
+    const r = run(c.repo, "receipts", ["--dir"]);
+    emit("v06-07-receipts-dir", "guard receipts --dir", r, null, c.base);
+  }
+}
+
 // ───────────────────────────── 인덱스 + 정리 ─────────────────────────────
 
 const indexLines = [
