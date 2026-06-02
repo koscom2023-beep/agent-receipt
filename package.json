@@ -2,7 +2,7 @@
   "name": "@promptia/agent-receipt",
   "version": "0.2.0",
   "description": "Task-level work-contract verifier for AI coding agents — proves what an agent actually changed in your local git tree.",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "type": "module",
   "bin": {
     "agent-receipt": "dist/cli.js"
