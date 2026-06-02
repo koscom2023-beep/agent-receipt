@@ -1,0 +1,11 @@
+id: v1
+title: v1-core
+branch:
+  expected: main
+scope:
+  allowed_paths:
+    - "src/**"
+  denied_paths:
+    - ".env*"
+required_checks:
+  commands: []

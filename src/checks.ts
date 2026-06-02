@@ -65,7 +65,9 @@ export function runVerify(contract: Contract): VerifyResult {
   //    제어 파일 .agent-guard/session.json 은 항상 제외(전체 .agent-guard/** 제외는 아님).
   //    유효 session(baseline) 이 있으면 scope 검사는 baseline 이후 신규 변경만 본다.
   //    denied 검사는 안전을 위해 항상 full touched 기준(baseline 으로 절대 안 묻음).
-  const ex = (arr: string[]): string[] => arr.filter((f) => f !== SESSION_REL_PATH);
+  // 제어/산출 파일은 verify 에서 제외: session.json + receipts/ (사용자 작업물 아님). contract.yaml/README.md 는 제외 안 함.
+  const ex = (arr: string[]): string[] =>
+    arr.filter((f) => f !== SESSION_REL_PATH && !f.startsWith(".agent-guard/receipts/"));
   const curUnstaged = ex(g.unstagedFiles());
   const curStaged = ex(g.stagedFiles());
   const curUntracked = ex(g.untrackedFiles());

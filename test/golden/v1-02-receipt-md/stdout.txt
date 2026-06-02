@@ -1,0 +1,1 @@
+receipt 저장: receipt.md (ok=true)

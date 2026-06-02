@@ -1,7 +1,7 @@
 # agent-guard v0.1 golden baseline (A0.5)
 
 - branch: v0.1-verify-check-split
-- 캡처 케이스: 39개
+- 캡처 케이스: 45개
 - 결정론: 고정 git identity(ci/ci@local) + 고정 DATE(2025-01-01T00:00:00 +0000) → headHash 재현
 - 정규화(스냅샷 한정): $HOME→<HOME>, /tmp/claude-1000/ag-gold-*→<FIXTURE>
 
@@ -46,3 +46,9 @@
 | v03-03-status-stale | `guard start (main) … checkout other ; guard status` | 0 |
 | v03-04-reset-with-session | `guard start … ; guard reset` | 0 |
 | v03-05-reset-no-session | `guard reset   (no session)` | 0 |
+| v1-01-receipt-json | `guard start … ; guard receipt --format json --out receipt.json` | 0 |
+| v1-02-receipt-md | `guard start … ; guard receipt --format md --out receipt.md` | 0 |
+| v1-03-receipt-fail | `guard receipt --format json --out receipt.json   (no start, oos)` | 1 |
+| v1-04-doctor-ok | `guard doctor` | 0 |
+| v1-05-doctor-no-contract | `guard doctor   (no contract)` | 0 |
+| v1-06-lint-warn | `guard lint --contract contract.yaml` | 0 |

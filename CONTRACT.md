@@ -185,6 +185,9 @@ Slice A 의 원칙은 **"출력 0 변경"** 이다. 아래 5개 명령의 **stdo
 | `verify [--json]` | **필요**(`requireRepo`) | 상태검사만(브랜치/범위/금지/stage/untracked/NUL/ahead-behind). **commands 실행 안 함.** 사람모드=박스 리포트(stdout)+note(stderr). `--json`=stable JSON 한 줄만(stdout), note 억제. | 0/1 |
 | `check` | 불필요 | `required_checks.commands` 만 `/bin/sh` 로 실행. 전부 통과해야 0. | 0/1 |
 | `report [--out]` | **필요** | verify + 마크다운 보고서 저장(`--out`, 기본 `agent-guard-report-<id>.md`). | 0/1 |
+| `receipt [--format json\|md] [--out]` | **필요** | verify + check 결과를 `.agent-guard/receipts/` 에 저장(AI Work Receipt, verify --json 14키와 별개 스키마). | 0/1 |
+| `doctor` | 불필요 | 환경/설정 건강 점검(git / 계약 발견·유효 / baseline). 오류 시 1. | 0/1 |
+| `lint` | 불필요 | 계약 품질 조언(allowed/denied/forbidden_actions/commands) — advisory. | 0 |
 | `pre` | **필요** | 시작 전 점검(브랜치 불일치 / 이미 stage 된 파일). | 0/1 |
 | `start` | **필요** | 작업 시작 baseline 을 `.agent-guard/session.json` 에 기록(§11.5). denied 가 이미 dirty 거나 session 이 이미 있으면 실패. | 0/1 |
 | `status` | **필요** | 계약 범위 / baseline(session) 상태 / 브랜치 / 현재 변경 요약(read-only). | 0 |
@@ -200,7 +203,7 @@ Slice A 의 원칙은 **"출력 0 변경"** 이다. 아래 5개 명령의 **stdo
 - **안전조건 — 덮어쓰기 금지**: 둘 중 하나라도 이미 있으면 **실패(exit 1), 아무것도 안 씀.** 모르는/없는 `--preset` = 사용오류(exit 2).
 - 생성된 `contract.yaml` 은 이후 모든 명령이 기본 위치에서 자동탐색한다(`--contract` 생략 가능).
 - **관계**: `init`(계약 생성) → (선택) `start`(baseline 기록, §11.5) → `verify`/`check`(계약 기준 평가). init/start 의 생성물(`contract.yaml`/`README.md`)은 `.agent-guard/session.json` 과 달리 verify 에서 제외되지 않는다(사용자가 커밋할 수 있는 실제 파일이므로).
-- **주의 — start 전 verify**: 위와 같이 `init` 산출물(`.agent-guard/contract.yaml`/`README.md`)은 untracked 이고 verify 에서 제외되지 않으므로(**`session.json` 만 제외** — §11.5), restrictive `allowed_paths` 에서 **start 전에 verify** 하면 outOfScope 로 잡힐 수 있다. **이는 정상 동작이다.** 권장 순서(`init`→edit→**`start`**→`verify`/`check`)를 따르면 baseline 에 묻혀 사라진다. 또는 그 두 경로를 `allowed_paths` 에 포함하거나, 계약 파일을 커밋/관리 대상으로 다뤄라.
+- **주의 — start 전 verify**: 위와 같이 `init` 산출물(`.agent-guard/contract.yaml`/`README.md`)은 untracked 이고 verify 에서 제외되지 않으므로(**`session.json`/`receipts/` 만 제외** — §11.5), restrictive `allowed_paths` 에서 **start 전에 verify** 하면 outOfScope 로 잡힐 수 있다. **이는 정상 동작이다.** 권장 순서(`init`→edit→**`start`**→`verify`/`check`)를 따르면 baseline 에 묻혀 사라진다. 또는 그 두 경로를 `allowed_paths` 에 포함하거나, 계약 파일을 커밋/관리 대상으로 다뤄라.
 
 ### verify 상태검사 의미 (요약)
 
@@ -223,7 +226,7 @@ Slice A 의 원칙은 **"출력 0 변경"** 이다. 아래 5개 명령의 **stdo
   - 유효 session 없음 → 기존(full-tree) 동작 그대로(완전 후방호환).
   - 유효 session 있음 → `touched`/`outOfScope`/`stagedOutOfScope`/untracked 검사는 **baseline 이후 신규 변경만**(현재 − `*AtStart` + `baselineHead..HEAD` 커밋분) 기준.
   - **`deniedHits` 는 항상 full touched 기준 — baseline 으로 denied 를 숨길 수 없다.**
-  - `.agent-guard/session.json` *만* verify 에서 제외(나머지 `.agent-guard/**` 는 일반 파일로 취급 — `contract.yaml` 등은 그대로 잡힌다).
+  - `.agent-guard/session.json` 과 `.agent-guard/receipts/`(tool 산출) 만 verify 에서 제외(나머지 `.agent-guard/**` 는 일반 파일로 취급 — `contract.yaml` 등은 그대로 잡힌다).
   - session 유효성 = `gitBranch` 일치 + `baselineHead` 가 `HEAD` 의 조상. 무효(branch 변경/rebase 등)면 **baseline 무시 + full-tree degrade**(숨기지 않고 시끄러운 쪽으로).
 - **`verify --json` 14키는 baseline 적용 후에도 동결**(§12) — 값만 baseline-relative 로 바뀌고 키는 그대로.
 

@@ -9,6 +9,9 @@ import { runInit } from "./init.js";
 import { runStart } from "./start.js";
 import { runStatus } from "./status.js";
 import { runReset } from "./reset.js";
+import { runReceipt } from "./receipt.js";
+import { runDoctor } from "./doctor.js";
+import { runLint } from "./lint.js";
 
 function getArg(flag: string): string | undefined {
   const i = process.argv.indexOf(flag);
@@ -41,8 +44,11 @@ agent-receipt — AI 작업계약 검수 CLI
         [--json]                                사람용 보고서 대신 기계용 stable JSON을 stdout에 단독 출력
   agent-receipt check  --contract <path.yaml>   required_checks.commands(tsc/test 등)만 실행 (git 불필요)
   agent-receipt report --contract <path.yaml>   verify + 마크다운 보고서 저장 (--out 으로 경로 지정)
+  agent-receipt receipt --contract <path.yaml>  verify+check 결과를 .agent-guard/receipts/ 에 저장 [--format json|md] [--out]
   agent-receipt pre    --contract <path.yaml>   작업 시작 전 안전 점검
   agent-receipt prompt --contract <path.yaml>   Cursor/Claude에 붙여넣을 지시문 생성
+  agent-receipt doctor                          환경/설정 건강 점검 (git/계약/baseline)
+  agent-receipt lint   --contract <path.yaml>   계약 품질 조언 (advisory)
 
   --contract 생략 시 .agent-guard/contract.yaml 등을 자동 탐색
 `);
@@ -86,6 +92,10 @@ function main(): void {
   }
   if (command === "reset") {
     runReset();
+  }
+  if (command === "doctor") {
+    // 환경 점검 — 계약이 없을 수도 있으니 계약 해석 전에 처리(자체적으로 계약을 탐색).
+    runDoctor();
   }
 
   const contractPath = getArg("--contract") ?? getArg("-c") ?? discoverContract();
@@ -153,6 +163,19 @@ function main(): void {
       // 계약/세션/git 상태 요약(read-only).
       requireRepo();
       runStatus(contract);
+      break;
+    }
+
+    case "receipt": {
+      // verify + check 결과를 .agent-guard/receipts/ 에 저장(AI Work Receipt).
+      requireRepo();
+      runReceipt(contract, getArg("--format"), getArg("--out"));
+      break;
+    }
+
+    case "lint": {
+      // 계약 품질 조언(advisory) — git 불필요.
+      runLint(contract);
       break;
     }
 

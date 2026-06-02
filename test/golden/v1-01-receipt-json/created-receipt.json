@@ -1,0 +1,24 @@
+{
+  "ok": true,
+  "contractId": "v1",
+  "title": "v1-core",
+  "branch": {
+    "current": "main",
+    "expected": "main",
+    "ok": true
+  },
+  "headHash": "06f4e1cfbd6a5a4019d7d182ee6f61f757a6354e",
+  "timestamp": "<TS>",
+  "touched": [],
+  "staged": [],
+  "untracked": [],
+  "outOfScope": [],
+  "deniedHits": [],
+  "violations": [],
+  "session": {
+    "applied": true,
+    "reason": null,
+    "baselineHead": "06f4e1cfbd6a5a4019d7d182ee6f61f757a6354e"
+  },
+  "checks": []
+}

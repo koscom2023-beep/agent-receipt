@@ -1,0 +1,9 @@
+id: v1-lint
+scope:
+  allowed_paths: []
+  denied_paths:
+    - "**"
+forbidden_actions:
+  - push
+required_checks:
+  commands: []

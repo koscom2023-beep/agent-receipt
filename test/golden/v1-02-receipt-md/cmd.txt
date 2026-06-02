@@ -1,0 +1,1 @@
+guard start … ; guard receipt --format md --out receipt.md

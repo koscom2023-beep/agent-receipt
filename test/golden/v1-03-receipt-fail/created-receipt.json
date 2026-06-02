@@ -1,0 +1,28 @@
+{
+  "ok": false,
+  "contractId": "v1",
+  "title": "v1-core",
+  "branch": {
+    "current": "main",
+    "expected": "main",
+    "ok": true
+  },
+  "headHash": "06f4e1cfbd6a5a4019d7d182ee6f61f757a6354e",
+  "timestamp": "<TS>",
+  "touched": [
+    "outsider.md"
+  ],
+  "staged": [],
+  "untracked": [
+    "outsider.md"
+  ],
+  "outOfScope": [
+    "outsider.md"
+  ],
+  "deniedHits": [],
+  "violations": [
+    "허용 범위 밖 변경 1건: outsider.md"
+  ],
+  "session": null,
+  "checks": []
+}

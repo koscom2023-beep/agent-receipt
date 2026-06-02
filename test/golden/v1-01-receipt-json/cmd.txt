@@ -1,0 +1,1 @@
+guard start … ; guard receipt --format json --out receipt.json

@@ -54,3 +54,4 @@
 - **`0.2.0`** — npm 최초 publish 완료 (`@promptia-labs/agent-receipt`, `--access public`).
 - **`0.2.1`** — README publish-state 문구 패치: "not yet published to npm / Once published / not final until release" 제거 → 공개 상태 반영. **코드/기능 변경 없음**(문서 + version bump만). golden 무영향.
 - **`0.2.2`** — v0.3 usability sprint: `status`/`reset` 명령 신규, stale 경고·start 실패 메시지를 `agent-receipt reset`/`start` 안내로 개선, help 갱신, README/CONTRACT 반영. verify 판정·`--json` 14키 불변. (미publish — 로컬 커밋만.)
+- **`0.3.0`** — v1-core sprint: `receipt`(verify+check 결과를 `.agent-guard/receipts/` 에 json/md 저장) · `doctor`(환경 건강 점검) · `lint`(계약 품질 advisory) 신규. verify 가 `.agent-guard/receipts/` 도 제외. README/CONTRACT/help 반영. verify 판정·`--json` 14키 불변. (npm latest 는 여전히 `0.2.1` — 0.2.2/0.3.0 미publish, 로컬 커밋만.)

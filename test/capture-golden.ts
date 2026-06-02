@@ -568,6 +568,72 @@ const V03_CONTRACT =
     run(c.repo, "reset", []), null);
 }
 
+// ───────────────────────────── v1-core: receipt / doctor / lint ─────────────────────────────
+const V1_CONTRACT =
+  `id: v1\ntitle: v1-core\nbranch:\n  expected: main\n` +
+  `scope:\n  allowed_paths:\n    - "src/**"\n  denied_paths:\n    - ".env*"\nrequired_checks:\n  commands: []\n`;
+
+function saveReceipt(name: string, repo: string, fname: string): void {
+  const sp = join(repo, fname);
+  if (!existsSync(sp)) return;
+  let s = readFileSync(sp, "utf8");
+  s = s.replace(/"timestamp": "[^"]*"/, '"timestamp": "<TS>"'); // json
+  s = s.replace(/- timestamp: .*/, "- timestamp: <TS>"); // md
+  writeFileSync(join(goldenDir, name, `created-${fname}`), s);
+}
+
+// v1-01: receipt json — session 활성 → ok=true
+{
+  const c = track(newCase());
+  writeFileSync(join(c.repo, "ambient.txt"), "ambient\n");
+  writeFileSync(c.contract, V1_CONTRACT);
+  run(c.repo, "start", ["--contract", c.contract]);
+  emit("v1-01-receipt-json", "guard start … ; guard receipt --format json --out receipt.json",
+    run(c.repo, "receipt", ["--format", "json", "--out", "receipt.json", "--contract", c.contract]), V1_CONTRACT);
+  saveReceipt("v1-01-receipt-json", c.repo, "receipt.json");
+}
+// v1-02: receipt md
+{
+  const c = track(newCase());
+  writeFileSync(join(c.repo, "ambient.txt"), "ambient\n");
+  writeFileSync(c.contract, V1_CONTRACT);
+  run(c.repo, "start", ["--contract", c.contract]);
+  emit("v1-02-receipt-md", "guard start … ; guard receipt --format md --out receipt.md",
+    run(c.repo, "receipt", ["--format", "md", "--out", "receipt.md", "--contract", c.contract]), V1_CONTRACT);
+  saveReceipt("v1-02-receipt-md", c.repo, "receipt.md");
+}
+// v1-03: receipt fail — 신규 oos(no start) → ok=false, exit 1
+{
+  const c = track(newCase());
+  writeFileSync(c.contract, V1_CONTRACT);
+  writeFileSync(join(c.repo, "outsider.md"), "out\n");
+  emit("v1-03-receipt-fail", "guard receipt --format json --out receipt.json   (no start, oos)",
+    run(c.repo, "receipt", ["--format", "json", "--out", "receipt.json", "--contract", c.contract]), V1_CONTRACT);
+  saveReceipt("v1-03-receipt-fail", c.repo, "receipt.json");
+}
+// v1-04: doctor — git + 계약 발견 + baseline 없음
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, ".agent-guard"), { recursive: true });
+  writeFileSync(join(c.repo, ".agent-guard", "contract.yaml"), V1_CONTRACT);
+  emit("v1-04-doctor-ok", "guard doctor", run(c.repo, "doctor", []), null);
+}
+// v1-05: doctor — 계약 없음(경고)
+{
+  const c = track(newCase());
+  emit("v1-05-doctor-no-contract", "guard doctor   (no contract)", run(c.repo, "doctor", []), null);
+}
+// v1-06: lint — 경고 다수(allowed:[], denied '**', forbidden_actions, commands:[])
+{
+  const c = track(newCase());
+  const contract =
+    `id: v1-lint\nscope:\n  allowed_paths: []\n  denied_paths:\n    - "**"\n` +
+    `forbidden_actions:\n  - push\nrequired_checks:\n  commands: []\n`;
+  writeFileSync(c.contract, contract);
+  emit("v1-06-lint-warn", "guard lint --contract contract.yaml",
+    run(c.repo, "lint", ["--contract", c.contract]), contract);
+}
+
 // ───────────────────────────── 인덱스 + 정리 ─────────────────────────────
 
 const indexLines = [

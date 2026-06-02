@@ -1,0 +1,11 @@
+
+────────────────────────────────────────────────────────
+agent-receipt lint: v1-lint
+────────────────────────────────────────────────────────
+  ⚠ allowed_paths 비어 있음 → positive 범위검사가 꺼집니다. 의도면 OK, 아니면 허용 경로를 명시하세요.
+  ⚠ denied_paths '**' 가 너무 넓음 → 거의 모든 변경을 금지로 잡습니다.
+  ⚠ forbidden_actions 는 advisory 입니다 — verify 가 기계적으로 막지 않습니다(CONTRACT.md §7).
+  ⚠ required_checks.commands 가 비어 있음 → 'check' 는 항상 통과(vacuous). tsc/test 등을 추가하면 좋습니다.
+────────────────────────────────────────────────────────
+결과: 경고 4건 (advisory)
+

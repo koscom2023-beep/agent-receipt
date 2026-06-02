@@ -70,7 +70,10 @@ If you omit `--contract`, the contract is auto-discovered (see below).
 | `check` | Run `required_checks.commands`; all must match their `required_exit`. | no |
 | `prompt` | Print a paste-in instruction block for the agent. | no |
 | `report [--out <file>]` | Run `verify` and write a Markdown report. | yes |
+| `receipt [--format json\|md] [--out <file>]` | Run `verify` + `check` and save an **AI Work Receipt** to `.agent-guard/receipts/`. | yes |
 | `pre` | Pre-start check (correct branch, nothing already staged). | yes |
+| `doctor` | Environment/setup health check (git / contract / baseline). | no |
+| `lint` | Advisory contract-quality checks (scope / denied / forbidden_actions). | no |
 | `help` | Usage. | no |
 
 ### Contract discovery
@@ -100,7 +103,7 @@ Real repos are rarely clean — there are often pre-existing untracked files (do
 - **Ambient noise is removed.** Files that were already unstaged/staged/untracked at `start` are excluded from scope checks — `verify` reports only what changed *since* the baseline.
 - **New violations are still caught.** A new out-of-scope or denied file created after `start` is flagged normally.
 - **`denied_paths` is never hidden by a baseline.** Denied matching runs against the **full** current working tree, not the baseline-relative subset. You cannot bury a denied path by baselining it.
-- **Only `.agent-guard/session.json` is ignored by `verify`** — the rest of `.agent-guard/` (e.g. `contract.yaml`) is treated normally.
+- **Only `.agent-guard/session.json` and `.agent-guard/receipts/` are ignored by `verify`** (tool-generated) — the rest of `.agent-guard/` (e.g. `contract.yaml`) is treated normally.
 - **Stale baselines are ignored, safely.** If you switch branches, or the recorded `baselineHead` is no longer an ancestor of `HEAD`, the baseline is dropped and `verify` falls back to full-tree checking (noisier, but it never hides changes). Run `agent-receipt reset` then `agent-receipt start` to re-baseline. Use `agent-receipt status` to see the current baseline state.
 
 ### `start` refuses when a denied path is already dirty
