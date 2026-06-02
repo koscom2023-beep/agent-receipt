@@ -185,6 +185,7 @@ Slice A 의 원칙은 **"출력 0 변경"** 이다. 아래 5개 명령의 **stdo
 | `check` | 불필요 | `required_checks.commands` 만 `/bin/sh` 로 실행. 전부 통과해야 0. | 0/1 |
 | `report [--out]` | **필요** | verify + 마크다운 보고서 저장(`--out`, 기본 `agent-guard-report-<id>.md`). | 0/1 |
 | `pre` | **필요** | 시작 전 점검(브랜치 불일치 / 이미 stage 된 파일). | 0/1 |
+| `start` | **필요** | 작업 시작 baseline 을 `.agent-guard/session.json` 에 기록(§11.5). denied 가 이미 dirty 거나 session 이 이미 있으면 실패. | 0/1 |
 | `prompt` | 불필요 | 에이전트에 붙일 지시문 출력(여기서 `forbidden_actions` 가 표시됨 — §7). | 0 |
 | `help` / 인자없음 | 불필요 | 사용법 출력. | 0 |
 
@@ -196,6 +197,35 @@ Slice A 의 원칙은 **"출력 0 변경"** 이다. 아래 5개 명령의 **stdo
 - `stagedOutOfScope` = `git.require_only_allowed_files_staged`(기본 false)일 때.
 - untracked 위반 = `git.require_no_staged_untracked`(기본 false)일 때.
 - `aheadBehind` = `origin/main` 기준. upstream 없으면 `null`.
+- (baseline) 유효 `.agent-guard/session.json` 이 있으면 위 검사는 baseline 이후 신규 변경만 본다 — **`deniedHits` 는 예외(항상 full touched)**. 상세는 §11.5.
+
+---
+
+## 11.5 baseline / session (`start`)
+
+`agent-guard start` 는 작업 시작 시점의 working tree 를 `.agent-guard/session.json` 에 baseline 으로 기록한다. 목적: 작업 *이전*부터 있던 ambient untracked 노이즈를 제거하고, verify 가 baseline *이후* 변경만 평가하게 한다.
+
+- **session 스키마**(계약 스키마와 무관, 독립): `version(1) · baselineHead · createdAt · contractId · gitBranch · unstagedAtStart · stagedAtStart · untrackedAtStart`.
+- **verify 의 baseline 적용**:
+  - 유효 session 없음 → 기존(full-tree) 동작 그대로(완전 후방호환).
+  - 유효 session 있음 → `touched`/`outOfScope`/`stagedOutOfScope`/untracked 검사는 **baseline 이후 신규 변경만**(현재 − `*AtStart` + `baselineHead..HEAD` 커밋분) 기준.
+  - **`deniedHits` 는 항상 full touched 기준 — baseline 으로 denied 를 숨길 수 없다.**
+  - `.agent-guard/session.json` *만* verify 에서 제외(나머지 `.agent-guard/**` 는 일반 파일로 취급 — `contract.yaml` 등은 그대로 잡힌다).
+  - session 유효성 = `gitBranch` 일치 + `baselineHead` 가 `HEAD` 의 조상. 무효(branch 변경/rebase 등)면 **baseline 무시 + full-tree degrade**(숨기지 않고 시끄러운 쪽으로).
+- **`verify --json` 14키는 baseline 적용 후에도 동결**(§12) — 값만 baseline-relative 로 바뀌고 키는 그대로.
+
+### start 안전조건 — denied 가 이미 dirty 면 실패
+
+`start` 시 이미 dirty 한(unstaged/staged/untracked) 파일이 `denied_paths` 에 매칭되면 **start 는 실패하고 session 을 쓰지 않는다.** dirty 한 denied 를 baseline 으로 묻으면 위험 변경이 "원래 있던 것"처럼 숨겨지기 때문이다. (기존 session 이 있어도 덮어쓰지 않고 실패 — 실수로 baseline 이 밀려 작업이 숨는 것 방지.)
+
+**이는 우회 대상이 아니라 안전 조건이다.** 해결:
+
+- 문제 untracked 를 정리 / `git add`+commit / gitignore, 또는
+- `denied_paths` 글롭을 ambient 파일과 겹치지 않게 축소.
+
+**안전 우회 플래그는 만들지 않는다 — 거부가 정답이다.**
+
+> baseline 은 **경로 집합** 비교지 내용 해시가 아니다. start 시점에 이미 untracked 였던 파일을 이후 *내용 수정*해도 (denied 가 아니면) 탐지 안 될 수 있다. denied 는 항상 full tree 기준이라 예외.
 
 ---
 
@@ -266,3 +296,4 @@ report:
 2. **`verify` / `check` / `prompt` / `report` / `pre` 의 stdout / stderr / `--json` / exit code 는 Slice A 동안 동결**이다. 회귀는 `test/golden/` 로 검출한다.
 3. 스키마에 없는 새 필드(`version` 등)는 도입하지 않는다(§8).
 4. 이 문서와 `src/schema.ts` 가 충돌하면 **`src/schema.ts` 가 SSOT** 다.
+5. **`start`(P1)는 `.agent-guard/session.json`(별도 session 스키마, §11.5)을 쓴다 — 계약 스키마(§1–§13)와 무관.** baseline 적용 후에도 `verify --json` 14키는 동결 유지.

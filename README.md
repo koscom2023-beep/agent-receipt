@@ -62,6 +62,7 @@ If you omit `--contract`, the contract is auto-discovered (see below).
 | Command | What it does | Needs git repo |
 |---|---|---|
 | `init --preset <generic\|nextjs-supabase>` | Create `.agent-guard/contract.yaml` + `.agent-guard/README.md`. Refuses to overwrite existing files. | no |
+| `start` | Record a baseline of the current working tree to `.agent-guard/session.json` (see Baseline mode). Refuses if a denied path is already dirty, or if a session already exists. | yes |
 | `verify [--json]` | State checks only (no commands run). Human report, or a stable one-line JSON with `--json`. | yes |
 | `check` | Run `required_checks.commands`; all must match their `required_exit`. | no |
 | `prompt` | Print a paste-in instruction block for the agent. | no |
@@ -84,6 +85,33 @@ When `--contract` / `-c` is not given, the first existing file wins, in this ord
 - `0` — pass
 - `1` — violation (`verify` state violation, `check` command failure, `pre` problem)
 - `2` — loading/usage error (missing/unreadable contract, schema error, not a git repo, unknown command/preset)
+
+---
+
+## Baseline mode (`start`)
+
+Real repos are rarely clean — there are often pre-existing untracked files (docs, exports, scratch) unrelated to the current task. Without a baseline, `verify` flags all of them, drowning the real signal.
+
+`agent-guard start` records the working tree at the start of a task into `.agent-guard/session.json` (a baseline). After that:
+
+- **Ambient noise is removed.** Files that were already unstaged/staged/untracked at `start` are excluded from scope checks — `verify` reports only what changed *since* the baseline.
+- **New violations are still caught.** A new out-of-scope or denied file created after `start` is flagged normally.
+- **`denied_paths` is never hidden by a baseline.** Denied matching runs against the **full** current working tree, not the baseline-relative subset. You cannot bury a denied path by baselining it.
+- **Only `.agent-guard/session.json` is ignored by `verify`** — the rest of `.agent-guard/` (e.g. `contract.yaml`) is treated normally.
+- **Stale baselines are ignored, safely.** If you switch branches, or the recorded `baselineHead` is no longer an ancestor of `HEAD`, the baseline is dropped and `verify` falls back to full-tree checking (noisier, but it never hides changes).
+
+### `start` refuses when a denied path is already dirty
+
+If any already-dirty file (unstaged/staged/untracked) matches `denied_paths`, **`start` fails and writes no session.** Baselining a dirty denied path would "bury" a dangerous change as if it had always been there.
+
+**This is a safety condition, not something to work around.** Resolve it by one of:
+
+- clean up / `git add` + commit / gitignore the offending untracked files, or
+- narrow the `denied_paths` globs so they don't overlap pre-existing ambient files.
+
+There is deliberately **no flag to bypass this check** — refusing is the correct behavior.
+
+> Baseline mode compares **path sets, not content hashes.** If a file already existed as untracked at `start`, later content edits to that same untracked path may not be detected — unless it matches `denied_paths`, which is always checked against the full tree.
 
 ---
 
