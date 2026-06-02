@@ -1,0 +1,1 @@
+{"ok":true,"contractId":"p2-utf8-paths","title":null,"branch":{"current":"main","expected":null,"ok":true},"touched":["추적.txt","스테이지.txt","my file.txt","미추적.txt"],"staged":["스테이지.txt"],"untracked":["my file.txt","미추적.txt"],"outOfScope":[],"deniedHits":[],"stagedOutOfScope":[],"nulBad":[],"violations":[],"headHash":"c06e5fb37c571e9abe3671967ec0c9f2e3d248ab","aheadBehind":null}

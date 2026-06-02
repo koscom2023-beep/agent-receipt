@@ -8,8 +8,14 @@ function git(args: string[]): string {
   }).trim();
 }
 
-function toList(out: string): string[] {
-  return out ? out.split("\n").map((s) => s.trim()).filter(Boolean) : [];
+// 파일 경로 목록 전용 수집기. -z(NUL 종단)로 받아 git 의 C-style quoting/octal escape 를 피하고
+// 한글·공백·특수문자 경로를 raw UTF-8 그대로 얻는다. 경로 양끝 공백이 실제 파일명일 수 있어 trim 하지 않는다.
+function gitPaths(args: string[]): string[] {
+  const out = execFileSync("git", [...args, "-z"], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  });
+  return out.split("\0").filter((s) => s.length > 0);
 }
 
 export function isGitRepo(): boolean {
@@ -31,17 +37,17 @@ export function currentBranch(): string {
 
 // 아직 stage 안 한 (tracked) 파일 변경
 export function unstagedFiles(): string[] {
-  return toList(git(["diff", "--name-only"]));
+  return gitPaths(["diff", "--name-only"]);
 }
 
 // stage된 파일 (새로 추가된 파일도 여기 포함됨)
 export function stagedFiles(): string[] {
-  return toList(git(["diff", "--cached", "--name-only"]));
+  return gitPaths(["diff", "--cached", "--name-only"]);
 }
 
 // 추적 안 되는 새 파일 (.gitignore 된 건 제외)
 export function untrackedFiles(): string[] {
-  return toList(git(["ls-files", "--others", "--exclude-standard"]));
+  return gitPaths(["ls-files", "--others", "--exclude-standard"]);
 }
 
 export function headHash(): string {

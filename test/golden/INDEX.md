@@ -1,7 +1,7 @@
 # agent-guard v0.1 golden baseline (A0.5)
 
 - branch: v0.1-verify-check-split
-- 캡처 케이스: 19개
+- 캡처 케이스: 22개
 - 결정론: 고정 git identity(ci/ci@local) + 고정 DATE(2025-01-01T00:00:00 +0000) → headHash 재현
 - 정규화(스냅샷 한정): $HOME→<HOME>, /tmp/claude-1000/ag-gold-*→<FIXTURE>
 
@@ -26,3 +26,6 @@
 | new-06-init-overwrite-fail | `guard init --preset generic   (재실행: 덮어쓰기 거부)` | 1 |
 | new-07-init-unknown-preset | `guard init --preset bogus` | 2 |
 | new-08-init-no-preset | `guard init` | 2 |
+| p2-01-utf8-paths-json | `guard verify --json --contract contract.yaml` | 0 |
+| p2-01b-utf8-paths-human | `guard verify --contract contract.yaml` | 0 |
+| p2-02-denied-utf8-json | `guard verify --json --contract contract.yaml` | 1 |

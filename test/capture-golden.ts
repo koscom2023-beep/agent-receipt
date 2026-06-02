@@ -338,6 +338,41 @@ function saveCreated(name: string, base: string): void {
   emit("new-08-init-no-preset", "guard init", r, null, base);
 }
 
+// ───────────────────────────── P2: 비ASCII/공백 경로 (NUL 파싱) ─────────────────────────────
+// git path 를 -z 로 읽어 한글·공백 경로가 quoting/octal 없이 raw UTF-8 로 잡히는지 + denied glob 정확 매칭 고정.
+
+// p2-01: unstaged(한글) + staged(한글) + untracked(한글/공백) 모두 정상 UTF-8 수집 (allowed:[] → PASS)
+{
+  const c = track(newCase());
+  writeFileSync(join(c.repo, "추적.txt"), "tracked korean\n");
+  git(c.repo, ["add", "추적.txt"]);
+  git(c.repo, ["commit", "-q", "-m", "add korean tracked"]);
+  writeFileSync(join(c.repo, "추적.txt"), "tracked korean edited\n"); // unstaged 수정
+  writeFileSync(join(c.repo, "스테이지.txt"), "staged korean\n");
+  git(c.repo, ["add", "스테이지.txt"]); // staged
+  writeFileSync(join(c.repo, "미추적.txt"), "untracked korean\n"); // untracked
+  writeFileSync(join(c.repo, "my file.txt"), "space name\n"); // untracked + 공백
+  const contract = `id: p2-utf8-paths\nscope:\n  allowed_paths: []\n`;
+  writeFileSync(c.contract, contract);
+  emit("p2-01-utf8-paths-json", "guard verify --json --contract contract.yaml",
+    run(c.repo, "verify", ["--json", "--contract", c.contract]), contract);
+  emit("p2-01b-utf8-paths-human", "guard verify --contract contract.yaml",
+    run(c.repo, "verify", ["--contract", c.contract]), contract);
+}
+
+// p2-02: denied_paths 의 한글 glob 이 한글 경로를 정확히 잡는지 (P2 이전엔 거짓 PASS → 회귀 가드)
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, "비밀"), { recursive: true });
+  writeFileSync(join(c.repo, "비밀", "문서.txt"), "secret korean\n");
+  const contract =
+    `id: p2-denied-utf8\ntitle: denied 한글 경로 매칭\n` +
+    `scope:\n  allowed_paths: []\n  denied_paths:\n    - "비밀/**"\n`;
+  writeFileSync(c.contract, contract);
+  emit("p2-02-denied-utf8-json", "guard verify --json --contract contract.yaml",
+    run(c.repo, "verify", ["--json", "--contract", c.contract]), contract);
+}
+
 // ───────────────────────────── 인덱스 + 정리 ─────────────────────────────
 
 const indexLines = [

@@ -1,0 +1,6 @@
+id: p2-denied-utf8
+title: denied 한글 경로 매칭
+scope:
+  allowed_paths: []
+  denied_paths:
+    - "비밀/**"
