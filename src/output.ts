@@ -4,8 +4,24 @@ import { resolveSession } from "./session.js";
 
 const line = "─".repeat(56);
 
-// 콘솔에 사람이 보기 좋은 검증 결과 출력
-export function printReport(r: VerifyResult): void {
+// verify FAIL 시 "다음 조치" 힌트(표시 전용 — 판정/exit/--json 에 영향 없음, 자동 revert 안 함).
+// 계약의 git.* 플래그로 실제 위반 카테고리만 정확히 짚는다.
+export function recoveryHints(r: VerifyResult, contract: Contract): string[] {
+  const h: string[] = [];
+  if (r.outOfScope.length) {
+    h.push("범위 밖 변경: 검토 후 되돌리거나(git restore/checkout) 계약의 allowed_paths 를 넓히세요. (자동 revert 안 함)");
+  }
+  if (r.deniedHits.length && contract.git.require_no_denied_path_diff) {
+    h.push("금지 경로 변경: commit 금지 — 되돌리기 / 별도 변경으로 분리 / denied_paths 글롭 조정 중 선택. (자동 revert 안 함)");
+  }
+  if (r.untracked.length && contract.git.require_no_staged_untracked) {
+    h.push("정리 안 된 새 파일: 필요하면 git add+commit, 아니면 삭제/gitignore. ambient 노이즈면 `agent-receipt start` 로 baseline 을 찍으세요.");
+  }
+  return h;
+}
+
+// 콘솔에 사람이 보기 좋은 검증 결과 출력. contract 가 주어지면 FAIL 시 recovery hint 를 덧붙인다.
+export function printReport(r: VerifyResult, contract?: Contract): void {
   console.log("");
   console.log(line);
   console.log(`작업계약 검증: ${r.contractId}`);
@@ -53,6 +69,16 @@ export function printReport(r: VerifyResult): void {
     for (const v of r.violations) console.log(`   ! ${v}`);
   }
   console.log(line);
+
+  // 다음 조치 hint (FAIL + contract 있을 때만 — 표시 전용, 자동 revert 안 함).
+  if (!r.ok && contract) {
+    const hints = recoveryHints(r, contract);
+    if (hints.length) {
+      console.log("");
+      console.log("다음 조치:");
+      for (const x of hints) console.log(`   → ${x}`);
+    }
+  }
 
   // stale baseline 경고 (표시 전용 — 판정은 runVerify 가 이미 끝냄; --json/exit 에는 영향 없음).
   // session 파일은 있는데 무효(stale)라 full-tree 로 degrade 된 경우만 이유+해결책을 알려준다.
@@ -168,7 +194,9 @@ export function printCheckReport(r: CheckResult): void {
     console.log("검사할 명령 없음 (required_checks.commands 비어 있음 — 통과 처리)");
   } else {
     for (const c of r.commands) {
-      console.log(`   - ${c.name}: ${c.ok ? "OK" : "✗"} (exit ${c.exitCode}, 기대 ${c.requiredExit})`);
+      // exit 127 은 코드 실패가 아니라 환경 문제(command not found / PATH)로 구분 표시.
+      const envTag = c.env ? "  ← command not found / 환경 문제 (PATH/설치 확인)" : "";
+      console.log(`   - ${c.name}: ${c.ok ? "OK" : "✗"} (exit ${c.exitCode}, 기대 ${c.requiredExit})${envTag}`);
     }
   }
 
@@ -210,7 +238,9 @@ export function buildPrompt(c: Contract): string {
   out.push("■ 공통 규칙:");
   out.push("  - 허용 파일 외에는 생성/수정/삭제 금지");
   out.push("  - 문서/메모/임시 리포트 같은 새 파일 만들지 말 것");
-  out.push("  - 작업이 끝나면 commit/push 하지 말고 멈출 것");
+  out.push("  - 허용 scope 밖 작업이 필요하면, 진행하지 말고 멈춰서 사람에게 물어볼 것");
+  out.push("  - 요청하지 않은 추가 개선/리팩터링 금지 (요청한 것만)");
+  out.push("  - 작업이 끝나면 commit / push / deploy 하지 말고 멈출 것");
 
   if (c.required_checks?.commands?.length) {
     out.push("");
@@ -219,9 +249,14 @@ export function buildPrompt(c: Contract): string {
   }
 
   out.push("");
-  out.push("■ 완료 보고 형식:");
-  out.push("  - 수정한 파일 목록");
-  out.push("  - 각 검사 통과 여부");
-  out.push("  - 범위 밖 변경이 없음을 확인");
+  out.push("■ 완료 보고 — 아래 JSON 을 그대로 붙일 것 (사람이 `agent-receipt claims --file` 로 git 과 대조한다):");
+  out.push("  {");
+  out.push('    "changedFiles": ["수정/생성한 파일 상대경로", "..."],');
+  out.push('    "newFiles": ["새로 만든 파일", "..."],');
+  out.push('    "deniedHits": [],');
+  out.push('    "tests": true,');
+  out.push('    "summary": "무엇을 했는지 한 줄"');
+  out.push("  }");
+  out.push("  - 이 보고는 '주장'일 뿐이며 git 실측과 다르면 mismatch 로 잡힌다. 변경을 숨기지 말 것.");
   return out.join("\n");
 }

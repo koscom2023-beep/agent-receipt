@@ -70,11 +70,14 @@ If you omit `--contract`, the contract is auto-discovered (see below).
 | `check` | Run `required_checks.commands`; all must match their `required_exit`. | no |
 | `prompt` | Print a paste-in instruction block for the agent. | no |
 | `report [--out <file>]` | Run `verify` and write a Markdown report. | yes |
-| `receipt [--format json\|md] [--out <file>]` | Run `verify` + `check` and save an **AI Work Receipt** to `.agent-guard/receipts/`. | yes |
+| `receipt [--format json\|md] [--out <file>]` | Run `verify` + `check` and save an **AI Work Receipt** to `.agent-guard/receipts/` (includes change magnitude, critical-path attestation, and an integrity `contentHash`). | yes |
+| `claims --file <claim.json>` | Compare an agent's completion report (JSON) against the actual git state — surfaces hidden/over-claimed changes as **AI said / Git says**. Mismatch → exit `1`. | yes |
+| `explain` | Explain *why* the tree is PASS/FAIL (branch / scope / denied / magnitude / critical paths) with recovery hints. Exit mirrors `verify`. | yes |
 | `pre` | Pre-start check (correct branch, nothing already staged). | yes |
 | `doctor` | Environment/setup health check (git / contract / baseline). | no |
 | `lint` | Advisory contract-quality checks (scope / denied / forbidden_actions). | no |
 | `help` | Usage. | no |
+| *(no args)* | Single-command routing: inspects state and points to the next step (`init` / `start` / `check`), or runs `verify` when a baseline exists. | — |
 
 ### Contract discovery
 
@@ -91,6 +94,8 @@ When `--contract` / `-c` is not given, the first existing file wins, in this ord
 - `0` — pass
 - `1` — violation (`verify` state violation, `check` command failure, `pre` problem)
 - `2` — loading/usage error (missing/unreadable contract, schema error, not a git repo, unknown command/preset)
+
+> Wiring it into a worktree sandbox, CI, or a pre-push hook? See [`docs/recipes.md`](docs/recipes.md).
 
 ---
 
@@ -245,6 +250,29 @@ For CI/automation, `verify --json` prints a single stable JSON line to stdout an
 
 ---
 
+## Completion claims (`claims`)
+
+An agent's "I changed only X, tests pass" is a *claim*. `agent-receipt claims --file <claim.json>` checks that claim against the **actual git state** — it never trusts the claim itself. The most useful catch is a change the agent *didn't* mention.
+
+The claim file is plain JSON; every field is optional and only provided fields are compared:
+
+```json
+{
+  "changedFiles": ["src/auth.ts"],
+  "newFiles": [],
+  "deniedHits": [],
+  "tests": true,
+  "summary": "fixed the token refresh"
+}
+```
+
+- `changedFiles` / `newFiles` / `deniedHits` are compared (as sets) to git's actual touched / untracked / denied paths.
+- `tests` (boolean) is compared to running `check` (the contract's `required_checks.commands`).
+- `summary` is informational only (echoed, not verified).
+- Exit `0` = claim matches git · `1` = mismatch · `2` = file missing / not valid JSON.
+
+`agent-receipt prompt` already tells the agent to emit exactly this JSON, so the loop is: brief with `prompt` → agent works → agent pastes the claim → `claims --file` reconciles it with git.
+
 ## Local-first / privacy
 
 - Runs entirely locally; no code or diff leaves your machine.
@@ -255,7 +283,7 @@ For CI/automation, `verify --json` prints a single stable JSON line to stdout an
 
 ## Package status
 
-Early preview (`0.2.x`), published on npm as **`@promptia-labs/agent-receipt`**. For local development:
+Early preview, published on npm as **`@promptia-labs/agent-receipt`** (latest published `0.2.1`; `0.4.x` is in local development and adds `claims` / `explain`, receipt magnitude + critical-path attestation + `contentHash`, and single-command routing). For local development:
 
 ```bash
 npm run build           # emit dist/  (also runs via prepack on npm pack/publish)

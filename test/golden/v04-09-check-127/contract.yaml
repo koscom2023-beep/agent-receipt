@@ -1,0 +1,8 @@
+id: s2-check-127
+scope:
+  allowed_paths: []
+required_checks:
+  commands:
+    - name: missing-cmd
+      command: 'exit 127'
+      required_exit: 0

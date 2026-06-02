@@ -89,3 +89,26 @@ export function committedSince(baseline: string): string[] {
     return [];
   }
 }
+
+// 변경 규모(라인 수) — `git diff HEAD --numstat` 기반: 추적 파일의 추가/삭제 라인 + 변경 파일 수.
+// 의미 판단/점수화 없음(숫자만). 경로 문자열은 쓰지 않으므로 비ASCII 경로의 C-quoting 과 무관하다.
+// 바이너리 파일은 numstat 이 '-\t-' 로 표시 → 파일 수에는 세고 라인 수에는 0 으로 둔다.
+export type LineStat = { filesChanged: number; added: number; deleted: number };
+export function numstatVsHead(): LineStat {
+  let filesChanged = 0;
+  let added = 0;
+  let deleted = 0;
+  try {
+    const out = git(["diff", "HEAD", "--numstat"]);
+    for (const ln of out.split("\n")) {
+      if (!ln) continue;
+      filesChanged++;
+      const [a, d] = ln.split("\t");
+      if (a && a !== "-") added += Number(a) || 0;
+      if (d && d !== "-") deleted += Number(d) || 0;
+    }
+  } catch {
+    /* HEAD 없음(커밋 0개) 등 → 0 */
+  }
+  return { filesChanged, added, deleted };
+}

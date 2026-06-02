@@ -1,7 +1,7 @@
 # agent-guard v0.1 golden baseline (A0.5)
 
 - branch: v0.1-verify-check-split
-- 캡처 케이스: 45개
+- 캡처 케이스: 54개
 - 결정론: 고정 git identity(ci/ci@local) + 고정 DATE(2025-01-01T00:00:00 +0000) → headHash 재현
 - 정규화(스냅샷 한정): $HOME→<HOME>, /tmp/claude-1000/ag-gold-*→<FIXTURE>
 
@@ -52,3 +52,12 @@
 | v1-04-doctor-ok | `guard doctor` | 0 |
 | v1-05-doctor-no-contract | `guard doctor   (no contract)` | 0 |
 | v1-06-lint-warn | `guard lint --contract contract.yaml` | 0 |
+| v04-01-claims-match | `guard claims --file claim.json --contract contract.yaml` | 0 |
+| v04-02-claims-mismatch | `guard claims --file claim.json   (AI hid newfile.txt)` | 1 |
+| v04-03-claims-no-file | `guard claims --file nope.json --contract contract.yaml   (missing)` | 2 |
+| v04-04-explain-pass | `guard explain --contract contract.yaml` | 0 |
+| v04-05-explain-fail | `guard explain --contract contract.yaml   (oos)` | 1 |
+| v04-06-router-no-contract | `guard   (no command, no contract)` | 0 |
+| v04-07-router-no-session | `guard   (no command; contract, no session)` | 0 |
+| v04-08-router-verify | `guard start … ; guard   (no command → verify)` | 0 |
+| v04-09-check-127 | `guard check --contract contract.yaml   (exit 127 = env problem)` | 1 |

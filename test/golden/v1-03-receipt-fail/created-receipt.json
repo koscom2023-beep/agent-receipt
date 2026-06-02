@@ -24,5 +24,38 @@
     "허용 범위 밖 변경 1건: outsider.md"
   ],
   "session": null,
-  "checks": []
+  "checks": [],
+  "magnitude": {
+    "filesChanged": 0,
+    "added": 0,
+    "deleted": 0,
+    "newFiles": 1
+  },
+  "criticalPaths": [
+    {
+      "glob": ".env*",
+      "touched": []
+    },
+    {
+      "glob": "package-lock.json",
+      "touched": []
+    },
+    {
+      "glob": "pnpm-lock.yaml",
+      "touched": []
+    },
+    {
+      "glob": "supabase/migrations/**",
+      "touched": []
+    },
+    {
+      "glob": "vercel.json",
+      "touched": []
+    },
+    {
+      "glob": ".github/workflows/**",
+      "touched": []
+    }
+  ],
+  "contentHash": "sha256:c0a41fbb6a9d7e548ff33390d8966732b02a6fccbd810ccf9cc34201ceaa0384"
 }

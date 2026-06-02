@@ -20,5 +20,38 @@
     "reason": null,
     "baselineHead": "06f4e1cfbd6a5a4019d7d182ee6f61f757a6354e"
   },
-  "checks": []
+  "checks": [],
+  "magnitude": {
+    "filesChanged": 0,
+    "added": 0,
+    "deleted": 0,
+    "newFiles": 1
+  },
+  "criticalPaths": [
+    {
+      "glob": ".env*",
+      "touched": []
+    },
+    {
+      "glob": "package-lock.json",
+      "touched": []
+    },
+    {
+      "glob": "pnpm-lock.yaml",
+      "touched": []
+    },
+    {
+      "glob": "supabase/migrations/**",
+      "touched": []
+    },
+    {
+      "glob": "vercel.json",
+      "touched": []
+    },
+    {
+      "glob": ".github/workflows/**",
+      "touched": []
+    }
+  ],
+  "contentHash": "sha256:776327708925df9a6960c6df2a874ea143d22649e25d07fb163aa8c28013a2d7"
 }

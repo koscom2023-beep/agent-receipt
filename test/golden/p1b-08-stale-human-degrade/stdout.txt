@@ -15,6 +15,9 @@ NUL 검사      : (대상 없음)
    ! 허용 범위 밖 변경 1건: ambient.txt
 ────────────────────────────────────────────────────────
 
+다음 조치:
+   → 범위 밖 변경: 검토 후 되돌리거나(git restore/checkout) 계약의 allowed_paths 를 넓히세요. (자동 revert 안 함)
+
 ⚠️  baseline(.agent-guard/session.json)을 무시하고 full-tree 로 검사했습니다 (session 이 현재 상태와 안 맞음).
    이유: session 브랜치 'main' ≠ 현재 'other'
    해결: `agent-receipt reset` 후 `agent-receipt start` 로 새 baseline 을 찍으세요.

@@ -1,0 +1,1 @@
+guard claims --file claim.json --contract contract.yaml

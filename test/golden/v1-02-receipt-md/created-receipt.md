@@ -17,3 +17,12 @@
 
 ## Checks
 - (none)
+
+## Magnitude (full working tree vs HEAD — git numstat)
+- files changed: 0, +0 / -0 lines, new files: 1
+
+## Critical paths
+- (none touched)
+
+## Integrity
+- contentHash: `sha256:776327708925df9a6960c6df2a874ea143d22649e25d07fb163aa8c28013a2d7`

@@ -12,6 +12,9 @@ import { runReset } from "./reset.js";
 import { runReceipt } from "./receipt.js";
 import { runDoctor } from "./doctor.js";
 import { runLint } from "./lint.js";
+import { runClaims } from "./claims.js";
+import { runExplain } from "./explain.js";
+import { runDefault } from "./router.js";
 
 function getArg(flag: string): string | undefined {
   const i = process.argv.indexOf(flag);
@@ -45,12 +48,15 @@ agent-receipt — AI 작업계약 검수 CLI
   agent-receipt check  --contract <path.yaml>   required_checks.commands(tsc/test 등)만 실행 (git 불필요)
   agent-receipt report --contract <path.yaml>   verify + 마크다운 보고서 저장 (--out 으로 경로 지정)
   agent-receipt receipt --contract <path.yaml>  verify+check 결과를 .agent-guard/receipts/ 에 저장 [--format json|md] [--out]
+  agent-receipt claims --file <claim.json>      AI 완료보고(JSON)를 git 실측과 대조 (mismatch 시 exit 1)
+  agent-receipt explain --contract <path.yaml>  왜 PASS/FAIL 인지 설명 + 규모/critical 경로 (exit = verify)
   agent-receipt pre    --contract <path.yaml>   작업 시작 전 안전 점검
   agent-receipt prompt --contract <path.yaml>   Cursor/Claude에 붙여넣을 지시문 생성
   agent-receipt doctor                          환경/설정 건강 점검 (git/계약/baseline)
   agent-receipt lint   --contract <path.yaml>   계약 품질 조언 (advisory)
 
   --contract 생략 시 .agent-guard/contract.yaml 등을 자동 탐색
+  agent-receipt        (인자 없이 실행)         현재 상태를 보고 다음 명령을 안내(준비됐으면 verify 실행)
 `);
 }
 
@@ -81,9 +87,14 @@ function runPre(contract: Contract): void {
 function main(): void {
   const command = process.argv[2];
 
-  if (!command || command === "help" || command === "--help" || command === "-h") {
+  if (command === "help" || command === "--help" || command === "-h") {
     printHelp();
     process.exit(0);
+  }
+
+  // 인자 없이 실행 → 단일명령 라우팅(상태 기반 안내 / 준비됐으면 verify). help 는 위에서 이미 가로챔.
+  if (!command) {
+    runDefault();
   }
 
   // init/reset 은 계약이 필요 없는 명령이라 계약 해석 전에 분리 처리한다(기존 명령 흐름 불변).
@@ -120,7 +131,7 @@ function main(): void {
         // 기계용: stdout엔 spec 필드만 추린 stable JSON 한 줄만. 그 외 출력은 일절 금지.
         process.stdout.write(JSON.stringify(toJsonReport(r)) + "\n");
       } else {
-        printReport(r);
+        printReport(r, contract);
         // verify는 commands를 실행하지 않는다 — 사람이 "테스트도 통과"로 오인하지 않도록 알림(stderr).
         process.stderr.write(
           "note: verify는 상태만 검사하고 명령(commands)을 실행하지 않습니다 — 테스트/빌드 검증은 `agent-receipt check`.\n"
@@ -170,6 +181,20 @@ function main(): void {
       // verify + check 결과를 .agent-guard/receipts/ 에 저장(AI Work Receipt).
       requireRepo();
       runReceipt(contract, getArg("--format"), getArg("--out"));
+      break;
+    }
+
+    case "claims": {
+      // AI 완료보고(JSON)를 git 실측과 대조 — git 필요(runVerify/runCheck 사용).
+      requireRepo();
+      runClaims(contract, getArg("--file"));
+      break;
+    }
+
+    case "explain": {
+      // 왜 PASS/FAIL 인지 설명(+규모/critical) — exit 는 verify 와 동일.
+      requireRepo();
+      runExplain(contract);
       break;
     }
 

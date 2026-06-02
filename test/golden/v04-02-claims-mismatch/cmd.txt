@@ -1,0 +1,1 @@
+guard claims --file claim.json   (AI hid newfile.txt)

@@ -1,0 +1,6 @@
+id: s2-explain-pass
+scope:
+  allowed_paths:
+    - "f.txt"
+  denied_paths:
+    - ".env*"

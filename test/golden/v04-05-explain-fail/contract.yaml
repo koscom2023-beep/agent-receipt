@@ -1,0 +1,11 @@
+id: s2-src
+title: sprint2 src-only
+branch:
+  expected: main
+scope:
+  allowed_paths:
+    - "src/**"
+  denied_paths:
+    - ".env*"
+required_checks:
+  commands: []

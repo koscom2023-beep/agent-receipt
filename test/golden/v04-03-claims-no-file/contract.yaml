@@ -1,0 +1,9 @@
+id: s2-all
+title: sprint2
+scope:
+  allowed_paths:
+    - "**"
+  denied_paths:
+    - ".env*"
+required_checks:
+  commands: []

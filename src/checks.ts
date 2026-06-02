@@ -11,6 +11,7 @@ export type CommandResult = {
   exitCode: number;
   requiredExit: number;
   ok: boolean;
+  env: boolean; // exit 127 = command not found / 환경 문제(코드 실패와 구분 — 표시 전용)
 };
 
 export type VerifyResult = {
@@ -47,7 +48,8 @@ function runCommand(name: string, command: string, requiredExit: number): Comman
   } catch (e: any) {
     exitCode = typeof e?.status === "number" ? e.status : 1;
   }
-  return { name, command, exitCode, requiredExit, ok: exitCode === requiredExit };
+  // exit 127 = 셸의 "command not found" 관례 → 코드 실패가 아니라 환경 문제로 구분(판정/exit 규칙은 불변).
+  return { name, command, exitCode, requiredExit, ok: exitCode === requiredExit, env: exitCode === 127 };
 }
 
 export function runVerify(contract: Contract): VerifyResult {

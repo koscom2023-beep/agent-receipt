@@ -1,0 +1,5 @@
+
+agent-receipt — 시작하려면 계약이 필요합니다.
+  → agent-receipt init --preset generic    (.agent-guard/contract.yaml 생성)
+  자세히: agent-receipt help
+

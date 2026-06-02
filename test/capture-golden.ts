@@ -634,6 +634,100 @@ function saveReceipt(name: string, repo: string, fname: string): void {
     run(c.repo, "lint", ["--contract", c.contract]), contract);
 }
 
+// ───────────────────────────── V1-Core Sprint 2 (v0.4): claims / explain / router / check-127 ─────────────────────────────
+// 새 명령(claims/explain) + 단일명령 라우팅(bare) + check exit127 구분. 기존 케이스는 위에서 동결.
+const S2_ALL =
+  `id: s2-all\ntitle: sprint2\nscope:\n  allowed_paths:\n    - "**"\n  denied_paths:\n    - ".env*"\nrequired_checks:\n  commands: []\n`;
+const S2_SRC =
+  `id: s2-src\ntitle: sprint2 src-only\nbranch:\n  expected: main\n` +
+  `scope:\n  allowed_paths:\n    - "src/**"\n  denied_paths:\n    - ".env*"\nrequired_checks:\n  commands: []\n`;
+
+// 인자 없이(=명령 없이) CLI 실행 → 단일명령 라우팅(runDefault). run() 은 항상 command 를 넣으므로 별도 헬퍼.
+function runBare(cwd: string, args: string[]): RunRes {
+  const res = spawnSync(tsxBin, [cli, ...args], { cwd, env: ENV, encoding: "utf8" });
+  if (res.error) throw new Error(`서브프로세스 spawn 실패(bare): ${res.error.message}`);
+  return { status: res.status, stdout: res.stdout, stderr: res.stderr };
+}
+
+// v04-01: claims 일치 → exit 0 (allowed:**, f.txt 수정, claim 이 정확). claim 파일은 repo 밖(base)에 둔다.
+{
+  const c = track(newCase());
+  writeFileSync(c.contract, S2_ALL);
+  writeFileSync(join(c.repo, "f.txt"), "edited within scope\n");
+  const claim = join(c.base, "claim.json");
+  writeFileSync(claim, JSON.stringify({ changedFiles: ["f.txt"], newFiles: [], deniedHits: [], tests: true, summary: "edit f.txt" }, null, 2) + "\n");
+  emit("v04-01-claims-match", "guard claims --file claim.json --contract contract.yaml",
+    run(c.repo, "claims", ["--file", claim, "--contract", c.contract]), S2_ALL, c.base);
+}
+// v04-02: claims mismatch → exit 1 (AI 가 newfile.txt 를 숨김)
+{
+  const c = track(newCase());
+  writeFileSync(c.contract, S2_ALL);
+  writeFileSync(join(c.repo, "f.txt"), "edited within scope\n");
+  writeFileSync(join(c.repo, "newfile.txt"), "hidden new file\n");
+  const claim = join(c.base, "claim.json");
+  writeFileSync(claim, JSON.stringify({ changedFiles: ["f.txt"], newFiles: [], deniedHits: [], tests: true, summary: "only edited f.txt" }, null, 2) + "\n");
+  emit("v04-02-claims-mismatch", "guard claims --file claim.json   (AI hid newfile.txt)",
+    run(c.repo, "claims", ["--file", claim, "--contract", c.contract]), S2_ALL, c.base);
+}
+// v04-03: claims 파일 없음 → exit 2
+{
+  const c = track(newCase());
+  writeFileSync(c.contract, S2_ALL);
+  emit("v04-03-claims-no-file", "guard claims --file nope.json --contract contract.yaml   (missing)",
+    run(c.repo, "claims", ["--file", "nope.json", "--contract", c.contract]), S2_ALL);
+}
+// v04-04: explain PASS (allowed f.txt, 범위 안 수정)
+{
+  const c = track(newCase());
+  const contract = `id: s2-explain-pass\nscope:\n  allowed_paths:\n    - "f.txt"\n  denied_paths:\n    - ".env*"\n`;
+  writeFileSync(c.contract, contract);
+  writeFileSync(join(c.repo, "f.txt"), "edited within scope\n");
+  emit("v04-04-explain-pass", "guard explain --contract contract.yaml",
+    run(c.repo, "explain", ["--contract", c.contract]), contract);
+}
+// v04-05: explain FAIL (allowed src/**, 범위 밖 새 파일)
+{
+  const c = track(newCase());
+  writeFileSync(c.contract, S2_SRC);
+  writeFileSync(join(c.repo, "newfile.txt"), "out of scope\n");
+  emit("v04-05-explain-fail", "guard explain --contract contract.yaml   (oos)",
+    run(c.repo, "explain", ["--contract", c.contract]), S2_SRC);
+}
+// v04-06: router — 계약 없음 → init 안내 (bare)
+{
+  const c = track(newCase());
+  emit("v04-06-router-no-contract", "guard   (no command, no contract)",
+    runBare(c.repo, []), null);
+}
+// v04-07: router — 계약 있음(.agent-guard/), session 없음 → start 안내 (bare)
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, ".agent-guard"), { recursive: true });
+  writeFileSync(join(c.repo, ".agent-guard", "contract.yaml"), S2_SRC);
+  emit("v04-07-router-no-session", "guard   (no command; contract, no session)",
+    runBare(c.repo, []), null, c.base);
+}
+// v04-08: router — session 있음 → verify 실행 (bare, PASS). contract.yaml 은 start 전 생성 → baseline 에 묻힘.
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, ".agent-guard"), { recursive: true });
+  writeFileSync(join(c.repo, ".agent-guard", "contract.yaml"), S2_SRC);
+  run(c.repo, "start", []); // .agent-guard/contract.yaml 자동탐색 → session 기록
+  emit("v04-08-router-verify", "guard start … ; guard   (no command → verify)",
+    runBare(c.repo, []), null, c.base);
+}
+// v04-09: check — exit 127 → 코드 실패가 아니라 환경 문제로 구분 표시 ('exit 127' 은 stderr 없이 결정론적)
+{
+  const c = track(newCase());
+  const contract =
+    `id: s2-check-127\nscope:\n  allowed_paths: []\n` +
+    `required_checks:\n  commands:\n    - name: missing-cmd\n      command: 'exit 127'\n      required_exit: 0\n`;
+  writeFileSync(c.contract, contract);
+  emit("v04-09-check-127", "guard check --contract contract.yaml   (exit 127 = env problem)",
+    run(c.repo, "check", ["--contract", c.contract]), contract);
+}
+
 // ───────────────────────────── 인덱스 + 정리 ─────────────────────────────
 
 const indexLines = [
