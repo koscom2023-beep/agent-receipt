@@ -103,15 +103,9 @@ export function runVerify(contract: Contract): VerifyResult {
     violations.push(`NUL 바이트(파일 깨짐) 발견: ${nulBad.join(", ")}`);
   }
 
-  // 8) 필수 명령 실행 (tsc, test 등)
-  const commands: CommandResult[] = [];
-  for (const c of contract.required_checks?.commands ?? []) {
-    const res = runCommand(c.name, c.command, c.required_exit ?? 0);
-    commands.push(res);
-    if (!res.ok) {
-      violations.push(`체크 실패 '${c.name}': exit ${res.exitCode} (기대 ${res.requiredExit})`);
-    }
-  }
+  // 8) (v0.1) verify는 더 이상 필수 명령(commands)을 실행하지 않는다 — `guard check`가 담당.
+  //     VerifyResult.commands 필드는 output.ts(printReport/toMarkdown) 하위호환을 위해
+  //     형태만 유지하고 항상 빈 배열로 둔다. 실제 실행은 runCheck()를 보라.
 
   // 9) push 상태 (참고용)
   const aheadBehind = g.aheadBehind("origin/main");
@@ -128,10 +122,34 @@ export function runVerify(contract: Contract): VerifyResult {
     stagedOutOfScope,
     nulPaths,
     nulBad,
-    commands,
+    commands: [],
     headHash: g.headHash(),
     aheadBehind,
     violations,
     ok: violations.length === 0,
+  };
+}
+
+// ── check 명령: 계약의 required_checks.commands 만 실행한다 ──
+// verify(상태 검사)와 책임을 분리한 것. git 상태에 의존하지 않는다.
+export type CheckResult = {
+  contractId: string;
+  title?: string;
+  commands: CommandResult[];
+  ok: boolean;
+};
+
+export function runCheck(contract: Contract): CheckResult {
+  const commands: CommandResult[] = [];
+  for (const c of contract.required_checks?.commands ?? []) {
+    commands.push(runCommand(c.name, c.command, c.required_exit ?? 0));
+  }
+  // 명령이 하나도 없으면 ok=true(빈 배열 every) — vacuous PASS.
+  // 사람용 출력(printCheckReport)에서 "검사할 명령 없음"을 명시한다.
+  return {
+    contractId: contract.id,
+    title: contract.title,
+    commands,
+    ok: commands.every((c) => c.ok),
   };
 }

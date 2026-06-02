@@ -30,21 +30,41 @@ pnpm add minimatch yaml zod
 
 ---
 
-## 명령 4개
+## 명령 5개
 
 | 명령 | 하는 일 |
 |------|---------|
 | `guard pre`    | 작업 시작 전 점검 (브랜치 맞는지, 이미 stage된 거 없는지) |
 | `guard prompt` | 계약서를 읽고 Cursor/Claude에 붙여넣을 지시문 생성 |
-| `guard verify` | 작업 후 diff/범위/금지파일/NUL/테스트 검사. 위반 있으면 exit 1 |
+| `guard verify` | 작업 후 **상태** 검사: diff/범위/금지파일/NUL. 위반 있으면 exit 1. **명령(테스트/빌드)은 실행 안 함** |
+| `guard verify --json` | 사람용 보고서 대신 **기계용 stable JSON**을 stdout에 단독 출력 (CI용) |
+| `guard check`  | 계약의 `required_checks.commands`(tsc/test 등)**만 실행**. git 불필요 |
 | `guard report` | verify + 결과를 마크다운 파일로 저장 (`--out 경로`) |
+
+> **verify ≠ check** — `verify`는 **상태만** 본다(빠름). 테스트·빌드는 `check`가 돌린다.
+> 작업 후 게이트는 **둘 다** 통과시켜라: `guard verify && guard check`.
+> `verify` 단독 통과는 "테스트도 통과"가 아니다(아래 위협모델 참고).
 
 ```bash
 pnpm guard pre     --contract tools/agent-guard/contracts/gate-3a-p0.yaml
 pnpm guard prompt  --contract tools/agent-guard/contracts/gate-3a-p0.yaml
 pnpm guard verify  --contract tools/agent-guard/contracts/gate-3a-p0.yaml
+pnpm guard verify  --contract tools/agent-guard/contracts/gate-3a-p0.yaml --json   # 기계용 JSON
+pnpm guard check   --contract tools/agent-guard/contracts/gate-3a-p0.yaml
 pnpm guard report  --contract tools/agent-guard/contracts/gate-3a-p0.yaml --out report.md
 ```
+
+### `verify --json` 출력 (기계용 stable 계약)
+
+`--json`은 아래 **spec 필드만** stdout에 한 줄 JSON으로 낸다(키 집합·순서 고정). exit code: PASS=0 / 위반=1 / 로딩·환경 오류=2(이때 stdout엔 JSON 없음, stderr만).
+
+```json
+{"ok":true,"contractId":"...","title":null,"branch":{"current":"main","expected":null,"ok":true},"touched":[],"staged":[],"untracked":[],"outOfScope":[],"deniedHits":[],"stagedOutOfScope":[],"nulBad":[],"violations":[],"headHash":"...","aheadBehind":null}
+```
+
+- 옵셔널 필드(`title`, `branch.expected`)는 없으면 `null`로 **키가 유지**된다(키 집합 불변).
+- `aheadBehind`는 upstream(`origin/main`) 없으면 `null`.
+- 내부 필드(`commands`, `nulPaths` 등)는 **출력하지 않는다**. 안정 보장 대상은 위 spec 필드뿐 — CI는 키 형태가 아니라 **`ok` 값과 exit code**에 의존하라.
 
 ---
 
@@ -54,7 +74,7 @@ pnpm guard report  --contract tools/agent-guard/contracts/gate-3a-p0.yaml --out 
 2. `pnpm guard pre ...` — 시작해도 안전한지 확인
 3. `pnpm guard prompt ...` — 나온 지시문을 Cursor/Claude에 붙여넣고 작업 시킴
 4. AI가 작업
-5. `pnpm guard verify ...` — **PASS 나오기 전엔 커밋 금지**
+5. `pnpm guard verify ...`(상태) + `pnpm guard check ...`(테스트/빌드) — **둘 다 PASS 전엔 커밋 금지** (`verify && check`)
 6. PASS면 허용 파일만 직접 `git add` 후 커밋
 7. (선택) `pnpm guard report ...` 로 완료 보고서 남김
 
@@ -87,12 +107,23 @@ git:
 
 ---
 
-## v0 한계 (알고 쓰기)
+## 위협 모델 — 막는 것 / 못 막는 것 (과신 금지)
 
-- **push는 완벽히 못 막는다.** `origin/main` 대비 앞/뒤 커밋 수만 참고로 보여준다.
-  push 차단은 git pre-push hook으로 따로 거는 게 확실하다.
+이건 **보안 솔루션이 아니라 "AI 변경통제 보조 + 감사" 도구**다.
+
+**막는 것** (정적 검사, 위반 시 exit 1):
+- 허용 범위 밖 파일 변경, 금지(`denied_paths`) 경로 접촉
+- 허용 밖 파일이 stage됨, 정리 안 된 새 파일(untracked)
+- 지정 파일의 NUL 바이트(파일 깨짐)
+
+**못 막는 것** (알고 써라):
+- **`verify`는 테스트/빌드를 실행하지 않는다** — 런타임/통합 결함은 못 잡는다. 그건 `check` 책임이며, `check`를 게이트에서 빠뜨리면 verify가 PASS여도 검증된 게 아니다.
+- **push는 완벽히 못 막는다.** `origin/main` 대비 앞/뒤 커밋 수만 참고로 보여준다. 확실히 막으려면 git pre-push hook을 따로 걸어라.
 - glob은 `minimatch` 기본 동작을 따른다. (`**`는 폴더 가로질러 매칭)
-- 파일 경로에 특수문자가 있으면 git이 따옴표로 감싸는데, 그건 아직 처리 안 함.
+- 파일 경로에 특수문자(따옴표/공백/비ASCII)가 있으면 git이 따옴표로 감싸는데, 그건 아직 처리 안 함.
+- 악의적 사용자·셸 우회·OS 권한 밖은 범위 밖.
+
+설계 근거·14인 회의록은 [`docs/v0.1-design-log.md`](docs/v0.1-design-log.md) 참고.
 
 ---
 

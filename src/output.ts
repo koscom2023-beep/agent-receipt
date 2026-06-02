@@ -1,5 +1,5 @@
 import type { Contract } from "./schema.js";
-import type { VerifyResult } from "./checks.js";
+import type { VerifyResult, CheckResult } from "./checks.js";
 
 const line = "─".repeat(56);
 
@@ -98,6 +98,73 @@ export function toMarkdown(r: VerifyResult): string {
     out.push("");
   }
   return out.join("\n");
+}
+
+// ── 기계용 stable JSON ──
+// 안정 계약을 위해 spec 필드만 명시적으로 추린다(키 집합·순서 고정).
+// 내부 필드(commands, nulPaths, changed 등)는 의도적으로 제외한다.
+// 옵셔널 필드(title, branch.expected)는 undefined여도 키가 사라지지 않게 ?? null 로 고정한다.
+export type JsonReport = {
+  ok: boolean;
+  contractId: string;
+  title: string | null;
+  branch: { current: string; expected: string | null; ok: boolean };
+  touched: string[];
+  staged: string[];
+  untracked: string[];
+  outOfScope: string[];
+  deniedHits: string[];
+  stagedOutOfScope: string[];
+  nulBad: string[];
+  violations: string[];
+  headHash: string;
+  aheadBehind: { ahead: number; behind: number } | null;
+};
+
+export function toJsonReport(r: VerifyResult): JsonReport {
+  return {
+    ok: r.ok,
+    contractId: r.contractId,
+    title: r.title ?? null,
+    branch: { current: r.branch.current, expected: r.branch.expected ?? null, ok: r.branch.ok },
+    touched: r.touched,
+    staged: r.staged,
+    untracked: r.untracked,
+    outOfScope: r.outOfScope,
+    deniedHits: r.deniedHits,
+    stagedOutOfScope: r.stagedOutOfScope,
+    nulBad: r.nulBad,
+    violations: r.violations,
+    headHash: r.headHash,
+    aheadBehind: r.aheadBehind,
+  };
+}
+
+// check 명령 결과(필수 명령 실행)를 사람이 보기 좋게 출력
+export function printCheckReport(r: CheckResult): void {
+  console.log("");
+  console.log(line);
+  console.log(`필수 체크 실행: ${r.contractId}`);
+  if (r.title) console.log(r.title);
+  console.log(line);
+
+  if (!r.commands.length) {
+    console.log("검사할 명령 없음 (required_checks.commands 비어 있음 — 통과 처리)");
+  } else {
+    for (const c of r.commands) {
+      console.log(`   - ${c.name}: ${c.ok ? "OK" : "✗"} (exit ${c.exitCode}, 기대 ${c.requiredExit})`);
+    }
+  }
+
+  console.log(line);
+  if (r.ok) {
+    console.log("결과: PASS ✅  모든 명령 통과.");
+  } else {
+    const failed = r.commands.filter((c) => !c.ok).length;
+    console.log(`결과: FAIL ❌  실패 ${failed}건`);
+  }
+  console.log(line);
+  console.log("");
 }
 
 // 계약서 → Cursor/Claude에 붙여넣을 지시문 생성
