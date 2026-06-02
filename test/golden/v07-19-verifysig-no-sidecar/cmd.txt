@@ -1,0 +1,1 @@
+guard verify-signature --receipt f.txt   (no .sig.json → exit 2)

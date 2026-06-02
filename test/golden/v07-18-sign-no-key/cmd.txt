@@ -1,0 +1,1 @@
+guard sign --receipt f.txt   (no keys init → exit 2)

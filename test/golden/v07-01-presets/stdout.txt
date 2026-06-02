@@ -1,0 +1,17 @@
+
+────────────────────────────────────────────────────────
+agent-receipt presets — 내장 계약 preset (local builtin)
+────────────────────────────────────────────────────────
+  generic
+      범용 patch-only — 아무 프로젝트나 시작점. allowed_paths 비움(denied 보호 중심).
+  nextjs-supabase
+      Next.js + Supabase — migrations/lockfile/vercel.json denied + tsc 체크 포함.
+  promptia
+      Promptia 전용 — Promptia 구조(app/src/.../database/e2e) allowed + .env/migrations/vercel/exports denied.
+  strict
+      엄격(strict) — 위험 작업·외주 검수. allowed 좁게 + untracked/staged 검사 on.
+  relaxed
+      느슨(relaxed) — 탐색/프로토타이핑. denied 중심, ambient 노이즈에 관대.
+────────────────────────────────────────────────────────
+  사용:  agent-receipt init --preset <name>   /   초안:  agent-receipt draft-contract --preset <name>
+

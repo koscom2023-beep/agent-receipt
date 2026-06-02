@@ -1,0 +1,1 @@
+verify-signature: 서명 파일 없음 (f.txt.sig.json) — 'agent-receipt sign' 을 먼저 실행하세요.

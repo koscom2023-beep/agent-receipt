@@ -1,0 +1,1 @@
+guard review --contract contract.yaml

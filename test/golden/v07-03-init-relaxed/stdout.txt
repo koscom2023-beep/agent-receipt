@@ -1,0 +1,3 @@
+생성됨 (preset: relaxed):
+  - <FIXTURE>/.agent-guard/contract.yaml
+  - <FIXTURE>/.agent-guard/README.md

@@ -839,6 +839,131 @@ const normTs = (s: string): string => s.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\
   }
 }
 
+// ───────────────────────────── Sprint 5 (v0.7): presets/draft/review/prompt변종/client-md/sign/audit/dashboard/approve/export ─────────────────────────────
+// 신규 명령 대량 추가. 서명(키)은 비결정적 → error path 만 golden, happy path 는 smoke/dogfood.
+
+// 산출물 저장(타임스탬프 정규화 옵션) — saveReceipt/saveSession 패턴 계승.
+function saveArtifact(caseName: string, repo: string, relPath: string, outName: string, tsNorm: boolean): void {
+  const sp = join(repo, relPath);
+  if (!existsSync(sp)) return;
+  let s = readFileSync(sp, "utf8");
+  if (tsNorm) s = normTs(s);
+  writeFileSync(join(goldenDir, caseName, outName), s);
+}
+// receipt 1개(고정명) 가진 fixture — audit/export/approve/dashboard/client-md 공용.
+function v07Receipt(): { base: string; repo: string; contract: string } {
+  const c = track(newCase());
+  mkdirSync(join(c.repo, ".agent-guard"), { recursive: true });
+  mkdirSync(join(c.repo, "src"), { recursive: true });
+  writeFileSync(join(c.repo, ".agent-guard", "contract.yaml"), V06_SRC);
+  writeFileSync(join(c.repo, "src", "a.ts"), "export const a = 1;\n");
+  run(c.repo, "start", []);
+  run(c.repo, "receipt", ["--format", "json", "--out", join(".agent-guard", "receipts", "receipt-A.json")]);
+  return c;
+}
+
+// v07-01: presets 목록
+{
+  const c = track(newCase());
+  emit("v07-01-presets", "guard presets", run(c.repo, "presets", []), null);
+}
+// v07-02/03: init strict / relaxed (생성물 캡처)
+{
+  const base = initBase();
+  emit("v07-02-init-strict", "guard init --preset strict", run(base, "init", ["--preset", "strict"]), null, base);
+  saveCreated("v07-02-init-strict", base);
+}
+{
+  const base = initBase();
+  emit("v07-03-init-relaxed", "guard init --preset relaxed", run(base, "init", ["--preset", "relaxed"]), null, base);
+  saveCreated("v07-03-init-relaxed", base);
+}
+// v07-04: draft-contract — repo 스캔(app/src/docs 존재) → stdout 초안
+{
+  const c = track(newCase());
+  for (const d of ["app", "src", "docs"]) mkdirSync(join(c.repo, d), { recursive: true });
+  emit("v07-04-draft-scan", "guard draft-contract   (repo 스캔)", run(c.repo, "draft-contract", []), null);
+}
+// v07-05: draft-contract --preset strict → template 그대로 stdout
+{
+  const c = track(newCase());
+  emit("v07-05-draft-preset-strict", "guard draft-contract --preset strict", run(c.repo, "draft-contract", ["--preset", "strict"]), null);
+}
+// v07-06: review (strict 계약 대상)
+{
+  const c = track(newCase());
+  const contract = readFileSync(join(repoRoot, "templates", "strict.yaml"), "utf8");
+  writeFileSync(c.contract, contract);
+  emit("v07-06-review-strict", "guard review --contract contract.yaml", run(c.repo, "review", ["--contract", c.contract]), contract);
+}
+// v07-07/08: prompt --cursor / --claude (case-07 default 와 머리말만 다름)
+{
+  const c = track(newCase());
+  const contract =
+    `id: gold-prompt\ntitle: prompt block test\nbranch:\n  expected: main\n` +
+    `scope:\n  allowed_paths:\n    - "src/**"\n  denied_paths:\n    - "package.json"\n` +
+    `forbidden_actions:\n  - push\n  - deploy\n` +
+    `required_checks:\n  commands:\n    - name: tsc\n      command: 'tsc --noEmit'\n      required_exit: 0\n`;
+  writeFileSync(c.contract, contract);
+  emit("v07-07-prompt-cursor", "guard prompt --cursor --contract contract.yaml", run(c.repo, "prompt", ["--cursor", "--contract", c.contract]), contract);
+  emit("v07-08-prompt-claude", "guard prompt --claude --contract contract.yaml", run(c.repo, "prompt", ["--claude", "--contract", c.contract]), contract);
+}
+// v07-09: receipt --format client-md (고객 전달용 — 내용 정규화 저장)
+{
+  const c = v07Receipt();
+  const r = run(c.repo, "receipt", ["--format", "client-md", "--out", join(".agent-guard", "receipts", "client.md")]);
+  emit("v07-09-receipt-client-md", "guard receipt --format client-md --out client.md", r, null);
+  saveArtifact("v07-09-receipt-client-md", c.repo, join(".agent-guard", "receipts", "client.md"), "created-client.md", true);
+}
+// v07-10/11/12: audit / audit-empty / audit --json
+{
+  const c = v07Receipt();
+  emit("v07-10-audit", "guard audit   (1 receipt)", run(c.repo, "audit", []), null);
+  emit("v07-12-audit-json", "guard audit --json", run(c.repo, "audit", ["--json"]), null);
+}
+{
+  const c = track(newCase());
+  emit("v07-11-audit-empty", "guard audit   (no receipts)", run(c.repo, "audit", []), null);
+}
+// v07-13/14: export slack / json
+{
+  const c = v07Receipt();
+  emit("v07-13-export-slack", "guard export --format slack --receipt receipt-A.json",
+    run(c.repo, "export", ["--format", "slack", "--receipt", join(".agent-guard", "receipts", "receipt-A.json")]), null);
+  const ej = run(c.repo, "export", ["--format", "json", "--receipt", join(".agent-guard", "receipts", "receipt-A.json")]);
+  ej.stdout = normTs(ej.stdout);
+  emit("v07-14-export-json", "guard export --format json --receipt receipt-A.json", ej, null);
+}
+// v07-15/16: approve / approvals (golden 환경엔 git user 미설정 → approver unknown)
+{
+  const c = v07Receipt();
+  const ap = run(c.repo, "approve", ["--receipt", join(".agent-guard", "receipts", "receipt-A.json"), "--note", "검수 완료"]);
+  emit("v07-15-approve", "guard approve --receipt receipt-A.json --note '검수 완료'", ap, null);
+  saveArtifact("v07-15-approve", c.repo, join(".agent-guard", "receipts", "receipt-A.json.approval.json"), "created-approval.json", true);
+  const al = run(c.repo, "approvals", []);
+  al.stdout = normTs(al.stdout);
+  emit("v07-16-approvals", "guard approvals", al, null);
+}
+// v07-17: dashboard (stdout 메시지 + HTML marker)
+{
+  const c = v07Receipt();
+  emit("v07-17-dashboard", "guard dashboard   (1 receipt → static HTML)", run(c.repo, "dashboard", []), null);
+  saveArtifact("v07-17-dashboard", c.repo, join(".agent-guard", "dashboard.html"), "created-dashboard.html", true);
+}
+// v07-18/19/20: signing error paths (키 비결정적 → happy path 는 smoke/dogfood)
+{
+  const c = track(newCase());
+  emit("v07-18-sign-no-key", "guard sign --receipt f.txt   (no keys init → exit 2)", run(c.repo, "sign", ["--receipt", "f.txt"]), null);
+}
+{
+  const c = track(newCase());
+  emit("v07-19-verifysig-no-sidecar", "guard verify-signature --receipt f.txt   (no .sig.json → exit 2)", run(c.repo, "verify-signature", ["--receipt", "f.txt"]), null);
+}
+{
+  const c = track(newCase());
+  emit("v07-20-export-no-format", "guard export --receipt f.txt   (no --format → exit 2)", run(c.repo, "export", ["--receipt", "f.txt"]), null);
+}
+
 // ───────────────────────────── 인덱스 + 정리 ─────────────────────────────
 
 const indexLines = [

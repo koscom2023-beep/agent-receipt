@@ -1,0 +1,1 @@
+guard export --format json --receipt receipt-A.json

@@ -1,10 +1,9 @@
 import { minimatch } from "minimatch";
 import * as g from "./git.js";
-import { SESSION_REL_PATH } from "./session.js";
+import { isToolOutput } from "./session.js";
 
-// verify 와 동일하게 tool 산출물(session.json / receipts/)은 증거 집계에서 제외한다.
-const isToolFile = (f: string): boolean =>
-  f === SESSION_REL_PATH || f.startsWith(".agent-guard/receipts/");
+// verify 와 동일하게 tool 산출물(session.json / receipts / keys / dashboard.html)은 증거 집계에서 제외한다.
+const isToolFile = isToolOutput;
 
 // ── 변경 규모(Change Magnitude) ──
 // git 숫자만. 추적 파일 라인 수는 numstat(=HEAD 대비 working tree, staged+unstaged),

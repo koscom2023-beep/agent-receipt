@@ -1,0 +1,2 @@
+receipt 저장: .agent-guard/receipts/client.md (ok=true)
+  → 조회: `agent-receipt receipts` (목록) / `--latest` / `--cat`

@@ -27,17 +27,25 @@ It is local-first by design:
 
 ## Quick Start
 
-Install and run via `npx`:
+Install and run via `npx`. The everyday loop (here with the `promptia` preset):
 
 ```bash
 npm install -D @promptia-labs/agent-receipt
-npx agent-receipt init --preset generic
-npx agent-receipt prompt
-npx agent-receipt verify
-npx agent-receipt check
+npx agent-receipt presets                  # pick a preset
+npx agent-receipt init --preset promptia   # scaffold .agent-guard/contract.yaml
+npx agent-receipt review                   # commit-time checklist (read-only)
+npx agent-receipt mode                      # task vs daily flow + next step
+npx agent-receipt start                     # baseline before the agent works
+npx agent-receipt prompt --cursor           # paste into the agent (or --claude)
+#   … agent works, pastes a completion-claim JSON …
+npx agent-receipt                           # (bare) verify + next-step guidance
+npx agent-receipt check                     # run tsc/tests
+npx agent-receipt claims --file claim.json  # AI said vs Git says
+npx agent-receipt receipt                   # save the AI Work Receipt
+npx agent-receipt receipts --latest         # find it again
 ```
 
-> **Early preview (`0.2.x`).** Published on npm as `@promptia-labs/agent-receipt`. For local development you can also run from source (`npm run build` + `node dist/cli.js ...`).
+> **Early preview.** Published on npm as `@promptia-labs/agent-receipt`. For local development you can also run from source (`npm run build` + `node dist/cli.js ...`). Feature coverage vs the design docs: [`docs/coverage.md`](docs/coverage.md). Full local v1 loop incl. signing/audit/dashboard: [`docs/recipes.md`](docs/recipes.md).
 
 Once installed, the CLI is invoked as `agent-receipt`. (The single-letter `ag` alias was dropped to avoid clashing with other tools.)
 
@@ -62,19 +70,30 @@ If you omit `--contract`, the contract is auto-discovered (see below).
 
 | Command | What it does | Needs git repo |
 |---|---|---|
-| `init --preset <generic\|nextjs-supabase\|promptia>` | Create `.agent-guard/contract.yaml` + `.agent-guard/README.md`. Refuses to overwrite existing files. | no |
+| `presets` | List the built-in presets (`generic` / `nextjs-supabase` / `promptia` / `strict` / `relaxed`) with when-to-use notes. | no |
+| `init --preset <generic\|nextjs-supabase\|promptia\|strict\|relaxed>` | Create `.agent-guard/contract.yaml` + `.agent-guard/README.md`. Refuses to overwrite existing files. | no |
+| `draft-contract [--preset <name>] [--out <path>] [--print]` | Generate a contract draft (non-interactive): scans the repo's top-level dirs for `allowed_paths` candidates, or copies a preset. Defaults to stdout; writes only with `--out` (never overwrites). | no |
+| `review` | Commit-time human checklist (read-only): scope tight enough? denied covers `.env`/lock/migrations/deploy? receipt at default location? Distinct from `lint`. | no |
 | `start` | Record a baseline of the current working tree to `.agent-guard/session.json` (see Baseline mode). Refuses if a denied path is already dirty, or if a session already exists. | yes |
 | `status` | Print a read-only summary: contract scope, baseline (session) state, branch, current changes. | yes |
 | `reset` | Remove the baseline `.agent-guard/session.json` (leaves `contract.yaml`/`README.md` intact). | no |
 | `verify [--json]` | State checks only (no commands run). Human report, or a stable one-line JSON with `--json`. | yes |
 | `check` | Run `required_checks.commands`; all must match their `required_exit`. | no |
-| `prompt` | Print a paste-in instruction block for the agent. | no |
+| `prompt [--cursor\|--claude]` | Print a paste-in instruction block for the agent. Variants differ only in header/tone; the completion-claim JSON is identical (so `claims` works either way). | no |
 | `report [--out <file>]` | Run `verify` and write a Markdown report. | yes |
-| `receipt [--format json\|md] [--out <file>]` | Run `verify` + `check` and save an **AI Work Receipt** to `.agent-guard/receipts/` (includes change magnitude, critical-path attestation, and an integrity `contentHash`). Saving outside the default dir warns (verify won't exclude it). | yes |
+| `receipt [--format json\|md\|client-md] [--out <file>]` | Run `verify` + `check` and save an **AI Work Receipt** to `.agent-guard/receipts/` (change magnitude, critical-path attestation, integrity `contentHash`). `client-md` is a trimmed client-facing render. Saving outside the default dir warns (verify won't exclude it). | yes |
 | `receipts [--latest\|--cat\|--dir]` | Find saved receipts under `.agent-guard/receipts/`: list newest-first (default), `--latest` summary (ok/contractId/timestamp/contentHash/magnitude), `--cat` latest content, `--dir` directory path. No receipts → guidance, exit `0`. | no |
 | `mode` | Read-only explanation of whether you're in **task** or **daily** flow (contract/session/baseline state + recommended next command). No file written. | no |
 | `claims --file <claim.json>` | Compare an agent's completion report (JSON) against the actual git state — surfaces hidden/over-claimed changes as **AI said / Git says**. Mismatch → exit `1`. | yes |
 | `explain` | Explain *why* the tree is PASS/FAIL (branch / scope / denied / magnitude / critical paths) with recovery hints. Exit mirrors `verify`. | yes |
+| `audit [--json]` | Local audit summary over `.agent-guard/receipts/`: count, latest, PASS/FAIL, critical-touched, unique `contentHash`. Read-only (no auto-append). | no |
+| `dashboard [--out <path>]` | Render a single self-contained static HTML (no CDN/network) of all receipts. Default `.agent-guard/dashboard.html` (excluded by `verify`). | no |
+| `keys init` | Generate an ed25519 key pair under `.agent-guard/keys/` (Node built-in crypto). Warns to gitignore the key dir (does not edit `.gitignore`). | no |
+| `sign --receipt <path>` | Sign a receipt's bytes (ed25519); writes sidecar `<receipt>.sig.json`. | no |
+| `verify-signature --receipt <path>` | Verify the sidecar signature with the public key. PASS → `0`, FAIL → `1`. | no |
+| `approve --receipt <path> [--note <text>]` | Record a local approval sidecar `<receipt>.approval.json` (approver from git config, timestamp, contentHash, note). No git commit, no network. | no |
+| `approvals` | List local approval sidecars. | no |
+| `export --format <slack\|json> --receipt <path>` | Print an external-transport payload **preview to stdout only** (Slack blocks / summary JSON). Never POSTs; no token/URL. | no |
 | `pre` | Pre-start check (correct branch, nothing already staged). | yes |
 | `doctor` | Environment/setup health check (git / contract / baseline). | no |
 | `lint` | Advisory contract-quality checks (scope / denied / forbidden_actions). | no |
@@ -205,8 +224,10 @@ In short: **`init` creates the contract; `start` (optional) records a baseline o
 - **`generic`** — a starter patch-only contract: empty `allowed_paths` with protective `denied_paths` (`.env*`, key/cert files).
 - **`nextjs-supabase`** — adds denied paths typical for a Next.js + Supabase app (migrations, lockfiles, `vercel.json`) and a `tsc --noEmit` check.
 - **`promptia`** — tuned for the Promptia app (Next.js + Supabase + Vercel). Denies `.env*`, lockfiles, `supabase/migrations/**`, `vercel.json`, `.vercel/**`, `exports/**`, and `docs/arch/json/**`; uses a **broad `allowed_paths`** (`app/`, `src/`, `components/`, `lib/`, …) so everyday source edits pass; `required_checks.commands` is left empty with commented examples (uncomment `pnpm tsc --noEmit` / `pnpm lint` for your project). `lint` and `doctor` recognize this preset and warn if a key denied path is missing.
+- **`strict`** — for risky changes or external-contractor review: narrow `allowed_paths`, strong `denied_paths`, and `require_no_staged_untracked` + `require_only_allowed_files_staged` turned on, plus a `tsc` check.
+- **`relaxed`** — for exploration/prototyping: `denied_paths`-only (empty `allowed_paths`, positive scope off), tolerant of ambient untracked noise.
 
-All three are starting points — edit the generated `.agent-guard/contract.yaml` for your project.
+All five are starting points — edit the generated `.agent-guard/contract.yaml` for your project. Run `agent-receipt presets` to list them, or `agent-receipt draft-contract` to generate a repo-scanned draft.
 
 ---
 
@@ -287,7 +308,7 @@ The claim file is plain JSON; every field is optional and only provided fields a
 
 ## Package status
 
-Early preview, published on npm as **`@promptia-labs/agent-receipt`** (latest published `0.2.1`; `0.6.x` is in local development and adds the `mode` and `receipts` commands, building on `0.5.x` — the `promptia` preset, the `run` routing alias, Promptia-aware `lint`/`doctor` warnings — and `0.4.x` — `claims` / `explain`, receipt magnitude + critical-path attestation + `contentHash`, single-command routing). Feature coverage vs the design docs is tracked in [`docs/coverage.md`](docs/coverage.md). For local development:
+Early preview, published on npm as **`@promptia-labs/agent-receipt`** (latest published `0.2.1`; `0.7.x` is in local development — a **local-first v1+ candidate**). `0.7.x` adds `presets` / `draft-contract` / `review`, `prompt --cursor|--claude`, `strict`/`relaxed` presets, `receipt --format client-md`, ed25519 `keys`/`sign`/`verify-signature`, and local `audit` / `dashboard` / `approve` / `export` (dry-run) — on top of `0.6.x` (`mode`, `receipts`), `0.5.x` (`promptia` preset, `run`), and `0.4.x` (`claims`, `explain`, receipt integrity). Cloud/SaaS/remote collaboration is intentionally deferred. Feature coverage: [`docs/coverage.md`](docs/coverage.md). For local development:
 
 ```bash
 npm run build           # emit dist/  (also runs via prepack on npm pack/publish)

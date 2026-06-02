@@ -211,12 +211,36 @@ export function printCheckReport(r: CheckResult): void {
   console.log("");
 }
 
-// 계약서 → Cursor/Claude에 붙여넣을 지시문 생성
-export function buildPrompt(c: Contract): string {
-  const out: string[] = [];
-  out.push(`[작업 계약: ${c.id}]`);
-  if (c.title) out.push(c.title);
-  out.push("");
+export type PromptVariant = "generic" | "cursor" | "claude";
+
+// 변종별 머리말. 공통 body(규칙 + 완료보고 JSON)는 promptBody 가 재사용한다.
+// 완료보고 JSON 형식은 세 변종 모두 동일(claims 입력 호환).
+function promptHeader(c: Contract, variant: PromptVariant): string[] {
+  const h: string[] = [];
+  if (variant === "cursor") {
+    h.push(`[Cursor 지시 — 작업 계약: ${c.id}]`);
+    if (c.title) h.push(c.title);
+    h.push("");
+    h.push("아래 규칙을 그대로 지켜 작업하라(짧고 명령형). 요청한 것만 — 추가 개선/리팩터링 금지.");
+    h.push("허용 scope 밖이 필요하면 진행하지 말고 멈춰서 물어라. 끝나면 아래 완료보고 JSON 만 정확히 붙여라.");
+  } else if (variant === "claude") {
+    h.push(`[Claude 작업 계약: ${c.id}]`);
+    if (c.title) h.push(c.title);
+    h.push("");
+    h.push("이 작업은 '작업 계약 → 작업 → 검증' 루프다. 작업이 끝나면 사람이");
+    h.push("`agent-receipt verify`(상태)·`check`(테스트)·`claims`(완료보고 ↔ git 대조)로 결과를 기계 검증한다.");
+    h.push("commit/push/deploy 는 하지 말고, 완료 후 아래 JSON claim 을 제출하라.");
+  } else {
+    h.push(`[작업 계약: ${c.id}]`);
+    if (c.title) h.push(c.title);
+  }
+  h.push("");
+  return h;
+}
+
+// 계약서 → Cursor/Claude에 붙여넣을 지시문 생성. variant 별 머리말만 다르고 본문/완료 JSON 은 공통.
+export function buildPrompt(c: Contract, variant: PromptVariant = "generic"): string {
+  const out: string[] = promptHeader(c, variant);
   out.push("이번 작업에서 반드시 지켜야 할 규칙이다.");
   out.push("");
   out.push("■ 수정해도 되는 파일 (오직 이 파일들만):");

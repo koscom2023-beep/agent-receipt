@@ -6,6 +6,18 @@ import * as g from "./git.js";
 // verify 가 노이즈에서 제외할 자기 제어 파일 — session.json "만"(.agent-guard/** 전체 제외 아님).
 export const SESSION_REL_PATH = ".agent-guard/session.json";
 
+// verify/evidence 가 "사용자 작업물 아님"으로 제외하는 tool 산출물 집합(단일 출처).
+//   session.json · receipts/(receipt + .sig.json/.approval.json sidecar) · keys/ · dashboard.html
+// contract.yaml / README.md 는 사용자가 커밋할 실제 파일이므로 제외하지 않는다(.agent-guard/** 전체 제외 아님).
+export function isToolOutput(f: string): boolean {
+  return (
+    f === SESSION_REL_PATH ||
+    f.startsWith(".agent-guard/receipts/") ||
+    f.startsWith(".agent-guard/keys/") ||
+    f === ".agent-guard/dashboard.html"
+  );
+}
+
 // .agent-guard/session.json 을 읽는다. 없거나 형식이 깨졌으면 null(=baseline 미적용 → v0.1 동작).
 export function loadSession(cwd: string = process.cwd()): SessionData | null {
   const p = join(cwd, ".agent-guard", "session.json");

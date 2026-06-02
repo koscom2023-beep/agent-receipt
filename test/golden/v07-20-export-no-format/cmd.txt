@@ -1,0 +1,1 @@
+guard export --receipt f.txt   (no --format → exit 2)

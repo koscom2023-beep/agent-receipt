@@ -50,6 +50,23 @@ export function untrackedFiles(): string[] {
   return gitPaths(["ls-files", "--others", "--exclude-standard"]);
 }
 
+// git config 의 사용자(approve 등에서 approver 표기용). 없으면 빈 문자열.
+export function gitUser(): { name: string; email: string } {
+  let name = "";
+  let email = "";
+  try {
+    name = git(["config", "user.name"]);
+  } catch {
+    /* 미설정 */
+  }
+  try {
+    email = git(["config", "user.email"]);
+  } catch {
+    /* 미설정 */
+  }
+  return { name, email };
+}
+
 export function headHash(): string {
   try {
     return git(["rev-parse", "HEAD"]);

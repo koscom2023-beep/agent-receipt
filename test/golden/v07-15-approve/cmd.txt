@@ -1,0 +1,1 @@
+guard approve --receipt receipt-A.json --note '검수 완료'

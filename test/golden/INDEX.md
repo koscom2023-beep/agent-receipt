@@ -1,7 +1,7 @@
 # agent-guard v0.1 golden baseline (A0.5)
 
 - branch: v0.1-verify-check-split
-- 캡처 케이스: 67개
+- 캡처 케이스: 87개
 - 결정론: 고정 git identity(ci/ci@local) + 고정 DATE(2025-01-01T00:00:00 +0000) → headHash 재현
 - 정규화(스냅샷 한정): $HOME→<HOME>, /tmp/claude-1000/ag-gold-*→<FIXTURE>
 
@@ -74,3 +74,23 @@
 | v06-05-receipts-latest | `guard receipts --latest` | 0 |
 | v06-06-receipts-cat | `guard receipts --cat   (최신 receipt 내용)` | 0 |
 | v06-07-receipts-dir | `guard receipts --dir` | 0 |
+| v07-01-presets | `guard presets` | 0 |
+| v07-02-init-strict | `guard init --preset strict` | 0 |
+| v07-03-init-relaxed | `guard init --preset relaxed` | 0 |
+| v07-04-draft-scan | `guard draft-contract   (repo 스캔)` | 0 |
+| v07-05-draft-preset-strict | `guard draft-contract --preset strict` | 0 |
+| v07-06-review-strict | `guard review --contract contract.yaml` | 0 |
+| v07-07-prompt-cursor | `guard prompt --cursor --contract contract.yaml` | 0 |
+| v07-08-prompt-claude | `guard prompt --claude --contract contract.yaml` | 0 |
+| v07-09-receipt-client-md | `guard receipt --format client-md --out client.md` | 0 |
+| v07-10-audit | `guard audit   (1 receipt)` | 0 |
+| v07-12-audit-json | `guard audit --json` | 0 |
+| v07-11-audit-empty | `guard audit   (no receipts)` | 0 |
+| v07-13-export-slack | `guard export --format slack --receipt receipt-A.json` | 0 |
+| v07-14-export-json | `guard export --format json --receipt receipt-A.json` | 0 |
+| v07-15-approve | `guard approve --receipt receipt-A.json --note '검수 완료'` | 0 |
+| v07-16-approvals | `guard approvals` | 0 |
+| v07-17-dashboard | `guard dashboard   (1 receipt → static HTML)` | 0 |
+| v07-18-sign-no-key | `guard sign --receipt f.txt   (no keys init → exit 2)` | 2 |
+| v07-19-verifysig-no-sidecar | `guard verify-signature --receipt f.txt   (no .sig.json → exit 2)` | 2 |
+| v07-20-export-no-format | `guard export --receipt f.txt   (no --format → exit 2)` | 2 |

@@ -1,0 +1,2 @@
+승인 기록: .agent-guard/receipts/receipt-A.json.approval.json (approver: unknown)
+  목록: agent-receipt approvals   (git commit/전송은 하지 않습니다.)

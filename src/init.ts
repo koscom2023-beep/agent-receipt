@@ -1,14 +1,10 @@
 import { existsSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { PRESETS } from "./presets.js";
 
-// preset 이름 → templates/ 안의 계약 파일명. 새 preset 은 여기와 templates/ 에만 추가하면 된다.
-const PRESETS = {
-  generic: "generic.yaml",
-  "nextjs-supabase": "nextjs-supabase.yaml",
-  promptia: "promptia.yaml",
-} as const;
-type Preset = keyof typeof PRESETS;
+// preset 목록(generic|nextjs-supabase|promptia|strict|relaxed)은 presets.ts 가 단일 출처.
+const PRESET_NAMES = Object.keys(PRESETS).join("|");
 
 // 템플릿은 패키지 안에 동봉된다(개발 시 repo 루트의 templates/). 모듈 위치 기준으로 찾는다.
 function templatePath(name: string): string {
@@ -16,7 +12,7 @@ function templatePath(name: string): string {
 }
 
 /**
- * `agent-guard init --preset <generic|nextjs-supabase|promptia>`
+ * `agent-guard init --preset <generic|nextjs-supabase|promptia|strict|relaxed>`
  * - .agent-guard/contract.yaml (선택한 preset)
  * - .agent-guard/README.md (에이전트 안내)
  * 둘 중 하나라도 이미 있으면 아무것도 쓰지 않고 실패(덮어쓰기 금지).
@@ -25,7 +21,7 @@ function templatePath(name: string): string {
 export function runInit(preset: string | undefined, cwd: string = process.cwd()): never {
   if (!preset || !(preset in PRESETS)) {
     console.error(
-      `알 수 없는 preset: ${preset ?? "(없음)"} — 사용: agent-receipt init --preset <generic|nextjs-supabase|promptia>`
+      `알 수 없는 preset: ${preset ?? "(없음)"} — 사용: agent-receipt init --preset <${PRESET_NAMES}>`
     );
     process.exit(2);
   }
@@ -42,7 +38,7 @@ export function runInit(preset: string | undefined, cwd: string = process.cwd())
     }
   }
 
-  const contractBody = readFileSync(templatePath(PRESETS[preset as Preset]), "utf8");
+  const contractBody = readFileSync(templatePath(PRESETS[preset].file), "utf8");
   const readmeBody = readFileSync(templatePath("agent-readme.md"), "utf8");
 
   mkdirSync(dir, { recursive: true });

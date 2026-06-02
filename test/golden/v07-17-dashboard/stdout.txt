@@ -1,0 +1,2 @@
+dashboard 생성: .agent-guard/dashboard.html (1 receipts)
+  브라우저로 열어 확인하세요. (기본 위치 .agent-guard/dashboard.html 는 verify 가 제외합니다.)

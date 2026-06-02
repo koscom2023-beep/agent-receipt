@@ -1,0 +1,1 @@
+guard receipt --format client-md --out client.md

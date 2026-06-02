@@ -1,1 +1,1 @@
-알 수 없는 preset: bogus — 사용: agent-receipt init --preset <generic|nextjs-supabase|promptia>
+알 수 없는 preset: bogus — 사용: agent-receipt init --preset <generic|nextjs-supabase|promptia|strict|relaxed>

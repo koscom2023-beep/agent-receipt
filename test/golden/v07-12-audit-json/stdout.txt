@@ -1,0 +1,1 @@
+{"receiptCount":1,"jsonReceiptCount":1,"latest":".agent-guard/receipts/receipt-A.json","pass":1,"fail":0,"criticalTouched":0,"uniqueContentHash":1}

@@ -1,0 +1,37 @@
+# agent-guard strict preset — 엄격 patch-only 계약(위험 작업·외주 검수용).
+# 스키마 정의(SSOT)는 agent-guard 의 CONTRACT.md 를 보세요. 프로젝트에 맞게 수정하세요.
+id: strict
+title: strict patch-only guard
+mode: patch_only
+branch:
+  expected: main
+scope:
+  # 좁게 시작하세요 — 이번 작업이 닿을 경로만 명시(넓히는 건 의도적으로).
+  allowed_paths:
+    - "src/**"
+  denied_paths:
+    - ".env*"
+    - "**/*.pem"
+    - "**/*.key"
+    - "package.json"
+    - "package-lock.json"
+    - "pnpm-lock.yaml"
+    - "supabase/migrations/**"
+    - "vercel.json"
+    - ".vercel/**"
+    - ".github/workflows/**"
+forbidden_actions: # 권고용 — verify 가 기계적으로 막지 않습니다(CONTRACT.md §7).
+  - push
+  - deploy
+  - db_write
+  - schema_change
+required_checks:
+  commands:
+    - name: typecheck
+      command: "npx tsc --noEmit"
+      required_exit: 0
+git:
+  require_no_staged_untracked: true       # 정리 안 된 새 파일도 위반으로 본다.
+  require_only_allowed_files_staged: true # 허용 밖 파일이 stage 되면 위반.
+  require_no_denied_path_diff: true
+  require_no_push: true

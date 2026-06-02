@@ -1,57 +1,24 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync } from "node:fs";
+import {
+  RECEIPTS_REL,
+  receiptsDirAbs,
+  listReceipts,
+  parseReceiptJson,
+  criticalTouchedCount,
+  type ReceiptEntry,
+  type ReceiptJson,
+} from "./receiptStore.js";
 
-// receipt 저장 위치(고정) — receipt.ts 의 기본 --out 과 동일. verify 는 이 디렉터리를 제외한다.
-const RECEIPTS_REL = join(".agent-guard", "receipts");
 const line = "─".repeat(56);
-
-type Entry = { name: string; abs: string; rel: string };
-
-function receiptsDirAbs(cwd: string): string {
-  return join(cwd, RECEIPTS_REL);
-}
-
-// 기본 receipt 파일명은 ISO timestamp 기반(receipt-<ts>.json) → 이름 내림차순 = 최신 우선.
-// mtime 비의존(결정론적). 사용자가 임의 이름을 써도 best-effort 정렬.
-function listReceipts(cwd: string): Entry[] {
-  const dir = receiptsDirAbs(cwd);
-  if (!existsSync(dir)) return [];
-  const files = readdirSync(dir).filter((f) => f.endsWith(".json") || f.endsWith(".md"));
-  files.sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
-  return files.map((f) => ({ name: f, abs: join(dir, f), rel: join(RECEIPTS_REL, f) }));
-}
-
-type JsonSummary = {
-  ok?: boolean;
-  contractId?: string;
-  timestamp?: string;
-  contentHash?: string;
-  magnitude?: { filesChanged?: number; added?: number; deleted?: number; newFiles?: number };
-  criticalPaths?: Array<{ touched?: string[] }>;
-};
-
-function parseJson(abs: string): JsonSummary | null {
-  try {
-    const o = JSON.parse(readFileSync(abs, "utf8")) as unknown;
-    return o && typeof o === "object" ? (o as JsonSummary) : null;
-  } catch {
-    return null;
-  }
-}
-
-function criticalTouched(o: JsonSummary): number {
-  if (!Array.isArray(o.criticalPaths)) return 0;
-  return o.criticalPaths.reduce((n, c) => n + (Array.isArray(c?.touched) ? c.touched!.length : 0), 0);
-}
 
 function okStr(ok: boolean | undefined): string {
   return ok === true ? "PASS ✅" : ok === false ? "FAIL ❌" : "?";
 }
 
-function listLine(e: Entry): string {
+function listLine(e: ReceiptEntry): string {
   if (e.name.endsWith(".json")) {
-    const o = parseJson(e.abs);
-    if (o) return `${e.name}  [${okStr(o.ok)}] ${o.contractId ?? "?"}  ${o.timestamp ?? "?"}  critical:${criticalTouched(o)}`;
+    const o = parseReceiptJson(e.abs);
+    if (o) return `${e.name}  [${okStr(o.ok)}] ${o.contractId ?? "?"}  ${o.timestamp ?? "?"}  critical:${criticalTouchedCount(o)}`;
     return `${e.name}  (json 파싱 실패)`;
   }
   return `${e.name}  (md — 내용은 --cat)`;
@@ -94,14 +61,14 @@ export function runReceipts(mode: ReceiptsMode, cwd: string = process.cwd()): ne
     console.log(line);
     console.log(`  파일        : ${e.rel}`);
     if (e.name.endsWith(".json")) {
-      const o = parseJson(e.abs);
+      const o: ReceiptJson | null = parseReceiptJson(e.abs);
       if (o) {
         console.log(`  ok          : ${okStr(o.ok)}`);
         console.log(`  contractId  : ${o.contractId ?? "?"}`);
         console.log(`  timestamp   : ${o.timestamp ?? "?"}`);
         console.log(`  contentHash : ${o.contentHash ?? "?"}`);
         if (o.magnitude) console.log(`  magnitude   : files ${o.magnitude.filesChanged ?? 0}, +${o.magnitude.added ?? 0}/-${o.magnitude.deleted ?? 0}, new ${o.magnitude.newFiles ?? 0}`);
-        console.log(`  critical    : ${criticalTouched(o)} touched`);
+        console.log(`  critical    : ${criticalTouchedCount(o)} touched`);
       } else {
         console.log("  (json 파싱 실패 — 내용 직접 확인: agent-receipt receipts --cat)");
       }

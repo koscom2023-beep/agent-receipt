@@ -1,0 +1,17 @@
+id: gold-prompt
+title: prompt block test
+branch:
+  expected: main
+scope:
+  allowed_paths:
+    - "src/**"
+  denied_paths:
+    - "package.json"
+forbidden_actions:
+  - push
+  - deploy
+required_checks:
+  commands:
+    - name: tsc
+      command: 'tsc --noEmit'
+      required_exit: 0

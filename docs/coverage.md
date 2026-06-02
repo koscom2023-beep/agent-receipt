@@ -2,8 +2,8 @@
 
 이 문서는 agent-receipt 의 3개 설계 문서(v0.1 / v0.2 A·B·C / post-v0.2 부록)에 적힌 기능이 현재 어디까지 구현됐는지를 **사실대로** 매핑한다. "전부 개발 완료"라고 선언하지 않는다.
 
-- 기준 버전: **0.6.0 local** (npm latest 는 `0.2.1`, 미publish)
-- 현재 상태 판정: **"Promptia dogfood 가능한 v1-core local"** — 개인/Promptia 실사용 범위는 거의 완료, 외주/팀(서명·SaaS 등)은 미착수.
+- 기준 버전: **0.7.0 local** (npm latest 는 `0.2.1`, 미publish)
+- 현재 상태 판정: **"local-first v1+ candidate"** — local CLI 로 구현 가능한 v1/v1+ 기능은 전부 완료. cloud/SaaS/remote collaboration 은 제품화 신호 전 보류(§4).
 - 범례: ✅ 완료 · 🟡 부분 · ⬜ 남음 · ⛔ 수요 전 보류(유료 고객 5~10 신호 전 금지)
 
 ---
@@ -49,24 +49,35 @@ v0.1 은 최종 범위를 **2개**로 못박았다(로그 전용 기능·`git di
 | **mode**(task/daily 흐름 설명) | ✅ | `mode` — read-only, 저장 파일 없음 (v0.6 신규) |
 | **receipts**(저장 receipt 조회) | ✅ | `receipts [--latest\|--cat\|--dir]` (v0.6 신규) |
 | promptia preset | ✅ | `init --preset promptia` (v0.5 신규, dogfood 검증) |
+| **prompt 변종** (cursor/claude) | ✅ | `prompt --cursor\|--claude` — 완료보고 JSON 동일 (v0.7) |
+| **strict / relaxed preset** | ✅ | `templates/strict.yaml`·`relaxed.yaml` + `presets` (v0.7) |
+| **draft-contract** | ✅ | `draft-contract` — 비대화형, repo 스캔/preset, stdout/`--out` (v0.7) |
+| **contract review checklist** | ✅ | `review` — commit 전 사람 체크리스트(lint 와 별개) (v0.7) |
+| **preset registry** | ✅ | `presets` — local builtin 레지스트리(`src/presets.ts` 단일 출처) (v0.7) |
+| **client receipt template** | ✅ | `receipt --format client-md` — 고객용 축약 렌더(스키마 동일) (v0.7) |
+| **ed25519 서명 receipt** | ✅ | `keys init`/`sign`/`verify-signature` — Node 내장 crypto, sidecar `.sig.json` (v0.7) |
+| **local audit history** | ✅ | `audit [--json]` — receipts 집계(자동 append 없음) (v0.7) |
+| **local static dashboard** | ✅ | `dashboard` — 단일 self-contained HTML(외부 CDN/network 없음) (v0.7) |
+| **local approval workflow** | ✅ | `approve`/`approvals` — sidecar `.approval.json`, git commit/network 없음 (v0.7) |
+| **export (slack/json) dry-run** | ✅ | `export --format slack\|json` — stdout 미리보기만(전송 없음) (v0.7) |
 
-## 4. 아직 남은 것 (개인/Promptia 범위 외 또는 미착수)
+## 4. 남은 것 — cloud / remote 전용 (제품화 신호 전 보류)
 
-| 기능 | 상태 | 메모 |
+Sprint 5(v0.7) 로 **local-first 로 구현 가능한 v1/v1+ 기능은 전부 수거**됐다. 남는 것은 본질적으로 외부 서버/원격 협업이 필요한 부분뿐이며, 유료 고객 5~10 신호 전까지 의도적으로 보류한다(허위로 "완료"라고 적지 않는다).
+
+| 기능 | 상태 | 보류 이유 |
 |---|---|---|
-| ed25519 서명 receipt | ⬜ | contentHash 는 됨. 서명은 백로그(새 의존성/키 관리 결정 필요) |
-| `prompt --cursor` / `--claude` 출력 분기 | ⬜ | 현재 단일 prompt 출력 |
-| strict / relaxed preset | ⬜ | 현재 generic/nextjs-supabase/promptia |
-| draft-contract | ⬜ | 대화형 계약 초안 생성 미구현 |
-| contract review checklist | ⬜ | lint 가 일부 대체하나 체크리스트 산출물은 없음 |
-| preset registry 기본 구조 | ⬜ | 현재 preset 은 `templates/` + `init.ts` PRESETS 맵 하드코딩 |
-| client receipt template 고급화 | ⬜ | 외주용 고급 템플릿 미구현 |
-| 팀 audit history / dashboard / Slack / approval / SaaS | ⛔ | **유료 고객 5~10 신호 전 금지**(v1.0+ 영역) |
+| 외부 SaaS 서버(중앙 저장/조회) | ⛔ | 서버 인프라·인증 필요. local audit/dashboard 로 대체 중. |
+| 실제 Slack 전송 / webhook POST | ⛔ | 토큰/URL·네트워크 전송 필요. `export` 가 payload 미리보기까지만 함(전송 없음). |
+| 유료 팀 dashboard(원격) | ⛔ | 호스팅·멀티유저 필요. 로컬 단일 HTML(`dashboard`)로 대체 중. |
+| 원격 approval workflow | ⛔ | 원격 상태/알림 필요. 로컬 sidecar(`approve`/`approvals`)로 대체 중. |
+
+> **표현 원칙**: "local-first v1+ 기능 완료" 는 맞다. "외부 SaaS/원격 협업까지 완료" 는 **아니다** — 위 4개는 미구현(보류)이다.
 
 ---
 
 ## 결론
 
-- **개인용 / Promptia 실사용 루프**: `init → mode → start → prompt → run/verify → check → claims → receipt → receipts → explain → reset` 가 하나의 흐름으로 동작한다. 거의 완료권.
-- **"3문서 전체"**: 서명 receipt, prompt 출력 분기, strict/relaxed preset, draft-contract, review checklist, preset registry, client template 이 남아 있고, 팀/SaaS 는 수요 전 보류.
-- 다음 갈림길: **(a) v1 최종 polish**(위 ⬜ 중 개인용에 도움되는 것) vs **(b) v1+ 외주/팀 기능**(⛔ 해제 신호 후).
+- **local-first v1+ 기능 완료.** 일상 루프 `presets → init → draft-contract/review → lint → doctor → mode → start → prompt(--cursor/--claude) → run/verify → check → claims → receipt → receipts → sign/verify-signature → audit → dashboard → approve → export(dry-run) → reset` 가 하나의 제품 흐름으로 이어진다.
+- **남은 것은 cloud/SaaS/remote collaboration 뿐**이며 제품화 신호 전 보류(§4). 그 외 3문서·부록 기능은 모두 ✅/🟡(로컬판).
+- 현재 상태 판정: **"local-first v1+ candidate"** — Promptia 실사용에 바로 투입 가능. 다음은 v1 최종 품질검사 + Promptia 본진 적용 승인.

@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { minimatch } from "minimatch";
 import type { Contract } from "./schema.js";
 import * as g from "./git.js";
-import { resolveSession, SESSION_REL_PATH } from "./session.js";
+import { resolveSession, isToolOutput } from "./session.js";
 
 export type CommandResult = {
   name: string;
@@ -67,9 +67,9 @@ export function runVerify(contract: Contract): VerifyResult {
   //    제어 파일 .agent-guard/session.json 은 항상 제외(전체 .agent-guard/** 제외는 아님).
   //    유효 session(baseline) 이 있으면 scope 검사는 baseline 이후 신규 변경만 본다.
   //    denied 검사는 안전을 위해 항상 full touched 기준(baseline 으로 절대 안 묻음).
-  // 제어/산출 파일은 verify 에서 제외: session.json + receipts/ (사용자 작업물 아님). contract.yaml/README.md 는 제외 안 함.
-  const ex = (arr: string[]): string[] =>
-    arr.filter((f) => f !== SESSION_REL_PATH && !f.startsWith(".agent-guard/receipts/"));
+  // 제어/산출 파일은 verify 에서 제외(session.json/receipts/keys/dashboard.html — session.ts isToolOutput).
+  // contract.yaml/README.md 는 사용자 파일이라 제외 안 함.
+  const ex = (arr: string[]): string[] => arr.filter((f) => !isToolOutput(f));
   const curUnstaged = ex(g.unstagedFiles());
   const curStaged = ex(g.stagedFiles());
   const curUntracked = ex(g.untrackedFiles());

@@ -2,7 +2,7 @@
 import { writeFileSync } from "node:fs";
 import { loadContract, type Contract } from "./schema.js";
 import { runVerify, runCheck } from "./checks.js";
-import { printReport, toMarkdown, buildPrompt, toJsonReport, printCheckReport } from "./output.js";
+import { printReport, toMarkdown, buildPrompt, toJsonReport, printCheckReport, type PromptVariant } from "./output.js";
 import * as g from "./git.js";
 import { discoverContract } from "./discover.js";
 import { runInit } from "./init.js";
@@ -17,6 +17,14 @@ import { runExplain } from "./explain.js";
 import { runDefault } from "./router.js";
 import { runMode } from "./mode.js";
 import { runReceipts, type ReceiptsMode } from "./receipts.js";
+import { runPresets } from "./presets.js";
+import { runDraftContract } from "./draft.js";
+import { runReview } from "./review.js";
+import { runAudit } from "./audit.js";
+import { runDashboard } from "./dashboard.js";
+import { runApprove, runApprovals } from "./approve.js";
+import { runExport } from "./export.js";
+import { runKeysInit, runSign, runVerifySignature } from "./keys.js";
 
 function getArg(flag: string): string | undefined {
   const i = process.argv.indexOf(flag);
@@ -39,26 +47,42 @@ function printHelp(): void {
   console.log(`
 agent-receipt — AI 작업계약 검수 CLI
 
-사용법:
-  agent-receipt init   --preset <generic|nextjs-supabase|promptia>   시작용 계약 + 안내 생성(.agent-guard/)
+사용법 — 계약/세션:
+  agent-receipt presets                         내장 preset 목록·설명 (generic/nextjs-supabase/promptia/strict/relaxed)
+  agent-receipt init   --preset <generic|nextjs-supabase|promptia|strict|relaxed>   시작용 계약 + 안내 생성(.agent-guard/)
+  agent-receipt draft-contract [--preset <name>] [--out <path>] [--print]   계약 초안 생성(비대화형; 기본 stdout)
+  agent-receipt review --contract <path.yaml>   commit 전 사람 체크리스트 (read-only)
   agent-receipt start  --contract <path.yaml>   작업 시작 baseline 기록(.agent-guard/session.json)
   agent-receipt status --contract <path.yaml>   계약/세션/git 상태 요약 (read-only)
+  agent-receipt mode                            지금 작업 흐름이 task/daily 인지 설명 + 다음 명령 (read-only)
   agent-receipt reset                           baseline(session.json) 제거
+
+검증:
   agent-receipt verify --contract <path.yaml>   변경 diff/범위/금지/NUL 상태 검사 (실패 시 exit 1)
                                                 (명령은 실행 안 함 — 테스트/빌드는 agent-receipt check)
         [--json]                                사람용 보고서 대신 기계용 stable JSON을 stdout에 단독 출력
   agent-receipt check  --contract <path.yaml>   required_checks.commands(tsc/test 등)만 실행 (git 불필요)
-  agent-receipt report --contract <path.yaml>   verify + 마크다운 보고서 저장 (--out 으로 경로 지정)
-  agent-receipt receipt --contract <path.yaml>  verify+check 결과를 .agent-guard/receipts/ 에 저장 [--format json|md] [--out]
-  agent-receipt receipts                        저장된 receipt 조회 [--latest|--cat|--dir] (없으면 생성 안내)
-  agent-receipt mode                            지금 작업 흐름이 task/daily 인지 설명 + 다음 명령 (read-only)
-  agent-receipt claims --file <claim.json>      AI 완료보고(JSON)를 git 실측과 대조 (mismatch 시 exit 1)
   agent-receipt explain --contract <path.yaml>  왜 PASS/FAIL 인지 설명 + 규모/critical 경로 (exit = verify)
+  agent-receipt claims --file <claim.json>      AI 완료보고(JSON)를 git 실측과 대조 (mismatch 시 exit 1)
   agent-receipt pre    --contract <path.yaml>   작업 시작 전 안전 점검
-  agent-receipt prompt --contract <path.yaml>   Cursor/Claude에 붙여넣을 지시문 생성
+  agent-receipt prompt --contract <path.yaml> [--cursor|--claude]   에이전트용 지시문 생성(완료보고 JSON 동일)
+
+증빙(receipt):
+  agent-receipt report --contract <path.yaml>   verify + 마크다운 보고서 저장 (--out 으로 경로 지정)
+  agent-receipt receipt --contract <path.yaml>  verify+check 결과 저장 [--format json|md|client-md] [--out]
+  agent-receipt receipts                        저장된 receipt 조회 [--latest|--cat|--dir]
+  agent-receipt audit  [--json]                 receipts 로컬 history 요약
+  agent-receipt dashboard [--out <path>]        receipts → 단일 static HTML 생성
+  agent-receipt keys init                       ed25519 키쌍 생성(.agent-guard/keys/)
+  agent-receipt sign --receipt <path>           receipt 서명(sidecar .sig.json)
+  agent-receipt verify-signature --receipt <path>   서명 검증 (PASS 0 / FAIL 1)
+  agent-receipt approve --receipt <path> [--note <text>]   local 승인 기록(sidecar)
+  agent-receipt approvals                       승인 목록
+  agent-receipt export --format <slack|json> --receipt <path>   외부전송용 payload 미리보기(stdout만, 전송 없음)
+
+점검/기타:
   agent-receipt doctor                          환경/설정 건강 점검 (git/계약/baseline)
   agent-receipt lint   --contract <path.yaml>   계약 품질 조언 (advisory)
-
   agent-receipt run                             agent-receipt(인자 없음)와 동일 — 상태 기반 다음 명령 안내
 
   --contract 생략 시 .agent-guard/contract.yaml 등을 자동 탐색
@@ -129,6 +153,48 @@ function main(): void {
           ? "dir"
           : "list";
     runReceipts(sub);
+  }
+  if (command === "presets") {
+    // 내장 preset 목록 — 계약/git 불필요(local builtin).
+    runPresets();
+  }
+  if (command === "draft-contract") {
+    // 계약 초안 생성(비대화형) — 계약 불필요. 기존 contract 덮어쓰기 금지.
+    runDraftContract(getArg("--preset"), getArg("--out"), hasFlag("--print"));
+  }
+  if (command === "audit") {
+    // receipts 로컬 audit 요약 — 계약/git 불필요.
+    runAudit(hasFlag("--json"));
+  }
+  if (command === "dashboard") {
+    // receipts → static HTML — 계약/git 불필요.
+    runDashboard(getArg("--out"));
+  }
+  if (command === "approve") {
+    // local approval sidecar — 계약 불필요(receipt 경로만).
+    runApprove(getArg("--receipt"), getArg("--note"));
+  }
+  if (command === "approvals") {
+    // approval 목록 — 계약/git 불필요.
+    runApprovals();
+  }
+  if (command === "export") {
+    // receipt → slack/json payload 미리보기(stdout만, 전송 없음) — 계약 불필요.
+    runExport(getArg("--format"), getArg("--receipt"));
+  }
+  if (command === "keys") {
+    // ed25519 키쌍 — 'keys init' 만 지원. 계약 불필요.
+    if (process.argv[3] === "init") runKeysInit();
+    console.error("사용: agent-receipt keys init");
+    process.exit(2);
+  }
+  if (command === "sign") {
+    // receipt 서명(sidecar .sig.json) — 계약 불필요.
+    runSign(getArg("--receipt"));
+  }
+  if (command === "verify-signature") {
+    // receipt 서명 검증 — 계약 불필요. PASS 0 / FAIL 1 / 문제 2.
+    runVerifySignature(getArg("--receipt"));
   }
 
   const contractPath = getArg("--contract") ?? getArg("-c") ?? discoverContract();
@@ -226,8 +292,16 @@ function main(): void {
       break;
     }
 
+    case "review": {
+      // commit 전 사람 체크리스트(read-only) — git 불필요. lint 와 역할 구분.
+      runReview(contract);
+      break;
+    }
+
     case "prompt": {
-      console.log("\n" + buildPrompt(contract) + "\n");
+      // 변종: --cursor / --claude / (기본) generic. 완료보고 JSON 형식은 셋 다 동일.
+      const variant: PromptVariant = hasFlag("--cursor") ? "cursor" : hasFlag("--claude") ? "claude" : "generic";
+      console.log("\n" + buildPrompt(contract, variant) + "\n");
       break;
     }
 

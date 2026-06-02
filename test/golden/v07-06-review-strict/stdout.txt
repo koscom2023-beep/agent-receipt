@@ -1,0 +1,16 @@
+
+────────────────────────────────────────────────────────
+agent-receipt review: strict  — commit 전 사람 체크리스트
+────────────────────────────────────────────────────────
+  ☐ allowed_paths(1개)가 이번 작업에 충분히 좁은가? (넓을수록 범위검사가 약해짐)
+  ✓ denied_paths 에 .env* (비밀)이 포함됐는가?
+  ✓ denied_paths 에 lockfile(package-lock/pnpm-lock)이 포함됐는가?
+  ✓ denied_paths 에 DB migrations 가 포함됐는가?
+  ✓ denied_paths 에 배포 설정(vercel.json/.vercel)이 포함됐는가?
+  ✓ required_checks.commands(1개)가 실제 검사인가?
+  ☐ receipt 를 기본 위치(.agent-guard/receipts/)에 저장할 것인가? (그 밖이면 verify 가 잡음)
+  ☐ AI 완료 claim(JSON)을 받아 `agent-receipt claims` 로 대조할 것인가?
+  ☐ commit/push/deploy 금지를 prompt 에 넣었는가? (prompt 출력은 이미 포함)
+────────────────────────────────────────────────────────
+  (☐ = 사람이 판단 / ✓ = 충족 / ⚠ = 미충족. lint 는 별도 advisory 경고.)
+

@@ -181,22 +181,33 @@ Slice A 의 원칙은 **"출력 0 변경"** 이다. 아래 5개 명령의 **stdo
 
 | 명령 | git repo 필요? | 한 일 | 종료코드 |
 |---|---|---|---|
-| `init --preset <generic\|nextjs-supabase\|promptia>` | 불필요 | `.agent-guard/contract.yaml`(preset) + `.agent-guard/README.md` 생성(§11.4). 기존 파일 있으면 덮어쓰지 않고 실패. preset 없음/모름은 사용오류. | 0/1/2 |
+| `presets` | 불필요 | 내장 preset 목록·설명(local builtin). | 0 |
+| `init --preset <generic\|nextjs-supabase\|promptia\|strict\|relaxed>` | 불필요 | `.agent-guard/contract.yaml`(preset) + `.agent-guard/README.md` 생성(§11.4). 기존 파일 있으면 덮어쓰지 않고 실패. preset 없음/모름은 사용오류. | 0/1/2 |
+| `draft-contract [--preset <name>] [--out] [--print]` | 불필요 | 계약 초안 생성(비대화형). repo 최상위 스캔으로 allowed 후보 생성 또는 preset 복사. 기본 stdout, `--out` 일 때만 저장(덮어쓰기 금지). 출력은 계약 스키마 호환. | 0/1/2 |
+| `review` | **필요(계약)** | commit 전 사람 체크리스트(read-only). lint(advisory)와 역할 구분 — 사람이 확인할 질문 목록. | 0 |
 | `verify [--json]` | **필요**(`requireRepo`) | 상태검사만(브랜치/범위/금지/stage/untracked/NUL/ahead-behind). **commands 실행 안 함.** 사람모드=박스 리포트(stdout)+note(stderr). `--json`=stable JSON 한 줄만(stdout), note 억제. | 0/1 |
 | `check` | 불필요 | `required_checks.commands` 만 `/bin/sh` 로 실행. 전부 통과해야 0. | 0/1 |
 | `report [--out]` | **필요** | verify + 마크다운 보고서 저장(`--out`, 기본 `agent-guard-report-<id>.md`). | 0/1 |
-| `receipt [--format json\|md] [--out]` | **필요** | verify + check 결과를 `.agent-guard/receipts/` 에 저장(AI Work Receipt, verify --json 14키와 별개 스키마 — §11.6). 기본 위치 밖 저장 시 안내(verify 가 제외 안 함). | 0/1 |
+| `receipt [--format json\|md\|client-md] [--out]` | **필요** | verify + check 결과를 `.agent-guard/receipts/` 에 저장(AI Work Receipt, verify --json 14키와 별개 스키마 — §11.6). `client-md`=고객 전달용 축약 렌더(스키마 동일). 기본 위치 밖 저장 시 안내(verify 가 제외 안 함). | 0/1 |
 | `receipts [--latest\|--cat\|--dir]` | 불필요 | `.agent-guard/receipts/` 조회(read-only): 최신순 목록 / `--latest` 요약 / `--cat` 최신 내용 / `--dir` 경로. json 은 ok/contractId/timestamp/contentHash/magnitude/critical 요약, md 는 파일명만. 없으면 생성 안내. | 0 |
 | `mode` | 불필요 | task/daily 작업 흐름 설명(read-only, 저장 파일 없음): 계약/session/baseline 상태 + 추천 모드 + 다음 명령. git 아니어도 안내. | 0 |
 | `claims --file <claim.json>` | **필요** | AI 완료보고(JSON)를 git 실측과 대조(§11.7). 파일 없음/파싱실패=2, mismatch=1, 일치=0. | 0/1/2 |
 | `explain` | **필요** | 왜 PASS/FAIL 인지 설명 + 규모/critical 경로 + recovery hint. **exit 는 verify 와 동일**(PASS 0 / FAIL 1). | 0/1 |
+| `audit [--json]` | 불필요 | `.agent-guard/receipts/` 로컬 집계(count/latest/PASS·FAIL/critical/고유 contentHash). 자동 append 없음 — 조회 전용. | 0 |
+| `dashboard [--out]` | 불필요 | receipts → 단일 static HTML(외부 CDN/network 없음). 기본 `.agent-guard/dashboard.html`(verify 제외 대상). | 0 |
+| `keys init` | 불필요 | ed25519 키쌍 생성(`.agent-guard/keys/`, Node 내장 crypto). private.pem gitignore 안내(자동 수정 안 함). 이미 있으면 실패. | 0/1 |
+| `sign --receipt <path>` | 불필요 | receipt 내용을 ed25519 서명 → sidecar `<receipt>.sig.json`. | 0/2 |
+| `verify-signature --receipt <path>` | 불필요 | public.pem 으로 서명 검증. PASS 0 / FAIL 1 / 파일·키·파싱 문제 2. | 0/1/2 |
+| `approve --receipt <path> [--note]` | 불필요 | local 승인 sidecar `<receipt>.approval.json`(approver=git config, timestamp, contentHash, note). git commit/network 없음. | 0/2 |
+| `approvals` | 불필요 | 승인 sidecar 목록(read-only). | 0 |
+| `export --format <slack\|json> --receipt <path>` | 불필요 | 외부전송용 payload **미리보기만 stdout** 출력. 실제 Slack/webhook POST·토큰 없음(dry-run). | 0/2 |
 | `doctor` | 불필요 | 환경/설정 건강 점검(git / 계약 발견·유효 / baseline). 오류 시 1. | 0/1 |
 | `lint` | 불필요 | 계약 품질 조언(allowed/denied/forbidden_actions/commands) — advisory. | 0 |
 | `pre` | **필요** | 시작 전 점검(브랜치 불일치 / 이미 stage 된 파일). | 0/1 |
 | `start` | **필요** | 작업 시작 baseline 을 `.agent-guard/session.json` 에 기록(§11.5). denied 가 이미 dirty 거나 session 이 이미 있으면 실패. | 0/1 |
 | `status` | **필요** | 계약 범위 / baseline(session) 상태 / 브랜치 / 현재 변경 요약(read-only). | 0 |
 | `reset` | 불필요 | baseline `.agent-guard/session.json` 제거(`contract.yaml`/`README.md` 는 유지). | 0 |
-| `prompt` | 불필요 | 에이전트에 붙일 지시문 출력(`forbidden_actions` 표시 + scope-밖 중단/추가개선 금지/commit·push·deploy 금지 + completion claim JSON 형식 — §7). | 0 |
+| `prompt [--cursor\|--claude]` | 불필요 | 에이전트에 붙일 지시문 출력(`forbidden_actions` 표시 + scope-밖 중단/추가개선 금지/commit·push·deploy 금지 + completion claim JSON 형식 — §7). 변종은 머리말/톤만 다르고 완료보고 JSON 은 동일(claims 입력 호환). | 0 |
 | `help` / `--help` | 불필요 | 사용법 출력. | 0 |
 | `run` | 상황별 | (인자 없음)과 동일한 단일명령 라우팅 별칭. | 0/1/2 |
 | (인자 없음) | 상황별 | 단일명령 라우팅: 계약 없음→init(promptia/generic 선택) / git 아님→check·lint / session 없음→start / session 있음→verify 실행 후 안내(PASS→check·receipt·claims / FAIL→explain·status·reset). | 0/1/2 |
@@ -344,3 +355,4 @@ report:
 6. **v0.4 추가(`claims`/`explain` 명령, receipt 확장 필드 §11.6, exit127 구분, recovery hint, prompt 강화)는 계약 스키마(§2–§8)와 `verify --json` 14키(§12)를 바꾸지 않는다.** 새 증거(magnitude/critical/contentHash)는 **receipt 스키마 한정**이고, critical paths 는 계약 필드가 아니라 코드 상수다. 단, `verify`(사람 모드)/`prompt` 의 **사람용 stdout 은 의도적으로 확장**됐다(recovery hint·완료보고 JSON 형식) — `test/golden/` baseline 을 그에 맞게 갱신했다(기계용 `--json` 은 불변).
 7. **v0.5 추가(`promptia` preset, `run` 별칭, promptia 감지 `lint`/`doctor` 경고, router PASS/FAIL 안내 강화)도 계약 스키마와 `verify --json` 14키를 바꾸지 않는다.** `promptia` 는 새 template 파일(`templates/promptia.yaml`)일 뿐 스키마 확장이 아니다(기존 필드만 사용). promptia 감지는 `id: promptia` 기반 advisory 경고로 점수화하지 않는다. `run` 은 (인자 없음) 라우팅의 별칭이며 새 판정 로직이 아니다. 라우팅/lint/doctor 의 **사람용 stdout 확장**은 `test/golden/` 에 반영했다(v04-06/v04-08 갱신 + v05-01~06 추가).
 8. **v0.6 추가(`mode`, `receipts` 명령)도 계약 스키마와 `verify --json` 14키를 바꾸지 않는다.** 둘 다 read-only 이고 새 저장 스키마를 만들지 않는다 — `mode` 는 task/daily 흐름 설명(저장 파일 없음), `receipts` 는 기존 receipt 파일 조회일 뿐이다(점수화·등급화 없음, AI 진실 간주 없음, 자동 revert 없음). `receipt` 출력에 기본위치-밖 저장 안내 1줄을 추가했다(verify 판정/제외 규칙 불변 — `.agent-guard/receipts/` 만 제외). golden: v1-01~03 갱신(receipt 안내) + v06-01~07 추가. 3문서 기능 매핑은 `docs/coverage.md` 참고.
+9. **v0.7(Sprint 5: remaining v1+ all-in)도 계약 스키마와 `verify --json` 14키를 바꾸지 않는다.** 신규 명령(`presets`/`draft-contract`/`review`/`prompt --cursor|--claude`/`receipt --format client-md`/`keys`/`sign`/`verify-signature`/`audit`/`dashboard`/`approve`/`approvals`/`export`)은 모두 **verify 판정 스키마와 별개**다: receipt signing 은 sidecar `.sig.json`, approval 은 `.approval.json`, client-md/export 은 기존 receipt JSON 의 렌더/요약, audit/dashboard 는 receipts 집계, draft-contract 출력은 계약 스키마 호환 초안일 뿐이다. `prompt` 변종은 완료보고 JSON 형식을 바꾸지 않는다(claims 입력 호환). **verify tool-output 제외 집합**(`session.ts` `isToolOutput`)에 `.agent-guard/keys/` 와 `.agent-guard/dashboard.html` 을 추가했다(기존 session.json·receipts/ 와 동일 취지 — 산출물이 verify 노이즈가 되지 않게). 판정/`--json`/exit 규칙은 불변. **금지선 유지**: 자동 revert·risk score·AI self-cert·외부 Slack/webhook 전송·원격 SaaS 없음(export 는 stdout dry-run, dashboard 는 로컬 HTML). golden: new-07/08 갱신(preset 목록) + v07-01~20 추가. 현재 상태 판정·남은 항목은 `docs/coverage.md`.

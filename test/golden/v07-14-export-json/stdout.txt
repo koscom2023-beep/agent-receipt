@@ -1,0 +1,16 @@
+{
+  "kind": "agent-receipt.export",
+  "contractId": "v06",
+  "ok": true,
+  "headHash": "06f4e1cfbd6a5a4019d7d182ee6f61f757a6354e",
+  "timestamp": "<TS>",
+  "contentHash": "sha256:685bfa45f1a0d0aed0503bfa49954b831eca3b53f914e6c09990f7c2eee4d47e",
+  "filesChanged": 0,
+  "magnitude": {
+    "filesChanged": 0,
+    "added": 0,
+    "deleted": 0,
+    "newFiles": 2
+  },
+  "criticalTouched": 0
+}

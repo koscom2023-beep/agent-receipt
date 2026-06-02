@@ -1,0 +1,12 @@
+
+────────────────────────────────────────────────────────
+agent-receipt audit  (.agent-guard/receipts — local history)
+────────────────────────────────────────────────────────
+  receipt 수        : 1 (json 1)
+  최신              : .agent-guard/receipts/receipt-A.json
+  PASS / FAIL       : 1 / 0
+  critical touched  : 0
+  고유 contentHash  : 1
+────────────────────────────────────────────────────────
+  상세: agent-receipt receipts   대시보드: agent-receipt dashboard
+

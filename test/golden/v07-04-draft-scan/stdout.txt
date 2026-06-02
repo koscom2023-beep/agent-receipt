@@ -1,0 +1,29 @@
+# agent-receipt draft contract — repo 스캔 기반 초안. 검토 후 수정하세요.
+# 스키마 SSOT: CONTRACT.md. 이 명령은 .agent-guard/contract.yaml 을 덮어쓰지 않습니다.
+id: draft
+title: draft contract
+mode: patch_only
+scope:
+  allowed_paths:
+    - "app/**"
+    - "src/**"
+    - "docs/**"
+  denied_paths:
+    - ".env*"
+    - "package-lock.json"
+    - "pnpm-lock.yaml"
+    - "supabase/migrations/**"
+    - "vercel.json"
+    - ".vercel/**"
+    - "exports/**"
+    - "docs/arch/json/**"
+forbidden_actions:
+  - push
+  - deploy
+required_checks:
+  commands: []
+git:
+  require_no_staged_untracked: false
+  require_only_allowed_files_staged: false
+  require_no_denied_path_diff: true
+  require_no_push: false

@@ -102,8 +102,32 @@ function toReceiptMd(r: Receipt): string {
   return L.join("\n");
 }
 
+// 고객/외주 전달용 Markdown — 내부 violation 상세는 빼고 결과/규모/무결성 요약만.
+// receipt JSON 스키마는 그대로(렌더 변종일 뿐). 같은 r 을 입력으로 받는다.
+function toClientMd(r: Receipt): string {
+  const L: string[] = [];
+  L.push(`# AI Work Receipt — ${r.contractId}`);
+  if (r.title) L.push(`> ${r.title}`);
+  L.push("");
+  L.push(`- Result: **${r.ok ? "PASS ✅" : "FAIL ❌"}**`);
+  L.push(`- Branch: \`${r.branch.current}\`${r.branch.expected ? ` (expected \`${r.branch.expected}\`)` : ""}`);
+  L.push(`- Commit (HEAD): \`${r.headHash}\``);
+  L.push(`- Files changed: ${r.touched.length}`);
+  L.push(`- Magnitude: ${r.magnitude.filesChanged} files, +${r.magnitude.added} / -${r.magnitude.deleted} lines, ${r.magnitude.newFiles} new`);
+  const hit = r.criticalPaths.filter((c) => c.touched.length);
+  L.push(hit.length ? `- Critical paths touched: ${hit.map((c) => c.glob).join(", ")}` : "- Critical paths: none touched");
+  L.push(`- Checks: ${r.checks.length ? r.checks.map((c) => `${c.name} ${c.ok ? "OK" : "✗"}`).join(", ") : "none"}`);
+  L.push(`- Integrity (contentHash): \`${r.contentHash}\``);
+  L.push(`- Generated at: ${r.timestamp}`);
+  L.push("");
+  L.push("## Reviewer note");
+  L.push("> _(reviewer fills in)_");
+  L.push("");
+  return L.join("\n");
+}
+
 /**
- * `agent-receipt receipt [--format json|md] [--out <path>]`
+ * `agent-receipt receipt [--format json|md|client-md] [--out <path>]`
  * verify(상태) + check(명령) 결과를 .agent-guard/receipts/ 아래 파일로 저장(기본 json).
  * 기능 로직(runVerify/runCheck)은 재사용만 한다. exit = ok ? 0 : 1.
  */
@@ -111,7 +135,7 @@ export function runReceipt(contract: Contract, format: string | undefined, outAr
   const v = runVerify(contract);
   const chk = runCheck(contract);
   const sess = resolveSession();
-  const fmt = format === "md" ? "md" : "json";
+  const fmt = format === "md" ? "md" : format === "client-md" ? "client-md" : "json";
   const r: Receipt = {
     ok: v.ok && chk.ok,
     contractId: v.contractId,
@@ -134,9 +158,10 @@ export function runReceipt(contract: Contract, format: string | undefined, outAr
     contentHash: "",
   };
   r.contentHash = receiptHash(r); // 나머지 필드 확정 후 봉인(자기 자신은 입력에서 제외).
-  const body = fmt === "md" ? toReceiptMd(r) : JSON.stringify(r, null, 2) + "\n";
+  const body = fmt === "md" ? toReceiptMd(r) : fmt === "client-md" ? toClientMd(r) : JSON.stringify(r, null, 2) + "\n";
   const stamp = r.timestamp.replace(/[:.]/g, "-");
-  const rel = outArg ?? join(".agent-guard", "receipts", `receipt-${stamp}.${fmt}`);
+  const ext = fmt === "json" ? "json" : "md"; // client-md 도 .md 로 저장(json 외엔 md).
+  const rel = outArg ?? join(".agent-guard", "receipts", `receipt-${stamp}.${ext}`);
   const out = isAbsolute(rel) ? rel : join(process.cwd(), rel);
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, body);

@@ -96,3 +96,37 @@ agent-receipt receipts --latest          # find it again: ok/contentHash/timesta
 `agent-receipt` with no command (or `agent-receipt run`) is the everyday entry point: it inspects state and tells you the next step — `init` → `start` → `verify`, suggesting `check`/`receipt`/`claims` on PASS and `explain`/`status`/`reset` on FAIL. When you're unsure whether this is a one-shot task or a day of stacked work, `agent-receipt mode` explains both flows.
 
 **task vs daily.** *task mode* is one unit of work: `start` → agent works → `verify`/`check`/`claims`/`receipt` → `reset` (or commit), one receipt per task. *daily mode* is several tasks on one branch in a day — `reset` then `start` to re-baseline before each, and use `agent-receipt receipts` to track the day's receipts. There is no separate daily schema; the receipts list *is* the history.
+
+## 7. Full local v1 loop (signing / audit / dashboard)
+
+Everything below is **local-first**: no network, no SaaS, no Slack POST. Signing uses Node's built-in ed25519.
+
+```bash
+# one-time: generate a signing key (then gitignore the key dir yourself)
+agent-receipt keys init                     # writes .agent-guard/keys/{private,public}.pem
+echo ".agent-guard/keys/" >> .gitignore      # never commit private.pem
+
+# per task
+agent-receipt presets                        # pick a preset
+agent-receipt draft-contract --preset strict --out .agent-guard/contract.yaml
+agent-receipt review                         # commit-time checklist
+agent-receipt start ; agent-receipt prompt --cursor
+#   … agent works, pastes claim.json …
+agent-receipt verify && agent-receipt check
+agent-receipt claims --file claim.json
+agent-receipt receipt                        # save receipt (default location)
+LATEST=$(agent-receipt receipts --dir)/$(ls -t "$(agent-receipt receipts --dir)" | head -1)
+agent-receipt sign --receipt "$LATEST"        # sidecar <receipt>.sig.json
+agent-receipt verify-signature --receipt "$LATEST"
+agent-receipt approve --receipt "$LATEST" --note "reviewed"
+
+# across the day / branch
+agent-receipt audit                          # summary over all receipts
+agent-receipt dashboard                      # → .agent-guard/dashboard.html (open in browser)
+
+# hand-off (no transport — preview only)
+agent-receipt receipt --format client-md --out client-receipt.md   # client-facing render
+agent-receipt export --format slack --receipt "$LATEST"            # Slack payload preview to stdout
+```
+
+The signing/approval sidecars live next to the receipt (under `.agent-guard/receipts/`), and `keys/` + `dashboard.html` are excluded by `verify`, so none of this creates verify noise. Cloud dashboards, real Slack delivery, and remote approval are intentionally **not** built — they wait for productization signal.

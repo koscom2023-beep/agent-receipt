@@ -1,0 +1,1 @@
+note: 미리보기만 출력했습니다 — 실제 Slack 전송/webhook POST 는 하지 않습니다(토큰/URL 없음).

@@ -1,0 +1,1 @@
+guard prompt --cursor --contract contract.yaml

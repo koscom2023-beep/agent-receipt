@@ -1,0 +1,28 @@
+# agent-guard relaxed preset — 느슨한 계약(탐색/프로토타이핑용).
+# denied_paths 중심으로만 보호하고, allowed_paths 는 비워 positive 범위검사를 끈다.
+# 스키마 정의(SSOT)는 agent-guard 의 CONTRACT.md 를 보세요. 프로젝트에 맞게 수정하세요.
+id: relaxed
+title: relaxed (denied-only) guard
+mode: patch_only
+scope:
+  # allowed_paths 가 비어 있으면 positive 범위검사 비활성 — 위험 경로만 denied 로 막는다(CONTRACT.md §3).
+  allowed_paths: []
+  denied_paths:
+    - ".env*"
+    - "**/*.pem"
+    - "**/*.key"
+    - "package-lock.json"
+    - "pnpm-lock.yaml"
+    - "supabase/migrations/**"
+    - "vercel.json"
+    - ".vercel/**"
+forbidden_actions: # 권고용 — verify 가 기계적으로 막지 않습니다(CONTRACT.md §7).
+  - push
+  - deploy
+required_checks:
+  commands: [] # 비워두면 check 는 vacuous PASS. 필요하면 tsc/test 등을 추가하세요.
+git:
+  require_no_staged_untracked: false # ambient untracked 노이즈에 관대.
+  require_only_allowed_files_staged: false
+  require_no_denied_path_diff: true
+  require_no_push: false
