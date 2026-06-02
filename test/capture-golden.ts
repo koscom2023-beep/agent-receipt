@@ -963,6 +963,18 @@ function v07Receipt(): { base: string; repo: string; contract: string } {
   const c = track(newCase());
   emit("v07-20-export-no-format", "guard export --receipt f.txt   (no --format → exit 2)", run(c.repo, "export", ["--receipt", "f.txt"]), null);
 }
+// v07-21: status — tool output(receipts/dashboard)을 변경 카운트에서 제외(verify 와 일관) — QA 정합성 가드.
+// 제외 실패 시 untracked 가 4 로 잡혀 golden 이 깨진다(회귀 검출).
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, ".agent-guard", "receipts"), { recursive: true });
+  mkdirSync(join(c.repo, "src"), { recursive: true });
+  writeFileSync(join(c.repo, ".agent-guard", "contract.yaml"), V06_SRC);
+  writeFileSync(join(c.repo, "src", "b.ts"), "export const b = 2;\n");
+  writeFileSync(join(c.repo, ".agent-guard", "receipts", "r.json"), "{}\n");
+  writeFileSync(join(c.repo, ".agent-guard", "dashboard.html"), "<html></html>\n");
+  emit("v07-21-status-excludes-tooloutput", "guard status   (receipts/dashboard 제외 → untracked 2)", run(c.repo, "status", []), null);
+}
 
 // ───────────────────────────── 인덱스 + 정리 ─────────────────────────────
 

@@ -1,7 +1,7 @@
 # agent-guard v0.1 golden baseline (A0.5)
 
 - branch: v0.1-verify-check-split
-- 캡처 케이스: 87개
+- 캡처 케이스: 88개
 - 결정론: 고정 git identity(ci/ci@local) + 고정 DATE(2025-01-01T00:00:00 +0000) → headHash 재현
 - 정규화(스냅샷 한정): $HOME→<HOME>, /tmp/claude-1000/ag-gold-*→<FIXTURE>
 
@@ -94,3 +94,4 @@
 | v07-18-sign-no-key | `guard sign --receipt f.txt   (no keys init → exit 2)` | 2 |
 | v07-19-verifysig-no-sidecar | `guard verify-signature --receipt f.txt   (no .sig.json → exit 2)` | 2 |
 | v07-20-export-no-format | `guard export --receipt f.txt   (no --format → exit 2)` | 2 |
+| v07-21-status-excludes-tooloutput | `guard status   (receipts/dashboard 제외 → untracked 2)` | 0 |

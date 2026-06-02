@@ -1,0 +1,1 @@
+guard status   (receipts/dashboard 제외 → untracked 2)

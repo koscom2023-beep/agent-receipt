@@ -34,8 +34,6 @@ export const PRESETS: Record<string, PresetMeta> = {
   },
 };
 
-export type PresetName = keyof typeof PRESETS;
-
 const line = "─".repeat(56);
 
 /** `agent-receipt presets` — 내장 preset 목록·설명 출력(read-only, local builtin only). exit 0. */

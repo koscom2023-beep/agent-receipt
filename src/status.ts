@@ -1,6 +1,6 @@
 import type { Contract } from "./schema.js";
 import * as g from "./git.js";
-import { resolveSession, SESSION_REL_PATH } from "./session.js";
+import { resolveSession, isToolOutput } from "./session.js";
 
 const line = "─".repeat(56);
 
@@ -8,7 +8,8 @@ const line = "─".repeat(56);
 export function runStatus(contract: Contract): never {
   const branch = g.currentBranch();
   const expected = contract.branch?.expected;
-  const ex = (a: string[]): string[] => a.filter((f) => f !== SESSION_REL_PATH);
+  // verify 와 동일한 tool-output 제외(session.json/receipts/keys/dashboard) — 변경 카운트 일관성.
+  const ex = (a: string[]): string[] => a.filter((f) => !isToolOutput(f));
   const unstaged = ex(g.unstagedFiles());
   const staged = ex(g.stagedFiles());
   const untracked = ex(g.untrackedFiles());
