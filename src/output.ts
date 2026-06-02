@@ -1,5 +1,6 @@
 import type { Contract } from "./schema.js";
 import type { VerifyResult, CheckResult } from "./checks.js";
+import { resolveSession } from "./session.js";
 
 const line = "─".repeat(56);
 
@@ -52,6 +53,21 @@ export function printReport(r: VerifyResult): void {
     for (const v of r.violations) console.log(`   ! ${v}`);
   }
   console.log(line);
+
+  // stale baseline 경고 (표시 전용 — 판정은 runVerify 가 이미 끝냄; --json/exit 에는 영향 없음).
+  // session 파일은 있는데 무효(stale)라 full-tree 로 degrade 된 경우만 이유+해결책을 알려준다.
+  const st = resolveSession();
+  if (!st.applied && st.session) {
+    console.log("");
+    console.log("⚠️  baseline(.agent-guard/session.json)을 무시하고 full-tree 로 검사했습니다 (session 이 현재 상태와 안 맞음).");
+    if (st.reason === "branch-mismatch") {
+      console.log(`   이유: session 브랜치 '${st.session.gitBranch}' ≠ 현재 '${r.branch.current}'`);
+    } else {
+      console.log(`   이유: 기록된 baselineHead(${st.session.baselineHead}) 가 현재 HEAD 의 조상이 아님 (rebase/checkout?)`);
+    }
+    console.log("   해결: .agent-guard/session.json 제거 후 `agent-guard start` 로 새 baseline 을 찍으세요.");
+  }
+
   console.log("");
 }
 

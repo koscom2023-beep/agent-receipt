@@ -1,0 +1,21 @@
+
+────────────────────────────────────────────────────────
+작업계약 검증: p1b-stale-human
+────────────────────────────────────────────────────────
+브랜치        : other
+변경한 파일   : 1개
+   - ambient.txt  [범위밖]
+stage된 파일  : 0개
+새 파일(untracked): 1개
+   - ambient.txt
+NUL 검사      : (대상 없음)
+로컬 커밋     : 06f4e1cfbd6a5a4019d7d182ee6f61f757a6354e
+────────────────────────────────────────────────────────
+결과: FAIL ❌  위반 1건
+   ! 허용 범위 밖 변경 1건: ambient.txt
+────────────────────────────────────────────────────────
+
+⚠️  baseline(.agent-guard/session.json)을 무시하고 full-tree 로 검사했습니다 (session 이 현재 상태와 안 맞음).
+   이유: session 브랜치 'main' ≠ 현재 'other'
+   해결: .agent-guard/session.json 제거 후 `agent-guard start` 로 새 baseline 을 찍으세요.
+

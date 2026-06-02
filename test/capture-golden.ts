@@ -509,6 +509,18 @@ const P1B_DENIED = `  denied_paths:\n    - ".env*"\n`;
     run(c.repo, "verify", ["--json", "--contract", c.contract]), contract);
 }
 
+// p1b-08: stale session + verify(human) → full-tree degrade + stale 경고 출력 (output.ts UX)
+{
+  const c = track(newCase());
+  writeFileSync(join(c.repo, "ambient.txt"), "ambient\n");
+  const contract = `id: p1b-stale-human\nscope:\n  allowed_paths:\n    - "src/**"\n${P1B_DENIED}`;
+  writeFileSync(c.contract, contract);
+  run(c.repo, "start", ["--contract", c.contract]); // session.gitBranch = main
+  git(c.repo, ["checkout", "-q", "-b", "other"]); // stale (branch 변경)
+  emit("p1b-08-stale-human-degrade", "guard start (main) … checkout other ; guard verify --contract contract.yaml",
+    run(c.repo, "verify", ["--contract", c.contract]), contract); // human 모드 → 경고
+}
+
 // ───────────────────────────── 인덱스 + 정리 ─────────────────────────────
 
 const indexLines = [
