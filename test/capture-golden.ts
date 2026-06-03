@@ -1169,6 +1169,76 @@ function s6Fixture(): { base: string; repo: string } {
     run(f.repo, "receipt", ["--redact", "--out", join(".agent-guard", "receipts", "r2.json")]), null);
 }
 
+// ───────────────────────────── v0.9 C1: begin --kind / session kind ─────────────────────────────
+// kind 는 session.json·receipt sidecar 에만(verify --json 14키 비접촉). 무kind 경로는 기존과 동일(기존 golden 불변).
+
+// v09-01: begin --kind recon (fresh baseline) → recon 운영원칙 + close-recon 종료안내
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, ".agent-guard"), { recursive: true });
+  writeFileSync(join(c.repo, ".agent-guard", "contract.yaml"), S6_CONTRACT);
+  writeFileSync(join(c.repo, ".agent-guard", "policy.yaml"), S6_POLICY);
+  emit("v09-01-begin-kind-recon", "guard begin --kind recon", run(c.repo, "begin", ["--kind", "recon"]), null);
+}
+// v09-02: begin --kind implementation → implementation 원칙 + finish 종료안내
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, ".agent-guard"), { recursive: true });
+  writeFileSync(join(c.repo, ".agent-guard", "contract.yaml"), S6_CONTRACT);
+  writeFileSync(join(c.repo, ".agent-guard", "policy.yaml"), S6_POLICY);
+  emit("v09-02-begin-kind-impl", "guard begin --kind implementation", run(c.repo, "begin", ["--kind", "implementation"]), null);
+}
+// v09-03: begin — 기존 baseline 존재 → 강화된 전환 경고(exit 0)
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, ".agent-guard"), { recursive: true });
+  writeFileSync(join(c.repo, ".agent-guard", "contract.yaml"), S6_CONTRACT);
+  run(c.repo, "start", []); // 기존 baseline
+  emit("v09-03-begin-existing-baseline", "guard start … ; guard begin   (기존 baseline → 전환 경고)", run(c.repo, "begin", []), null);
+}
+// v09-04: begin --kind bogus → 검증 실패 exit 2
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, ".agent-guard"), { recursive: true });
+  writeFileSync(join(c.repo, ".agent-guard", "contract.yaml"), S6_CONTRACT);
+  emit("v09-04-begin-kind-bogus", "guard begin --kind bogus   (검증 실패)", run(c.repo, "begin", ["--kind", "bogus"]), null);
+}
+// v09-05: start --kind recon → session.json 에 kind 기록(생성물 캡처)
+{
+  const c = track(newCase());
+  writeFileSync(c.contract, S6_CONTRACT);
+  const r = run(c.repo, "start", ["--kind", "recon", "--contract", c.contract]);
+  emit("v09-05-start-kind", "guard start --kind recon --contract contract.yaml", r, S6_CONTRACT);
+  saveSession("v09-05-start-kind", c.repo);
+}
+// v09-06: status — kind 세션 → '작업 종류' 라인
+{
+  const c = track(newCase());
+  writeFileSync(c.contract, S6_CONTRACT);
+  run(c.repo, "start", ["--kind", "implementation", "--contract", c.contract]);
+  emit("v09-06-status-kind", "guard start --kind implementation … ; guard status",
+    run(c.repo, "status", ["--contract", c.contract]), S6_CONTRACT);
+}
+// v09-07: receipt — kind 세션 → receipt.session.kind (생성물 캡처)
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, "src"), { recursive: true });
+  writeFileSync(c.contract, S6_CONTRACT);
+  run(c.repo, "start", ["--kind", "implementation", "--contract", c.contract]);
+  writeFileSync(join(c.repo, "src", "a.ts"), "export const a = 1;\n");
+  emit("v09-07-receipt-kind", "guard start --kind implementation … ; guard receipt --out r.json",
+    run(c.repo, "receipt", ["--out", "r.json", "--contract", c.contract]), S6_CONTRACT);
+  saveReceipt("v09-07-receipt-kind", c.repo, "r.json");
+}
+// v09-08: mode — kind 세션 → kind 표시
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, ".agent-guard"), { recursive: true });
+  writeFileSync(join(c.repo, ".agent-guard", "contract.yaml"), S6_CONTRACT);
+  run(c.repo, "start", ["--kind", "recon"]);
+  emit("v09-08-mode-kind", "guard start --kind recon … ; guard mode", run(c.repo, "mode", []), null);
+}
+
 // ───────────────────────────── 인덱스 + 정리 ─────────────────────────────
 
 const indexLines = [

@@ -1,0 +1,86 @@
+{
+  "ok": true,
+  "contractId": "s6",
+  "title": "sprint6 audit",
+  "branch": {
+    "current": "main",
+    "expected": "main",
+    "ok": true
+  },
+  "headHash": "06f4e1cfbd6a5a4019d7d182ee6f61f757a6354e",
+  "timestamp": "<TS>",
+  "touched": [
+    "src/a.ts"
+  ],
+  "staged": [],
+  "untracked": [
+    "src/a.ts"
+  ],
+  "outOfScope": [],
+  "deniedHits": [],
+  "violations": [],
+  "session": {
+    "applied": true,
+    "reason": null,
+    "baselineHead": "06f4e1cfbd6a5a4019d7d182ee6f61f757a6354e",
+    "kind": "implementation"
+  },
+  "checks": [],
+  "magnitude": {
+    "filesChanged": 0,
+    "added": 0,
+    "deleted": 0,
+    "newFiles": 1
+  },
+  "criticalPaths": [
+    {
+      "glob": ".env*",
+      "touched": []
+    },
+    {
+      "glob": "package-lock.json",
+      "touched": []
+    },
+    {
+      "glob": "pnpm-lock.yaml",
+      "touched": []
+    },
+    {
+      "glob": "supabase/migrations/**",
+      "touched": []
+    },
+    {
+      "glob": "vercel.json",
+      "touched": []
+    },
+    {
+      "glob": ".github/workflows/**",
+      "touched": []
+    }
+  ],
+  "policy": null,
+  "environment": {
+    "generatedAt": "<TS>",
+    "repoRoot": "<FIXTURE>",
+    "branch": "main",
+    "headHash": "06f4e1cfbd6a5a4019d7d182ee6f61f757a6354e",
+    "gitVersion": "<GIT>",
+    "nodeVersion": "<NODE>",
+    "npmVersion": "<NPM>",
+    "os": {
+      "platform": "linux",
+      "arch": "x64",
+      "release": "<OSREL>"
+    },
+    "agentReceiptVersion": "<VER>",
+    "package": {
+      "name": "@promptia-labs/agent-receipt",
+      "version": "<VER>"
+    },
+    "contractHash": "sha256:490ef991bb6db9d3d7bc0fc35fd0c821ff25cc0c038d749e0ed1685222da9c58",
+    "policyHash": null,
+    "note": "git 작업트리 기준 환경 메타 — .gitignore·레포 밖·OS·DB·외부 서비스는 담지 않음. AI 모델명 자동감지 안 함."
+  },
+  "disclosure": "이 도구는 git 작업트리 기준입니다 — .gitignore된 파일·레포 밖·OS 명령·DB write·외부 서비스 변경은 직접 볼 수 없습니다.",
+  "contentHash": "sha256:16903b9c92af48e5fa60bb0a1abdf00757bf1ae70074402d3cc3c626e48f77b8"
+}

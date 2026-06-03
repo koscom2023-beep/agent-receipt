@@ -1,0 +1,1 @@
+알 수 없는 --kind: bogus — 사용 가능: recon, implementation, docs, test, measure-first, observe-only, release-check

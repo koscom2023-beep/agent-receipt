@@ -13,6 +13,18 @@ function unique(arr: string[]): string[] {
   return [...new Set(arr)];
 }
 
+// 0.9: 작업 종류(kind) — begin --kind 로 기록. session.json·receipt sidecar 에만(verify --json 14키 비접촉).
+export const SESSION_KINDS = [
+  "recon",
+  "implementation",
+  "docs",
+  "test",
+  "measure-first",
+  "observe-only",
+  "release-check",
+] as const;
+export type SessionKind = (typeof SESSION_KINDS)[number];
+
 // .agent-guard/session.json 의 baseline 스키마(계약 스키마와 무관 — 독립 버전).
 export interface SessionData {
   version: 1;
@@ -20,6 +32,7 @@ export interface SessionData {
   createdAt: string;
   contractId: string;
   gitBranch: string;
+  kind?: SessionKind; // 0.9 optional — 없으면 기존 동작(하위호환)
   unstagedAtStart: string[];
   stagedAtStart: string[];
   untrackedAtStart: string[];
@@ -30,7 +43,7 @@ export type StartResult =
   | { ok: false; created: false; reason: "denied-dirty" | "exists"; message: string };
 
 // ── 비-exit 코어: baseline 기록 시도. begin/orchestrator 재사용. 안전조건 둘은 그대로(차단). ──
-export function startCore(contract: Contract, cwd: string = process.cwd()): StartResult {
+export function startCore(contract: Contract, cwd: string = process.cwd(), kind?: SessionKind): StartResult {
   const unstaged = g.unstagedFiles();
   const staged = g.stagedFiles();
   const untracked = g.untrackedFiles();
@@ -70,6 +83,7 @@ export function startCore(contract: Contract, cwd: string = process.cwd()): Star
     createdAt: new Date().toISOString(),
     contractId: contract.id,
     gitBranch: g.currentBranch(),
+    ...(kind ? { kind } : {}),
     unstagedAtStart: unstaged,
     stagedAtStart: staged,
     untrackedAtStart: untracked,
@@ -83,7 +97,7 @@ export function startCore(contract: Contract, cwd: string = process.cwd()): Star
     created: true,
     session,
     message:
-      `baseline 기록됨 (contract: ${session.contractId}, branch: ${session.gitBranch}):\n` +
+      `baseline 기록됨 (contract: ${session.contractId}, branch: ${session.gitBranch}${kind ? `, kind: ${kind}` : ""}):\n` +
       "  - .agent-guard/session.json\n" +
       `  - baselineHead: ${session.baselineHead}\n` +
       `  - snapshot: unstaged ${unstaged.length}, staged ${staged.length}, untracked ${untracked.length}`,
@@ -95,8 +109,8 @@ export function startCore(contract: Contract, cwd: string = process.cwd()): Star
  * 안전 규칙(둘 다 baseline 을 찍지 않고 실패): denied dirty / 기존 session 존재.
  * verify 동작은 바꾸지 않는다(baseline 적용은 별도 단계). 항상 process.exit 로 끝난다.
  */
-export function runStart(contract: Contract): never {
-  const res = startCore(contract);
+export function runStart(contract: Contract, kind?: SessionKind): never {
+  const res = startCore(contract, process.cwd(), kind);
   if (!res.ok) {
     console.error(res.message);
     process.exit(1);

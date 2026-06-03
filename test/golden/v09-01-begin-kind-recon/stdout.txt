@@ -1,0 +1,51 @@
+
+────────────────────────────────────────────────────────
+agent-receipt begin: s6
+────────────────────────────────────────────────────────
+상시 규칙(policy):
+  상시금지  : ✓ forbidAlways 변경 없음
+
+baseline 기록됨 (contract: s6, branch: main, kind: recon):
+  - .agent-guard/session.json
+  - baselineHead: 06f4e1cfbd6a5a4019d7d182ee6f61f757a6354e
+  - snapshot: unstaged 0, staged 0, untracked 2
+
+── 작업 종류(kind=recon) 운영 원칙 ──
+  · 읽기 전용 정찰 — 코드 변경 금지(읽기/검색만).
+  · 끝나면 close-recon 으로 변경 0 확인 후 audit-pack + baseline reset.
+
+── 아래 지시문을 AI 에이전트에 붙여 작업을 시작하세요 ──
+
+[작업 계약: s6]
+sprint6 audit
+
+이번 작업에서 반드시 지켜야 할 규칙이다.
+
+■ 수정해도 되는 파일 (오직 이 파일들만):
+  - src/**
+
+■ 절대 건드리면 안 되는 파일/폴더:
+  - .env*
+
+■ 공통 규칙:
+  - 허용 파일 외에는 생성/수정/삭제 금지
+  - 문서/메모/임시 리포트 같은 새 파일 만들지 말 것
+  - 허용 scope 밖 작업이 필요하면, 진행하지 말고 멈춰서 사람에게 물어볼 것
+  - 요청하지 않은 추가 개선/리팩터링 금지 (요청한 것만)
+  - 작업이 끝나면 commit / push / deploy 하지 말고 멈출 것
+
+■ 완료 보고 — 아래 JSON 을 그대로 붙일 것 (사람이 `agent-receipt claims --file` 로 git 과 대조한다):
+  {
+    "changedFiles": ["수정/생성한 파일 상대경로", "..."],
+    "newFiles": ["새로 만든 파일", "..."],
+    "deniedHits": [],
+    "tests": true,
+    "summary": "무엇을 했는지 한 줄"
+  }
+  - 이 보고는 '주장'일 뿐이며 git 실측과 다르면 mismatch 로 잡힌다. 변경을 숨기지 말 것.
+
+────────────────────────────────────────────────────────
+작업이 끝나면:  agent-receipt close-recon   (읽기 전용 — 변경 0 확인 후 audit-pack + reset)
+  이 도구는 git 작업트리 기준입니다 — .gitignore된 파일·레포 밖·OS 명령·DB write·외부 서비스 변경은 직접 볼 수 없습니다.
+────────────────────────────────────────────────────────
+

@@ -38,6 +38,9 @@ export function runStatus(contract: Contract): never {
   } else {
     console.log("baseline      : 없음 ('agent-receipt start' 로 기록)");
   }
+  if (sess.session?.kind) {
+    console.log(`작업 종류     : ${sess.session.kind}`);
+  }
   console.log(
     `변경(현재)    : ${touched}개 (unstaged ${unstaged.length}, staged ${staged.length}, untracked ${untracked.length})`,
   );

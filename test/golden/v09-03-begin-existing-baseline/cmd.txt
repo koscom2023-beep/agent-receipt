@@ -1,0 +1,1 @@
+guard start … ; guard begin   (기존 baseline → 전환 경고)

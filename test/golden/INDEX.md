@@ -1,7 +1,7 @@
 # agent-guard v0.1 golden baseline (A0.5)
 
 - branch: v0.1-verify-check-split
-- 캡처 케이스: 110개
+- 캡처 케이스: 118개
 - 결정론: 고정 git identity(ci/ci@local) + 고정 DATE(2025-01-01T00:00:00 +0000) → headHash 재현
 - 정규화(스냅샷 한정): $HOME→<HOME>, /tmp/claude-1000/ag-gold-*→<FIXTURE>
 
@@ -117,3 +117,11 @@
 | s6-20-export-langfuse | `guard export --format langfuse --receipt receipt-A.json` | 0 |
 | s6-21-report-audit | `guard report --type audit --out audit.md` | 0 |
 | s6-22-receipt-redact | `guard receipt --redact --out r2.json` | 0 |
+| v09-01-begin-kind-recon | `guard begin --kind recon` | 0 |
+| v09-02-begin-kind-impl | `guard begin --kind implementation` | 0 |
+| v09-03-begin-existing-baseline | `guard start … ; guard begin   (기존 baseline → 전환 경고)` | 0 |
+| v09-04-begin-kind-bogus | `guard begin --kind bogus   (검증 실패)` | 2 |
+| v09-05-start-kind | `guard start --kind recon --contract contract.yaml` | 0 |
+| v09-06-status-kind | `guard start --kind implementation … ; guard status` | 0 |
+| v09-07-receipt-kind | `guard start --kind implementation … ; guard receipt --out r.json` | 0 |
+| v09-08-mode-kind | `guard start --kind recon … ; guard mode` | 0 |

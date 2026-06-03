@@ -36,7 +36,7 @@ export function runMode(cwd: string = process.cwd()): never {
   console.log(line);
   console.log(`  계약       : ${cPath ? (contractBad ? "발견(형식오류)" : `발견 (${contractId})`) : "없음"}`);
   console.log(`  git 저장소 : ${isRepo ? "예" : "아니오"}`);
-  console.log(`  baseline   : ${!hasSession ? "없음" : active ? "활성" : `무효(${sess.reason})`}`);
+  console.log(`  baseline   : ${!hasSession ? "없음" : active ? "활성" : `무효(${sess.reason})`}${sess.session?.kind ? ` · kind=${sess.session.kind}` : ""}`);
   console.log(line);
   console.log("  ▸ task mode  — 1개 작업 단위");
   console.log("      start → (agent 작업) → verify → check → claims → receipt → reset/commit");

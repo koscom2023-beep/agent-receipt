@@ -1,0 +1,4 @@
+baseline 기록됨 (contract: s6, branch: main, kind: recon):
+  - .agent-guard/session.json
+  - baselineHead: 06f4e1cfbd6a5a4019d7d182ee6f61f757a6354e
+  - snapshot: unstaged 0, staged 0, untracked 0

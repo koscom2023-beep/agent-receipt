@@ -5,7 +5,7 @@ import { printReport, buildPrompt, toJsonReport, printCheckReport, type PromptVa
 import * as g from "./git.js";
 import { discoverContract } from "./discover.js";
 import { runInit } from "./init.js";
-import { runStart } from "./start.js";
+import { runStart, SESSION_KINDS, type SessionKind } from "./start.js";
 import { runStatus } from "./status.js";
 import { runReset } from "./reset.js";
 import { runReceipt } from "./receipt.js";
@@ -43,6 +43,17 @@ function getArg(flag: string): string | undefined {
 // 값 없는 boolean 플래그(예: --json)는 존재 여부만 본다. getArg(다음 인자 반환)와 구분.
 function hasFlag(flag: string): boolean {
   return process.argv.includes(flag);
+}
+
+// --kind <value> 파싱+검증(begin/start). 미지정→undefined. 알 수 없는 값→exit 2.
+function getKind(): SessionKind | undefined {
+  const v = getArg("--kind");
+  if (v === undefined) return undefined;
+  if (!(SESSION_KINDS as readonly string[]).includes(v)) {
+    console.error(`알 수 없는 --kind: ${v} — 사용 가능: ${SESSION_KINDS.join(", ")}`);
+    process.exit(2);
+  }
+  return v as SessionKind;
 }
 
 function requireRepo(): void {
@@ -262,7 +273,7 @@ function main(): void {
 
     case "start": {
       requireRepo();
-      runStart(contract);
+      runStart(contract, getKind());
       break;
     }
 
@@ -274,7 +285,7 @@ function main(): void {
 
     case "begin": {
       requireRepo();
-      runBegin(contract, promptVariant);
+      runBegin(contract, promptVariant, getKind());
       break;
     }
 

@@ -4,6 +4,7 @@ import { join, dirname, isAbsolute, relative } from "node:path";
 import type { Contract } from "./schema.js";
 import { runVerify, runCheck } from "./checks.js";
 import { resolveSession } from "./session.js";
+import type { SessionKind } from "./start.js";
 import { collectMagnitude, criticalPathHits, touchedFull, type Magnitude, type CriticalPath } from "./evidence.js";
 import { captureEnvironment, type Environment } from "./environment.js";
 import { loadPolicySafe, policyObservations, policyPath, type PolicyObs } from "./policy.js";
@@ -24,7 +25,7 @@ export interface Receipt {
   outOfScope: string[];
   deniedHits: string[];
   violations: string[];
-  session: { applied: boolean; reason: string | null; baselineHead: string } | null;
+  session: { applied: boolean; reason: string | null; baselineHead: string; kind?: SessionKind } | null;
   checks: { name: string; exitCode: number; requiredExit: number; ok: boolean }[];
   magnitude: Magnitude; // 변경 규모(full working tree 기준 — baseline-relative 아님)
   criticalPaths: CriticalPath[]; // 고위험 경로 touched/untouched (코드 상수 — 계약 필드 아님)
@@ -89,7 +90,12 @@ export function buildReceipt(contract: Contract, contractPath?: string): Receipt
     deniedHits: v.deniedHits,
     violations: v.violations,
     session: sess.session
-      ? { applied: sess.applied, reason: sess.reason, baselineHead: sess.session.baselineHead }
+      ? {
+          applied: sess.applied,
+          reason: sess.reason,
+          baselineHead: sess.session.baselineHead,
+          ...(sess.session.kind ? { kind: sess.session.kind } : {}),
+        }
       : null,
     checks: chk.commands.map((c) => ({ name: c.name, exitCode: c.exitCode, requiredExit: c.requiredExit, ok: c.ok })),
     magnitude: collectMagnitude(),
@@ -148,7 +154,7 @@ export function toReceiptMd(r: Receipt): string {
   L.push("");
   L.push("## Session (baseline)");
   if (!r.session) L.push("- none");
-  else L.push(`- applied: ${r.session.applied}${r.session.reason ? ` (${r.session.reason})` : ""}, baselineHead: \`${r.session.baselineHead}\``);
+  else L.push(`- applied: ${r.session.applied}${r.session.reason ? ` (${r.session.reason})` : ""}, baselineHead: \`${r.session.baselineHead}\`${r.session.kind ? `, kind: ${r.session.kind}` : ""}`);
   L.push("");
   L.push("## Checks");
   if (r.checks.length) for (const c of r.checks) L.push(`- ${c.name}: ${c.ok ? "OK" : "✗"} (exit ${c.exitCode}, expected ${c.requiredExit})`);
