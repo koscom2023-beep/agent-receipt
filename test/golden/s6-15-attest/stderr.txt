@@ -1,0 +1,1 @@
+note: in-toto style 초안을 stdout 으로만 출력했습니다 — 전송/등록/자동서명 없음.

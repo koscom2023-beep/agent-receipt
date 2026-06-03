@@ -1,0 +1,15 @@
+# agent-receipt policy — promptia (본진 상시 규칙)
+requireReceipt: true
+requireClaims: false
+requireCheck: false
+forbidAlways:
+  - ".env*"
+requireApprovalFor:
+  - "package-lock.json"
+  - "pnpm-lock.yaml"
+  - "supabase/migrations/**"
+  - "vercel.json"
+  - ".vercel/**"
+protectAlways:
+  - "exports/**"
+  - "docs/arch/json/**"

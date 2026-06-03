@@ -1,0 +1,30 @@
+
+────────────────────────────────────────────────────────
+작업계약 검증: s6
+sprint6 audit
+────────────────────────────────────────────────────────
+브랜치        : main (기대: main) OK
+변경한 파일   : 2개
+   - .agent-guard/policy.yaml  [범위밖]
+   - .env.local  [범위밖]
+stage된 파일  : 0개
+새 파일(untracked): 2개
+   - .agent-guard/policy.yaml
+   - .env.local
+NUL 검사      : (대상 없음)
+로컬 커밋     : 06f4e1cfbd6a5a4019d7d182ee6f61f757a6354e
+────────────────────────────────────────────────────────
+결과: FAIL ❌  위반 2건
+   ! 허용 범위 밖 변경 2건: .agent-guard/policy.yaml, .env.local
+   ! 금지 파일 변경 1건: .env.local
+────────────────────────────────────────────────────────
+
+상시 규칙(policy):
+   상시금지  : ✗ forbidAlways 1건 — .env.local
+
+다음 조치:
+   → 범위 밖 변경: 검토 후 되돌리거나(git restore/checkout) 계약의 allowed_paths 를 넓히세요. (자동 revert 안 함)
+   → 금지 경로 변경: commit 금지 — 되돌리기 / 별도 변경으로 분리 / denied_paths 글롭 조정 중 선택. (자동 revert 안 함)
+
+이 도구는 git 작업트리 기준입니다 — .gitignore된 파일·레포 밖·OS 명령·DB write·외부 서비스 변경은 직접 볼 수 없습니다.
+

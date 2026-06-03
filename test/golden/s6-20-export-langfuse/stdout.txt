@@ -1,0 +1,14 @@
+{
+  "type": "trace-create",
+  "body": {
+    "name": "agent-receipt",
+    "metadata": {
+      "contractId": "s6",
+      "ok": true,
+      "headHash": "06f4e1cfbd6a5a4019d7d182ee6f61f757a6354e",
+      "contentHash": "sha256:b0ba66e52fd03eafab69b6525020072026d1d4560ef0a179d798277ba0655886",
+      "filesChanged": 1,
+      "criticalTouched": 0
+    }
+  }
+}

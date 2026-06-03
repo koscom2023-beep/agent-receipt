@@ -1,0 +1,2 @@
+receipt 저장: .agent-guard/receipts/r2.json (ok=true) (redact: 1건 가림, best-effort)
+  → 조회: `agent-receipt receipts` (목록) / `--latest` / `--cat`

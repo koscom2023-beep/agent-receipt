@@ -1,0 +1,68 @@
+{
+  "resourceLogs": [
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "agent-receipt"
+            }
+          }
+        ]
+      },
+      "scopeLogs": [
+        {
+          "scope": {
+            "name": "agent-receipt.export"
+          },
+          "logRecords": [
+            {
+              "body": {
+                "stringValue": "AI Work Receipt s6 PASS ✅"
+              },
+              "attributes": [
+                {
+                  "key": "agent_receipt.contract_id",
+                  "value": {
+                    "stringValue": "s6"
+                  }
+                },
+                {
+                  "key": "agent_receipt.ok",
+                  "value": {
+                    "boolValue": true
+                  }
+                },
+                {
+                  "key": "agent_receipt.head_hash",
+                  "value": {
+                    "stringValue": "06f4e1cfbd6a5a4019d7d182ee6f61f757a6354e"
+                  }
+                },
+                {
+                  "key": "agent_receipt.content_hash",
+                  "value": {
+                    "stringValue": "sha256:b0ba66e52fd03eafab69b6525020072026d1d4560ef0a179d798277ba0655886"
+                  }
+                },
+                {
+                  "key": "agent_receipt.files_changed",
+                  "value": {
+                    "intValue": 1
+                  }
+                },
+                {
+                  "key": "agent_receipt.critical_touched",
+                  "value": {
+                    "intValue": 0
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

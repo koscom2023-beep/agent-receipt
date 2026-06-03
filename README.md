@@ -25,6 +25,29 @@ It is local-first by design:
 
 ---
 
+## AI work audit protocol (v0.8)
+
+Beyond a single receipt, v0.8 closes the evidence loop with a short, git-native audit flow:
+
+```
+begin → (agent works) → done → explain (if FAIL)
+      → audit-pack → attest (in-toto style) → commit with trailer
+      → ledger appends one line → later: replay re-verifies the pack
+                                   ↑ if something breaks, incident scans the trail
+```
+
+- `begin` / `done` collapse the everyday loop into two commands.
+- `policy.yaml` holds standing rules (`forbidAlways` / `requireApprovalFor` / `protectAlways`); the **contract** scopes one task, the **policy** governs the project.
+- `commit-check` gates the moment before you commit (it never commits for you) and prints a `Agent-Receipt:` / `Agent-Contract:` / `Agent-Policy:` trailer.
+- `audit-pack` bundles the evidence; `replay --pack <dir>` re-checks it later (content hash + commit existence = **tamper-evident**, not "non-forgeable").
+- `ledger.jsonl` is an append-only local trail (metadata only — no diffs/values). Flat file only.
+
+> **Scope of evidence.** This tool is **git-working-tree based**. It cannot see `.gitignore`d files, files outside the repo, OS commands, DB writes, or external-service changes. It provides **git-based evidence for compliance review — it is not a compliance guarantee.** An AI's completion report is always a *claim*; only git state is *measured*.
+
+Full command list: `agent-receipt help --all`.
+
+---
+
 ## Quick Start
 
 Install and run via `npx`. The everyday loop (here with the `promptia` preset):

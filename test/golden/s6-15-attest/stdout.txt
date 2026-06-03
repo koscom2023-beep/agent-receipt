@@ -1,0 +1,45 @@
+{
+  "_type": "https://in-toto.io/Statement/v1",
+  "subject": [
+    {
+      "name": "ai-work-receipt",
+      "digest": {
+        "sha256": "b0ba66e52fd03eafab69b6525020072026d1d4560ef0a179d798277ba0655886"
+      }
+    },
+    {
+      "name": "git-commit",
+      "digest": {
+        "gitCommit": "06f4e1cfbd6a5a4019d7d182ee6f61f757a6354e"
+      }
+    }
+  ],
+  "predicateType": "https://promptia-labs.dev/agent-receipt/ai-work/v0.1",
+  "predicate": {
+    "tool": "agent-receipt",
+    "toolVersion": "<VER>",
+    "contractId": "s6",
+    "contractHash": "sha256:490ef991bb6db9d3d7bc0fc35fd0c821ff25cc0c038d749e0ed1685222da9c58",
+    "policyHash": "sha256:dbe014292e1dbe2413b976ef0cab10db82b310aa191d9c568fdbe6fca83f78a4",
+    "branch": "main",
+    "headHash": "06f4e1cfbd6a5a4019d7d182ee6f61f757a6354e",
+    "ok": true,
+    "changes": {
+      "touched": 1,
+      "outOfScope": [],
+      "deniedHits": [],
+      "criticalTouched": 0,
+      "magnitude": {
+        "filesChanged": 0,
+        "added": 0,
+        "deleted": 0,
+        "newFiles": 3
+      }
+    },
+    "checks": [],
+    "approvals": 0,
+    "generatedAt": "<TS>",
+    "disclosure": "이 도구는 git 작업트리 기준입니다 — .gitignore된 파일·레포 밖·OS 명령·DB write·외부 서비스 변경은 직접 볼 수 없습니다.",
+    "note": "in-toto style 표준형 증명 초안 — 실제 SLSA level 주장이 아니며 표준 완전 준수를 단정하지 않습니다. 로컬 자가서명은 위조 불가가 아니라 변조를 알아챌 수 있는(tamper-evident) 출처 기록입니다."
+  }
+}

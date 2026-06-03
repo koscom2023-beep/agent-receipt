@@ -1,0 +1,20 @@
+{
+  "kind": "agent-receipt.audit-pack",
+  "generatedAt": "<TS>",
+  "contractId": "s6",
+  "headHash": "06f4e1cfbd6a5a4019d7d182ee6f61f757a6354e",
+  "branch": "main",
+  "ok": true,
+  "contentHash": "sha256:b0ba66e52fd03eafab69b6525020072026d1d4560ef0a179d798277ba0655886",
+  "redacted": false,
+  "files": [
+    "contract.yaml",
+    "environment.json",
+    "manifest.json",
+    "policy.yaml",
+    "receipt.json",
+    "summary.md"
+  ],
+  "disclosure": "이 도구는 git 작업트리 기준입니다 — .gitignore된 파일·레포 밖·OS 명령·DB write·외부 서비스 변경은 직접 볼 수 없습니다.",
+  "note": "감사 검토용 증거 묶음 — git 기준 재검증(replay) 가능한 작업 기록. '위조 불가 증명'이 아니라 변조를 알아챌 수 있는(tamper-evident) 로컬 기록."
+}

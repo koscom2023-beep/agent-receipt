@@ -69,11 +69,36 @@ function newCase(): { base: string; repo: string; contract: string } {
 function escapeRe(x: string): string {
   return x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
+// Sprint6: receipt/audit-pack/attest 등은 environment(node/git/npm/os/version) + wall-clock 타임스탬프 +
+// 스탬프 파일명(audit-packs/<ts>/, receipt-<ts>.json)을 포함한다 — 머신/시간마다 바뀌므로 정규화한다.
+// contentHash·contractHash·policyHash·headHash 는 고정 git date + 고정 파일내용으로 결정론적 → 정규화 안 함(진짜 값 유지).
+function normVolatile(s: string): string {
+  let out = s;
+  // 타임스탬프: ISO(콜론) + 파일 스탬프(대시) 둘 다 <TS>
+  out = out.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/g, "<TS>");
+  out = out.replace(/\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z/g, "<TS>");
+  // environment(JSON)
+  out = out.replace(/"nodeVersion": "[^"]*"/g, '"nodeVersion": "<NODE>"');
+  out = out.replace(/"gitVersion": ("[^"]*"|null)/g, '"gitVersion": "<GIT>"');
+  out = out.replace(/"npmVersion": ("[^"]*"|null)/g, '"npmVersion": "<NPM>"');
+  out = out.replace(/"release": "[^"]*"/g, '"release": "<OSREL>"');
+  out = out.replace(/"agentReceiptVersion": "[^"]*"/g, '"agentReceiptVersion": "<VER>"');
+  out = out.replace(/"toolVersion": ("[^"]*"|null)/g, '"toolVersion": "<VER>"');
+  out = out.replace(/"version": "[0-9][^"]*"/g, '"version": "<VER>"');
+  // environment(markdown)
+  out = out.replace(/- node: .*?  git: .*/g, "- node: <NODE>  npm: <NPM>  git: <GIT>");
+  out = out.replace(/- os: \S+\/\S+ \(.*\)/g, "- os: <OS>");
+  out = out.replace(/- agent-receipt: \S+  contractHash/g, "- agent-receipt: <VER>  contractHash");
+  out = out.replace(/- Environment: node .*/g, "- Environment: <ENV>");
+  return out;
+}
+
 function norm(s: string): string {
   if (!s) return s;
   let out = s;
   out = out.replace(new RegExp(escapeRe(TMP) + "/ag-gold-[^\\s\"']*", "g"), "<FIXTURE>");
   if (HOME) out = out.split(HOME).join("<HOME>");
+  out = normVolatile(out);
   return out;
 }
 
@@ -577,8 +602,7 @@ function saveReceipt(name: string, repo: string, fname: string): void {
   const sp = join(repo, fname);
   if (!existsSync(sp)) return;
   let s = readFileSync(sp, "utf8");
-  s = s.replace(/"timestamp": "[^"]*"/, '"timestamp": "<TS>"'); // json
-  s = s.replace(/- timestamp: .*/, "- timestamp: <TS>"); // md
+  s = norm(s); // 타임스탬프·environment(node/git/npm/os/version)·휘발 경로 정규화
   writeFileSync(join(goldenDir, name, `created-${fname}`), s);
 }
 
@@ -848,6 +872,7 @@ function saveArtifact(caseName: string, repo: string, relPath: string, outName: 
   if (!existsSync(sp)) return;
   let s = readFileSync(sp, "utf8");
   if (tsNorm) s = normTs(s);
+  s = norm(s); // environment/휘발 경로/스탬프 정규화(결정론)
   writeFileSync(join(goldenDir, caseName, outName), s);
 }
 // receipt 1개(고정명) 가진 fixture — audit/export/approve/dashboard/client-md 공용.
@@ -974,6 +999,174 @@ function v07Receipt(): { base: string; repo: string; contract: string } {
   writeFileSync(join(c.repo, ".agent-guard", "receipts", "r.json"), "{}\n");
   writeFileSync(join(c.repo, ".agent-guard", "dashboard.html"), "<html></html>\n");
   emit("v07-21-status-excludes-tooloutput", "guard status   (receipts/dashboard 제외 → untracked 2)", run(c.repo, "status", []), null);
+}
+
+// ───────────────────────────── Sprint 6 (v0.8): 감사 프로토콜 — policy/begin/done/commit-check/audit-pack/ledger/replay/attest/incident/report-type/export확장/help --all ─────────────────────────────
+// 신규 명령 대량. environment(node/git/npm/os/version)+wall-clock+스탬프 파일명은 norm() 으로 정규화(결정론).
+// contentHash/contractHash/policyHash/headHash 는 고정 git date+고정 파일내용으로 결정론적 → 실제 값 유지.
+
+const S6_CONTRACT =
+  `id: s6\ntitle: sprint6 audit\nbranch:\n  expected: main\n` +
+  `scope:\n  allowed_paths:\n    - "src/**"\n  denied_paths:\n    - ".env*"\nrequired_checks:\n  commands: []\n`;
+const S6_POLICY =
+  `requireReceipt: true\nrequireClaims: false\nrequireCheck: false\n` +
+  `forbidAlways:\n  - ".env*"\nrequireApprovalFor:\n  - "package-lock.json"\nprotectAlways:\n  - "exports/**"\n`;
+
+// 계약+정책+baseline+in-scope 변경(src/a.ts) + 고정명 receipt-A.json 을 갖춘 fixture.
+function s6Fixture(): { base: string; repo: string } {
+  const c = track(newCase());
+  mkdirSync(join(c.repo, ".agent-guard"), { recursive: true });
+  mkdirSync(join(c.repo, "src"), { recursive: true });
+  writeFileSync(join(c.repo, ".agent-guard", "contract.yaml"), S6_CONTRACT);
+  writeFileSync(join(c.repo, ".agent-guard", "policy.yaml"), S6_POLICY);
+  run(c.repo, "start", []); // baseline: contract.yaml/policy.yaml ambient
+  writeFileSync(join(c.repo, "src", "a.ts"), "export const a = 1;\n"); // start 이후 신규 in-scope
+  run(c.repo, "receipt", ["--out", join(".agent-guard", "receipts", "receipt-A.json")]); // 고정명 receipt
+  return { base: c.base, repo: c.repo };
+}
+
+// s6-01: policy init (promptia) — 생성물 캡처
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, ".agent-guard"), { recursive: true });
+  writeFileSync(join(c.repo, ".agent-guard", "contract.yaml"), S6_CONTRACT);
+  const r = run(c.repo, "policy", ["init", "--profile", "promptia"]);
+  emit("s6-01-policy-init", "guard policy init --profile promptia", r, null, c.base);
+  saveArtifact("s6-01-policy-init", c.repo, join(".agent-guard", "policy.yaml"), "created-policy.yaml", false);
+}
+// s6-02: policy show
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, ".agent-guard"), { recursive: true });
+  writeFileSync(join(c.repo, ".agent-guard", "policy.yaml"), S6_POLICY);
+  emit("s6-02-policy-show", "guard policy show", run(c.repo, "policy", ["show"]), null);
+}
+// s6-03: policy check — forbidAlways(.env) 닿음 → FAIL
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, ".agent-guard"), { recursive: true });
+  writeFileSync(join(c.repo, ".agent-guard", "policy.yaml"), S6_POLICY);
+  writeFileSync(join(c.repo, ".env.local"), "SECRET=1\n");
+  emit("s6-03-policy-check-forbid", "guard policy check   (.env touched → FAIL)", run(c.repo, "policy", ["check"]), null);
+}
+// s6-04: help --all
+{
+  const c = track(newCase());
+  emit("s6-04-help-all", "guard help --all", run(c.repo, "help", ["--all"]), null);
+}
+// s6-05: verify(human) + policy tripwire — .env(forbidAlways/denied) 닿음
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, ".agent-guard"), { recursive: true });
+  writeFileSync(join(c.repo, ".agent-guard", "policy.yaml"), S6_POLICY);
+  writeFileSync(c.contract, S6_CONTRACT);
+  writeFileSync(join(c.repo, ".env.local"), "SECRET=1\n");
+  emit("s6-05-verify-tripwire", "guard verify --contract contract.yaml   (policy tripwire)",
+    run(c.repo, "verify", ["--contract", c.contract]), S6_CONTRACT);
+}
+// s6-06: verify --json — policy 있어도 14키 유지(회귀 가드)
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, ".agent-guard"), { recursive: true });
+  writeFileSync(join(c.repo, ".agent-guard", "policy.yaml"), S6_POLICY);
+  writeFileSync(c.contract, S6_CONTRACT);
+  writeFileSync(join(c.repo, ".env.local"), "SECRET=1\n");
+  emit("s6-06-verify-json-14keys-policy", "guard verify --json   (policy 있어도 14키)",
+    run(c.repo, "verify", ["--json", "--contract", c.contract]), S6_CONTRACT);
+}
+// s6-07: explain + policy tripwire
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, ".agent-guard"), { recursive: true });
+  writeFileSync(join(c.repo, ".agent-guard", "policy.yaml"), S6_POLICY);
+  writeFileSync(c.contract, S6_CONTRACT);
+  mkdirSync(join(c.repo, "src"), { recursive: true });
+  writeFileSync(join(c.repo, "src", "x.ts"), "export const x=1;\n");
+  emit("s6-07-explain-policy", "guard explain --contract contract.yaml   (policy)",
+    run(c.repo, "explain", ["--contract", c.contract]), S6_CONTRACT);
+}
+// s6-08: begin (baseline + prompt)
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, ".agent-guard"), { recursive: true });
+  writeFileSync(join(c.repo, ".agent-guard", "contract.yaml"), S6_CONTRACT);
+  writeFileSync(join(c.repo, ".agent-guard", "policy.yaml"), S6_POLICY);
+  emit("s6-08-begin", "guard begin   (policy+baseline+prompt)", run(c.repo, "begin", []), null);
+}
+// s6-09: done (+ ledger) — stamped receipt 경로 <TS> 정규화
+{
+  const f = s6Fixture();
+  const r = run(f.repo, "done", ["--ledger"]);
+  emit("s6-09-done-ledger", "guard done --ledger", r, null);
+}
+// s6-10: commit-check PASS (+ 트레일러)
+{
+  const f = s6Fixture();
+  emit("s6-10-commit-check-pass", "guard commit-check   (PASS + trailer)", run(f.repo, "commit-check", []), null);
+}
+// s6-11: commit-check FAIL — forbidAlways(.env) 닿음
+{
+  const f = s6Fixture();
+  writeFileSync(join(f.repo, ".env.local"), "SECRET=1\n");
+  emit("s6-11-commit-check-fail", "guard commit-check   (.env → 차단)", run(f.repo, "commit-check", []), null);
+}
+// s6-12: trailer 단독
+{
+  const f = s6Fixture();
+  emit("s6-12-trailer", "guard trailer", run(f.repo, "trailer", []), null);
+}
+// s6-13: audit-pack (+ 산출물 정규화 캡처)
+{
+  const f = s6Fixture();
+  const r = run(f.repo, "audit-pack", ["--out", join(".agent-guard", "audit-packs", "PK")]);
+  emit("s6-13-audit-pack", "guard audit-pack --out audit-packs/PK", r, null);
+  saveArtifact("s6-13-audit-pack", f.repo, join(".agent-guard", "audit-packs", "PK", "manifest.json"), "created-manifest.json", false);
+  saveArtifact("s6-13-audit-pack", f.repo, join(".agent-guard", "audit-packs", "PK", "environment.json"), "created-environment.json", false);
+}
+// s6-14: replay (round-trip PASS)
+{
+  const f = s6Fixture();
+  run(f.repo, "audit-pack", ["--out", join(".agent-guard", "audit-packs", "PK")]);
+  emit("s6-14-replay", "guard replay --pack audit-packs/PK", run(f.repo, "replay", ["--pack", join(".agent-guard", "audit-packs", "PK")]), null);
+}
+// s6-15: attest (--receipt receipt-A.json)
+{
+  const f = s6Fixture();
+  const r = run(f.repo, "attest", ["--receipt", join(".agent-guard", "receipts", "receipt-A.json")]);
+  emit("s6-15-attest", "guard attest --receipt receipt-A.json", r, null);
+}
+// s6-16: ledger rebuild + ledger
+{
+  const f = s6Fixture();
+  run(f.repo, "ledger", ["rebuild"]);
+  emit("s6-16-ledger", "guard ledger rebuild ; guard ledger", run(f.repo, "ledger", []), null);
+}
+// s6-17: incident
+{
+  const f = s6Fixture();
+  emit("s6-17-incident", "guard incident", run(f.repo, "incident", []), null);
+}
+// s6-18: export github-pr / otel / langfuse (미리보기 — 전송 없음)
+{
+  const f = s6Fixture();
+  const rcpt = join(".agent-guard", "receipts", "receipt-A.json");
+  emit("s6-18-export-github-pr", "guard export --format github-pr --receipt receipt-A.json", run(f.repo, "export", ["--format", "github-pr", "--receipt", rcpt]), null);
+  emit("s6-19-export-otel", "guard export --format otel --receipt receipt-A.json", run(f.repo, "export", ["--format", "otel", "--receipt", rcpt]), null);
+  emit("s6-20-export-langfuse", "guard export --format langfuse --receipt receipt-A.json", run(f.repo, "export", ["--format", "langfuse", "--receipt", rcpt]), null);
+}
+// s6-21: report --type audit / client
+{
+  const f = s6Fixture();
+  // 단일 실행: runVerify 는 audit.md 를 쓰기 전에 끝나므로 PASS. (두 번 실행하면 audit.md 가 outOfScope 로 잡힘)
+  const r = run(f.repo, "report", ["--type", "audit", "--out", "audit.md"]);
+  emit("s6-21-report-audit", "guard report --type audit --out audit.md", r, null);
+  saveArtifact("s6-21-report-audit", f.repo, "audit.md", "created-audit.md", false);
+}
+// s6-22: receipt --redact (비밀 없음 → 0건, best-effort 고지)
+{
+  const f = s6Fixture();
+  emit("s6-22-receipt-redact", "guard receipt --redact --out r2.json",
+    run(f.repo, "receipt", ["--redact", "--out", join(".agent-guard", "receipts", "r2.json")]), null);
 }
 
 // ───────────────────────────── 인덱스 + 정리 ─────────────────────────────

@@ -1,0 +1,1 @@
+guard export --format github-pr --receipt receipt-A.json

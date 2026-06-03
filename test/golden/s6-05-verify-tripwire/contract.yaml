@@ -1,0 +1,11 @@
+id: s6
+title: sprint6 audit
+branch:
+  expected: main
+scope:
+  allowed_paths:
+    - "src/**"
+  denied_paths:
+    - ".env*"
+required_checks:
+  commands: []

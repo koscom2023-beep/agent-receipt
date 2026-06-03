@@ -1,0 +1,3 @@
+생성됨 (profile: promptia):
+  - <FIXTURE>/repo/.agent-guard/policy.yaml
+  contract=이번 작업 범위, policy=상시 규칙. 검사: `agent-receipt policy check` / `commit-check`

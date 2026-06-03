@@ -18,3 +18,5 @@ NUL 검사      : (대상 없음)
 다음 조치:
    → 정리 안 된 새 파일: 필요하면 git add+commit, 아니면 삭제/gitignore. ambient 노이즈면 `agent-receipt start` 로 baseline 을 찍으세요.
 
+이 도구는 git 작업트리 기준입니다 — .gitignore된 파일·레포 밖·OS 명령·DB write·외부 서비스 변경은 직접 볼 수 없습니다.
+

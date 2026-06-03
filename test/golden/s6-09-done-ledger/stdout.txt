@@ -1,0 +1,15 @@
+
+────────────────────────────────────────────────────────
+agent-receipt done: s6  — PASS ✅
+────────────────────────────────────────────────────────
+receipt 저장: .agent-guard/receipts/receipt-<TS>.json
+변경: touched 1, untracked 1, denied 0, outOfScope 0
+검사: 명령 없음(통과 처리)
+원장 적립: .agent-guard/ledger.jsonl
+────────────────────────────────────────────────────────
+다음: 사람이 직접 stage/commit 하세요.
+  → 커밋 전 확인:  agent-receipt commit-check
+  → 증거 묶음:     agent-receipt audit-pack [--claim <claim.json>]
+  이 도구는 git 작업트리 기준입니다 — .gitignore된 파일·레포 밖·OS 명령·DB write·외부 서비스 변경은 직접 볼 수 없습니다.
+────────────────────────────────────────────────────────
+

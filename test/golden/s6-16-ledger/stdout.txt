@@ -1,0 +1,9 @@
+
+────────────────────────────────────────────────────────
+agent-receipt ledger  (.agent-guard/ledger.jsonl) — 1건
+────────────────────────────────────────────────────────
+  <TS>  PASS  s6  main  files:0
+      06f4e1cfbd6a5a4019d7d182ee6f61f757a6354e  sha256:b0ba66e52fd03eafab69b6525020072026d1d4560ef0a179d798277ba0655886  .agent-guard/receipts/receipt-A.json
+────────────────────────────────────────────────────────
+  이 도구는 git 작업트리 기준입니다 — .gitignore된 파일·레포 밖·OS 명령·DB write·외부 서비스 변경은 직접 볼 수 없습니다.
+

@@ -1,0 +1,1 @@
+guard export --format otel --receipt receipt-A.json

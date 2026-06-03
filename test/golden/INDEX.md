@@ -1,7 +1,7 @@
 # agent-guard v0.1 golden baseline (A0.5)
 
 - branch: v0.1-verify-check-split
-- 캡처 케이스: 88개
+- 캡처 케이스: 110개
 - 결정론: 고정 git identity(ci/ci@local) + 고정 DATE(2025-01-01T00:00:00 +0000) → headHash 재현
 - 정규화(스냅샷 한정): $HOME→<HOME>, /tmp/claude-1000/ag-gold-*→<FIXTURE>
 
@@ -95,3 +95,25 @@
 | v07-19-verifysig-no-sidecar | `guard verify-signature --receipt f.txt   (no .sig.json → exit 2)` | 2 |
 | v07-20-export-no-format | `guard export --receipt f.txt   (no --format → exit 2)` | 2 |
 | v07-21-status-excludes-tooloutput | `guard status   (receipts/dashboard 제외 → untracked 2)` | 0 |
+| s6-01-policy-init | `guard policy init --profile promptia` | 0 |
+| s6-02-policy-show | `guard policy show` | 0 |
+| s6-03-policy-check-forbid | `guard policy check   (.env touched → FAIL)` | 1 |
+| s6-04-help-all | `guard help --all` | 0 |
+| s6-05-verify-tripwire | `guard verify --contract contract.yaml   (policy tripwire)` | 1 |
+| s6-06-verify-json-14keys-policy | `guard verify --json   (policy 있어도 14키)` | 1 |
+| s6-07-explain-policy | `guard explain --contract contract.yaml   (policy)` | 1 |
+| s6-08-begin | `guard begin   (policy+baseline+prompt)` | 0 |
+| s6-09-done-ledger | `guard done --ledger` | 0 |
+| s6-10-commit-check-pass | `guard commit-check   (PASS + trailer)` | 0 |
+| s6-11-commit-check-fail | `guard commit-check   (.env → 차단)` | 1 |
+| s6-12-trailer | `guard trailer` | 0 |
+| s6-13-audit-pack | `guard audit-pack --out audit-packs/PK` | 0 |
+| s6-14-replay | `guard replay --pack audit-packs/PK` | 0 |
+| s6-15-attest | `guard attest --receipt receipt-A.json` | 0 |
+| s6-16-ledger | `guard ledger rebuild ; guard ledger` | 0 |
+| s6-17-incident | `guard incident` | 0 |
+| s6-18-export-github-pr | `guard export --format github-pr --receipt receipt-A.json` | 0 |
+| s6-19-export-otel | `guard export --format otel --receipt receipt-A.json` | 0 |
+| s6-20-export-langfuse | `guard export --format langfuse --receipt receipt-A.json` | 0 |
+| s6-21-report-audit | `guard report --type audit --out audit.md` | 0 |
+| s6-22-receipt-redact | `guard receipt --redact --out r2.json` | 0 |

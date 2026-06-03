@@ -1,0 +1,28 @@
+
+agent-receipt — AI 작업계약 검수 / 작업 감사 CLI (전체 명령)
+
+계약/세션:
+  presets / init --preset <name> / draft-contract / review / start / status / mode / reset
+정책(상시 규칙):
+  policy init [--profile solo-founder|vibe-coder|agency-client|team-strict|promptia] / policy check / policy show
+검증:
+  verify [--json] / check / explain / claims --file <c.json> / pre / prompt [--cursor|--claude]
+감사 흐름(요약):
+  begin [--cursor|--claude] / done [--claim <c.json>] [--client] [--ledger] / commit-check / trailer
+증빙/감사 묶음:
+  report [--type developer|client|audit] [--out] / receipt [--format json|md|client-md] [--redact] [--out]
+  receipts [--latest|--cat|--dir] / audit [--json] / dashboard [--out]
+  audit-pack [--out <dir>] [--claim <c.json>] [--redact] [--ledger]
+  ledger [--json] / ledger rebuild
+  replay --pack <dir>  (별칭 verify-pack) / attest --receipt <p> | --pack <dir>
+  incident [--since <n>]
+서명/승인:
+  keys init / sign --receipt <p> / verify-signature --receipt <p> / approve --receipt <p> [--note] / approvals
+연동(미리보기 — 전송 없음):
+  export --format <slack|json|github-pr|otel|langfuse> --receipt <p>
+점검/기타:
+  doctor / lint / run
+
+  --contract 생략 시 .agent-guard/contract.yaml 등을 자동 탐색
+  한계: git 작업트리 기준 — .gitignore·레포 밖·OS·DB·외부 서비스는 직접 못 봅니다. "컴플라이언스 보장"이 아니라 "git 증거 제공".
+
