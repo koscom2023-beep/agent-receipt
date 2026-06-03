@@ -42,7 +42,21 @@ export function runNext(cwd: string = process.cwd()): never {
   if (!sess.applied) say("agent-receipt reset → agent-receipt begin", `baseline 무효(${sess.reason}) — 재시작`);
 
   const v = runVerify(contract);
-  if (!v.ok) say("agent-receipt explain", `verify FAIL — 위반 ${v.violations.length}건(denied/범위 밖 등)`, 1);
+  if (!v.ok) {
+    // 원인 요약(짧게) — 무엇이 FAIL 인지 한눈에. verify --json 구조는 불변(여기서 새로 출력만).
+    console.log("verify FAIL 요약:");
+    console.log(`  touched         : ${v.touched.length}`);
+    console.log(`  denied          : ${v.deniedHits.length}`);
+    console.log(`  outOfScope      : ${v.outOfScope.length}`);
+    console.log(`  stagedOutOfScope: ${v.stagedOutOfScope.length}`);
+    console.log(`  untracked       : ${v.untracked.length}`);
+    const rep = [...v.deniedHits, ...v.stagedOutOfScope, ...v.outOfScope, ...v.touched]
+      .filter((x, i, a) => a.indexOf(x) === i)
+      .slice(0, 3);
+    if (rep.length) console.log(`  대표 파일       : ${rep.join(", ")}`);
+    console.log("");
+    say("agent-receipt explain", "원인 자세히 — 무엇이/왜 FAIL 인지(자동 수정/커밋 안 함)", 1);
+  }
 
   const kind = sess.session?.kind;
   if (v.touched.length === 0) {

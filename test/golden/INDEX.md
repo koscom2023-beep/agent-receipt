@@ -1,7 +1,7 @@
 # agent-guard v0.1 golden baseline (A0.5)
 
 - branch: v0.1-verify-check-split
-- 캡처 케이스: 139개
+- 캡처 케이스: 143개
 - 결정론: 고정 git identity(ci/ci@local) + 고정 DATE(2025-01-01T00:00:00 +0000) → headHash 재현
 - 정규화(스냅샷 한정): $HOME→<HOME>, /tmp/claude-1000/ag-gold-*→<FIXTURE>
 
@@ -146,3 +146,7 @@
 | v09-27-release-check-no-base | `guard release-check   (no --base → exit 2)` | 2 |
 | v09-28-next-no-session | `guard next   (계약 있음, session 없음 → begin)` | 0 |
 | v09-29-next-changes | `guard start … ; (src/a.ts) ; guard next   (변경 → finish)` | 0 |
+| v091-01-version-flag | `guard --version   (no git repo, no contract)` | 0 |
+| v091-02-version-v | `guard -v   (no git repo, no contract)` | 0 |
+| v091-03-version-word | `guard version   (no git repo, no contract)` | 0 |
+| v091-04-next-verify-fail | `guard start … ; (oos) ; guard next   (verify FAIL 요약 → explain)` | 1 |

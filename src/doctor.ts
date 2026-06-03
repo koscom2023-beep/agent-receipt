@@ -4,6 +4,7 @@ import { loadContract } from "./schema.js";
 import * as g from "./git.js";
 import { DEFAULT_CONTRACT_PATHS, discoverContract } from "./discover.js";
 import { resolveSession } from "./session.js";
+import { binaryPath, installedVersion, npmLatest, compareVersions } from "./version.js";
 
 const line = "─".repeat(56);
 
@@ -51,6 +52,31 @@ export function runDoctor(cwd: string = process.cwd()): never {
   console.log(line);
   console.log("agent-receipt doctor");
   console.log(line);
+
+  // ── 설치/버전 진단(advisory — git/계약 진단과 별개, exit code 에 영향 없음) ──
+  // npm latest 조회 실패(오프라인/미발행/네트워크)는 doctor 를 실패시키지 않는다 — 참고 표시만.
+  const cur = installedVersion();
+  const latest = npmLatest();
+  console.log("설치:");
+  console.log(`  실행 파일 : ${binaryPath()}`);
+  console.log(`  현재 버전 : ${cur}`);
+  if (latest === null) {
+    console.log("  npm latest: 확인 안 함 (오프라인/조회 생략)");
+    console.log("  업데이트   : 확인 불가 (advisory — git 진단과 무관)");
+  } else {
+    console.log(`  npm latest: ${latest}`);
+    const cmp = compareVersions(cur, latest);
+    if (cmp === null) {
+      console.log("  업데이트   : 비교 불가 (advisory)");
+    } else if (cmp < 0) {
+      console.log(`  업데이트   : ⚠️ 새 버전이 있습니다: ${cur} → ${latest}`);
+      console.log("               npm install -g @promptia-labs/agent-receipt@latest");
+    } else {
+      console.log("  업데이트   : OK (최신)");
+    }
+  }
+  console.log(line);
+
   for (const x of f) console.log(`  ${x.level === "ok" ? "✓" : x.level === "warn" ? "⚠" : "✗"} ${x.msg}`);
   console.log(line);
   const errs = f.filter((x) => x.level === "err").length;

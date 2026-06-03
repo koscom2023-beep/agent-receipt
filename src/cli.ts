@@ -40,6 +40,7 @@ import { runReport } from "./report.js";
 import { runNote } from "./note.js";
 import { runReleaseCheck } from "./releasecheck.js";
 import { runNext } from "./nextcmd.js";
+import { installedVersion } from "./version.js";
 
 function getArg(flag: string): string | undefined {
   const i = process.argv.indexOf(flag);
@@ -164,6 +165,12 @@ function runPre(contract: Contract): void {
 
 function main(): void {
   const command = process.argv[2];
+
+  // 버전 — 계약/git 불필요, help·unknown 처리보다 먼저. --version / -v / version 동일 출력. exit 0.
+  if (command === "--version" || command === "-v" || command === "version") {
+    console.log(installedVersion());
+    process.exit(0);
+  }
 
   if (command === "help" || command === "--help" || command === "-h") {
     if (hasFlag("--all")) printHelpAll();

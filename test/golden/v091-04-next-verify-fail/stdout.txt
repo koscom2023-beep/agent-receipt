@@ -1,0 +1,10 @@
+verify FAIL 요약:
+  touched         : 1
+  denied          : 0
+  outOfScope      : 1
+  stagedOutOfScope: 0
+  untracked       : 1
+  대표 파일       : newfile.txt
+
+다음: agent-receipt explain
+  (원인 자세히 — 무엇이/왜 FAIL 인지(자동 수정/커밋 안 함))

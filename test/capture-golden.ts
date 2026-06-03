@@ -44,6 +44,8 @@ const ENV: NodeJS.ProcessEnv = {
   GIT_TERMINAL_PROMPT: "0",
   GIT_AUTHOR_DATE: FIXED_DATE,
   GIT_COMMITTER_DATE: FIXED_DATE,
+  // 0.9.1: doctor 의 npm latest 조회(네트워크)를 끈다 → 결정론. 현재 버전 라인은 normVolatile 가 <VER> 로 정규화.
+  AGENT_RECEIPT_NO_NET: "1",
 };
 
 function git(cwd: string, args: string[]): void {
@@ -85,6 +87,9 @@ function normVolatile(s: string): string {
   out = out.replace(/"agentReceiptVersion": "[^"]*"/g, '"agentReceiptVersion": "<VER>"');
   out = out.replace(/"toolVersion": ("[^"]*"|null)/g, '"toolVersion": "<VER>"');
   out = out.replace(/"version": "[0-9][^"]*"/g, '"version": "<VER>"');
+  // doctor 설치 진단(0.9.1): '현재 버전 : <semver>' → <VER>(버전 bump churn 방지), '실행 파일 : <path>' → <BIN>(clone 경로 무관).
+  out = out.replace(/(현재 버전 : )[0-9]\S*/g, "$1<VER>");
+  out = out.replace(/(실행 파일 : ).*/g, "$1<BIN>");
   // environment(markdown)
   out = out.replace(/- node: .*?  git: .*/g, "- node: <NODE>  npm: <NPM>  git: <GIT>");
   out = out.replace(/- os: \S+\/\S+ \(.*\)/g, "- os: <OS>");
@@ -1472,6 +1477,32 @@ const V09_CLAIMS_CONTRACT =
   run(c.repo, "start", []);
   writeFileSync(join(c.repo, "src", "a.ts"), "export const a = 1;\n");
   emit("v09-29-next-changes", "guard start … ; (src/a.ts) ; guard next   (변경 → finish)", run(c.repo, "next", []), null);
+}
+
+// ───────────────────────────── v0.9.1: version command / doctor 버전진단 / next FAIL 요약 ─────────────────────────────
+// 실사용 결함 패치. doctor 케이스(v1-04/v1-05/v05-04)는 설치/버전 섹션이 붙어 재캡처됨(no-net + <VER> 정규화로 결정론).
+
+// v091-01..03: --version / -v / version → 동일 버전(계약/git 불필요). 버전 문자열은 케이스-로컬 <VER> 정규화.
+for (const [nm, flag, label] of [
+  ["v091-01-version-flag", "--version", "guard --version   (no git repo, no contract)"],
+  ["v091-02-version-v", "-v", "guard -v   (no git repo, no contract)"],
+  ["v091-03-version-word", "version", "guard version   (no git repo, no contract)"],
+] as const) {
+  const base = initBase(); // 비-repo + 계약 없음 — version 은 그래도 동작해야 한다.
+  const r = run(base, flag, []);
+  r.stdout = r.stdout.replace(/\d+\.\d+\.\d+/g, "<VER>");
+  emit(nm, label, r, null, base);
+}
+
+// v091-04: next — verify FAIL(범위 밖 신규) → 원인 요약(counts + 대표 파일) + explain 추천(exit 1)
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, ".agent-guard"), { recursive: true });
+  writeFileSync(join(c.repo, ".agent-guard", "contract.yaml"), S2_SRC); // allowed src/**
+  run(c.repo, "start", []); // baseline: contract.yaml ambient
+  writeFileSync(join(c.repo, "newfile.txt"), "out of scope\n"); // start 이후 신규 oos → verify FAIL
+  emit("v091-04-next-verify-fail", "guard start … ; (oos) ; guard next   (verify FAIL 요약 → explain)",
+    run(c.repo, "next", []), null, c.base);
 }
 
 // ───────────────────────────── 인덱스 + 정리 ─────────────────────────────

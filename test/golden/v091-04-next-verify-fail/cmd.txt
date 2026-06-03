@@ -1,0 +1,1 @@
+guard start … ; (oos) ; guard next   (verify FAIL 요약 → explain)
