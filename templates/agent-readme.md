@@ -27,3 +27,22 @@ agent-receipt check
 
 - `forbidden_actions` 는 **기계적으로 차단되지 않습니다**(권고용 / 프롬프트용). 실제 차단은 `denied_paths` + git 검사 + 사람 검토로 합니다.
 - 계약 스키마는 `CONTRACT.md` 가 기준입니다. 스키마에 없는 필드를 추가해도 조용히 무시됩니다.
+
+## .gitignore 권장 (도구 산출물 추적 제외)
+
+`init` 은 여러분의 `.gitignore` 를 **자동으로 수정하지 않습니다**(안내만). 아래 블록을 직접 추가하면
+`.agent-guard/` 의 도구 산출물이 git 추적에서 빠져 `verify`/`status`/`close-recon` 노이즈가 사라집니다.
+계약 파일(`contract.yaml`)·정책(`policy.yaml`)·이 README 는 **커밋 대상이라 무시하지 않습니다**.
+
+```gitignore
+# agent-receipt local tool outputs
+.agent-guard/session.json
+.agent-guard/receipts/
+.agent-guard/audit-packs/
+.agent-guard/notes/
+.agent-guard/decisions/
+.agent-guard/keys/
+.agent-guard/dashboard.html
+.agent-guard/**/*.sig.json
+.agent-guard/**/*.approval.json
+```

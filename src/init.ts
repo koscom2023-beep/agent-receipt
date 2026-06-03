@@ -46,5 +46,7 @@ export function runInit(preset: string | undefined, cwd: string = process.cwd())
   writeFileSync(readmeOut, readmeBody);
 
   console.log(`생성됨 (preset: ${preset}):\n  - ${contractOut}\n  - ${readmeOut}`);
+  console.log("  팁: .agent-guard/ 의 도구 산출물(session/receipts/audit-packs 등)은 git 추적에서 빼세요.");
+  console.log("      권장 .gitignore 블록은 .agent-guard/README.md 참고 — init 은 .gitignore 를 건드리지 않습니다(안내만).");
   process.exit(0);
 }

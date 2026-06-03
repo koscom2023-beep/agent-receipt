@@ -73,6 +73,36 @@ Re-verify a saved bundle later with `agent-receipt replay --pack <dir>`. Full co
 
 Once installed, the CLI is invoked as `agent-receipt`. (The single-letter `ag` alias was dropped to avoid clashing with other tools.)
 
+### Verify your install (real-use smoke check)
+
+Before relying on it, confirm which binary/version you are actually running:
+
+```bash
+npm install -g @promptia-labs/agent-receipt@latest
+agent-receipt --version        # prints the version (works with no contract / no git repo)
+which agent-receipt            # which binary is on PATH
+agent-receipt doctor           # shows binary path, current version, npm latest, update status
+```
+
+**Dogfood principle.** Real-world verification is done against the **global install or `npx ... @latest`** — that is what your agents actually invoke. Calling a local `node dist/cli.js` directly is **developer-internal** verification only; do not report it as real-use verification. If `doctor` reports a newer `npm latest`, run `npm install -g @promptia-labs/agent-receipt@latest`.
+
+### Recommended `.gitignore` (tool outputs)
+
+`init` never edits your `.gitignore` (guidance only). Add this block so `.agent-guard/` tool outputs stay out of git — keeping `verify` / `status` / `close-recon` noise-free. The contract (`contract.yaml`), policy (`policy.yaml`), and the agent README are committable and intentionally **not** ignored.
+
+```gitignore
+# agent-receipt local tool outputs
+.agent-guard/session.json
+.agent-guard/receipts/
+.agent-guard/audit-packs/
+.agent-guard/notes/
+.agent-guard/decisions/
+.agent-guard/keys/
+.agent-guard/dashboard.html
+.agent-guard/**/*.sig.json
+.agent-guard/**/*.approval.json
+```
+
 ---
 
 ## Core workflow
@@ -363,9 +393,9 @@ The claim file is plain JSON; every field is optional and only provided fields a
 
 ## Package status
 
-Published on npm as **`@promptia-labs/agent-receipt`** — **latest `0.8.1`**. **`0.9.0`** (convenience/integration polish: `begin --kind`, `close-recon`, `prepare-commit`/`finish`, `note`, `release-check`, `next`, plus git-evidence/advisory separation) is **implemented locally on this branch (`v0.1-verify-check-split`) — not yet published.** Next: a publish decision. Cloud/SaaS, real Slack/webhook transport, remote approval, and any "compliance guarantee" remain intentionally out of scope. Feature coverage vs the design docs: [`docs/coverage.md`](docs/coverage.md).
+Published on npm as **`@promptia-labs/agent-receipt`** — **latest `0.9.0`** (convenience/integration: `begin --kind`, `close-recon`, `prepare-commit`/`finish`, `note`, `release-check`, `next`, plus git-evidence/advisory separation). **`0.9.1`** (real-use defect patch from Promptia dogfooding: `--version`/`-v`/`version` command, `doctor` install/version diagnostics, `next` verify-FAIL cause summary, explicit `*.sig.json`/`*.approval.json` tool-output exclusion + regression test, and these install-smoke docs) is **implemented locally on this branch (`v0.1-verify-check-split`) — not yet published.** Cloud/SaaS, real Slack/webhook transport, remote approval, and any "compliance guarantee" remain intentionally out of scope. Feature coverage vs the design docs: [`docs/coverage.md`](docs/coverage.md).
 
-Version ladder: `0.7.0` (work receipts) → **`0.8.0` (AI work audit protocol)** → `1.0.0` (stable, after real-world use).
+Version ladder: `0.7.0` (work receipts) → **`0.8.0` (AI work audit protocol)** → `0.9.x` (convenience + dogfood fixes) → `1.0.0` (stable, after real-world use).
 
 For local development:
 

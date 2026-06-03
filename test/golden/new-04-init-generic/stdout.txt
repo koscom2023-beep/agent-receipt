@@ -1,3 +1,5 @@
 생성됨 (preset: generic):
   - <FIXTURE>/.agent-guard/contract.yaml
   - <FIXTURE>/.agent-guard/README.md
+  팁: .agent-guard/ 의 도구 산출물(session/receipts/audit-packs 등)은 git 추적에서 빼세요.
+      권장 .gitignore 블록은 .agent-guard/README.md 참고 — init 은 .gitignore 를 건드리지 않습니다(안내만).
