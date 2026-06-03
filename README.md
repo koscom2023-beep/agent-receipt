@@ -140,6 +140,22 @@ If you omit `--contract`, the contract is auto-discovered (see below).
 | `attest --receipt <p> \| --pack <dir>` | Emit an in-toto **style** Statement (draft) to stdout — provenance over the receipt + commit. Not an SLSA-level claim; tamper-evident, not non-forgeable. | no |
 | `incident [--since <n>]` | Scan recent receipts/ledger for failures, critical-path changes, missing approvals, last PASS. Read-only; no auto-recovery, no scoring. | no |
 
+### Convenience & release commands (v0.9)
+
+These shorten the real-world loop. **None of them run git, npm, or any deploy** — they print paste-in blocks or read-only analysis. `verify --json`'s 14 keys are unchanged.
+
+| Command | What it does | Needs git repo |
+|---|---|---|
+| `begin --kind <recon\|implementation\|docs\|test\|measure-first\|observe-only\|release-check>` | Tag the session's *kind* (stored in `session.json` / receipt sidecar — never in the 14 keys). Prints kind-specific operating rules + end command, and a strong warning if a baseline already exists (recon→implementation transitions must `reset` first). | yes |
+| `close-recon` | Close a read-only recon session in one step. **Only when there are zero changes** (touched/staged/untracked/denied/out-of-scope all 0): save a receipt, build an audit-pack, and `reset`. Refuses (no reset) if anything changed, or if the session is `kind=implementation`. | yes |
+| `prepare-commit [--message <m>] [--include-linked-tests]` | Generate a safe copy-paste commit block — `git add` candidates + message + `Agent-Receipt` trailer — with the **commit block and reset block physically separated** (no `EOF`+`reset` on one line). Never commits. Suppresses the block on denied / true out-of-scope / branch mismatch / NUL. | yes |
+| `finish [--message <m>] [--client]` | Implementation wrap-up in one step: `done` → `commit-check` → `audit-pack` → commit block, with per-stage PASS/FAIL labels and a single "next command" on failure. No auto add/commit/reset/push. | yes |
+| `note --type <recon\|contract-draft\|no-code-decision\|next-options> [--message <m>]` | Record a no-code recon/decision as evidence (`.agent-guard/notes/` or `/decisions/`, pinned to `headHash`). Included in audit-packs. Tool output — excluded from `verify`. | yes |
+| `release-check --base <ref> [--failed-tests <file>] [--observe <event>]` | Pre-deploy **read-only** analysis: base/head, ahead/behind, rollbackBase, changed files, commits, a heuristic risk class (labeled — not a score), failed∩changed (only if the file is given), and post-deploy events to watch. **Never push/deploy/checkout/reset.** | yes |
+| `next` | Recommend the single next command for the current state. | (discovers) |
+
+Contracts may also declare `linked_test_paths` / `expected_linked_tests` (optional) so a guard test outside `allowed_paths` is shown as a *linked guard test (human-confirm)* in `commit-check`/`prepare-commit` — `verify`'s `outOfScope` meaning is unchanged. Policies may set `mode: measure_first | observe_only` to print a self-report checklist in `commit-check` (display only — the tool sees git diffs, not intent).
+
 ### Contract discovery
 
 When `--contract` / `-c` is not given, the first existing file wins, in this order:

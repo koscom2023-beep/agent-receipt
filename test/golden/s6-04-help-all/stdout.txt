@@ -8,7 +8,9 @@ agent-receipt — AI 작업계약 검수 / 작업 감사 CLI (전체 명령)
 검증:
   verify [--json] / check / explain / claims --file <c.json> / pre / prompt [--cursor|--claude]
 감사 흐름(요약):
-  begin [--cursor|--claude] / done [--claim <c.json>] [--client] [--ledger] / commit-check / trailer
+  begin [--cursor|--claude] [--kind <recon|implementation|docs|test|measure-first|observe-only|release-check>]
+  done [--claim <c.json>] [--client] [--ledger] / commit-check / trailer
+  close-recon / prepare-commit [--message <m>] [--include-linked-tests] / finish [--message <m>] [--client]
 증빙/감사 묶음:
   report [--type developer|client|audit] [--out] / receipt [--format json|md|client-md] [--redact] [--out]
   receipts [--latest|--cat|--dir] / audit [--json] / dashboard [--out]
@@ -20,6 +22,9 @@ agent-receipt — AI 작업계약 검수 / 작업 감사 CLI (전체 명령)
   keys init / sign --receipt <p> / verify-signature --receipt <p> / approve --receipt <p> [--note] / approvals
 연동(미리보기 — 전송 없음):
   export --format <slack|json|github-pr|otel|langfuse> --receipt <p>
+배포/메모(0.9 — read-only/증거):
+  release-check --base <ref> [--failed-tests <f>] [--observe <ev>] / next
+  note --type <recon|contract-draft|no-code-decision|next-options> [--message <m>]
 점검/기타:
   doctor / lint / run
 
