@@ -38,6 +38,8 @@ import { runAttest } from "./attest.js";
 import { runIncident } from "./incident.js";
 import { runReport } from "./report.js";
 import { runNote } from "./note.js";
+import { runReleaseCheck } from "./releasecheck.js";
+import { runNext } from "./nextcmd.js";
 
 function getArg(flag: string): string | undefined {
   const i = process.argv.indexOf(flag);
@@ -47,6 +49,15 @@ function getArg(flag: string): string | undefined {
 // 값 없는 boolean 플래그(예: --json)는 존재 여부만 본다. getArg(다음 인자 반환)와 구분.
 function hasFlag(flag: string): boolean {
   return process.argv.includes(flag);
+}
+
+// 반복 가능한 플래그 모으기(예: --observe a --observe b). release-check 의 postDeployObserve 용.
+function getAllArgs(flag: string): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < process.argv.length; i++) {
+    if (process.argv[i] === flag && process.argv[i + 1] !== undefined) out.push(process.argv[i + 1] as string);
+  }
+  return out;
 }
 
 // --kind <value> 파싱+검증(begin/start). 미지정→undefined. 알 수 없는 값→exit 2.
@@ -185,6 +196,13 @@ function main(): void {
   if (command === "note") {
     requireRepo();
     runNote(getArg("--type"), getArg("--message"));
+  }
+  if (command === "release-check") {
+    requireRepo();
+    runReleaseCheck(getArg("--base"), getArg("--failed-tests"), getAllArgs("--observe"));
+  }
+  if (command === "next") {
+    runNext();
   }
   if (command === "receipts") {
     const sub: ReceiptsMode = hasFlag("--latest")

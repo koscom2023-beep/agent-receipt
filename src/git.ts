@@ -152,3 +152,35 @@ export function numstatVsHead(): LineStat {
   }
   return { filesChanged, added, deleted };
 }
+
+// release-check: base..HEAD 커밋 목록(hash + 제목). 제목은 탭 구분(제목에 탭은 사실상 없음).
+export function commitsBetween(base: string): Array<{ hash: string; subject: string }> {
+  try {
+    const out = git(["log", "--format=%H%x09%s", `${base}..HEAD`]);
+    if (!out) return [];
+    return out.split("\n").map((ln) => {
+      const i = ln.indexOf("\t");
+      return i >= 0 ? { hash: ln.slice(0, i), subject: ln.slice(i + 1) } : { hash: ln, subject: "" };
+    });
+  } catch {
+    return [];
+  }
+}
+
+// release-check: base...HEAD(merge-base 기준 PR diff) 변경 파일. -z/NUL 파싱.
+export function changedFilesBetween(base: string): string[] {
+  try {
+    return gitPaths(["diff", "--name-only", `${base}...HEAD`]);
+  } catch {
+    return [];
+  }
+}
+
+// ref 를 커밋 해시로 해석(release-check rollbackBase). 없으면 null.
+export function resolveRef(ref: string): string | null {
+  try {
+    return git(["rev-parse", ref]);
+  } catch {
+    return null;
+  }
+}

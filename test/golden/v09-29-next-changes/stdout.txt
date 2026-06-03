@@ -1,0 +1,1 @@
+다음: agent-receipt finish   (변경 있음 — done+commit-check+audit-pack+커밋블록)

@@ -1434,6 +1434,46 @@ const V09_CLAIMS_CONTRACT =
   saveArtifact("v09-25-audit-pack-with-note", c.repo, join(".agent-guard", "audit-packs", "PK", "manifest.json"), "created-manifest.json", false);
 }
 
+// ───────────────────────────── v0.9 C7: release-check / next ─────────────────────────────
+// release-check 는 read-only(push/deploy/checkout/reset 0). 고정 DATE 로 hash 결정론. next 는 단일 명령 추천.
+
+// v09-26: release-check --base rel-base — ahead/behind·changed·commits·risk(휴리스틱)·rollbackBase
+{
+  const c = track(newCase()); // base commit(f.txt) on main
+  git(c.repo, ["branch", "rel-base"]); // base ref @ base commit
+  mkdirSync(join(c.repo, "docs"), { recursive: true });
+  writeFileSync(join(c.repo, "docs", "x.md"), "doc\n");
+  git(c.repo, ["add", "docs/x.md"]);
+  git(c.repo, ["commit", "-q", "-m", "docs: add x"]);
+  mkdirSync(join(c.repo, "src"), { recursive: true });
+  writeFileSync(join(c.repo, "src", "a.ts"), "export const a = 1;\n");
+  git(c.repo, ["add", "src/a.ts"]);
+  git(c.repo, ["commit", "-q", "-m", "feat: add a"]);
+  emit("v09-26-release-check", "guard release-check --base rel-base", run(c.repo, "release-check", ["--base", "rel-base"]), null);
+}
+// v09-27: release-check (no --base) → exit 2
+{
+  const c = track(newCase());
+  emit("v09-27-release-check-no-base", "guard release-check   (no --base → exit 2)", run(c.repo, "release-check", []), null);
+}
+// v09-28: next — 계약 있음, session 없음 → begin 추천
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, ".agent-guard"), { recursive: true });
+  writeFileSync(join(c.repo, ".agent-guard", "contract.yaml"), S6_CONTRACT);
+  emit("v09-28-next-no-session", "guard next   (계약 있음, session 없음 → begin)", run(c.repo, "next", []), null);
+}
+// v09-29: next — session 활성 + in-scope 변경 → finish 추천
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, ".agent-guard"), { recursive: true });
+  mkdirSync(join(c.repo, "src"), { recursive: true });
+  writeFileSync(join(c.repo, ".agent-guard", "contract.yaml"), S6_CONTRACT);
+  run(c.repo, "start", []);
+  writeFileSync(join(c.repo, "src", "a.ts"), "export const a = 1;\n");
+  emit("v09-29-next-changes", "guard start … ; (src/a.ts) ; guard next   (변경 → finish)", run(c.repo, "next", []), null);
+}
+
 // ───────────────────────────── 인덱스 + 정리 ─────────────────────────────
 
 const indexLines = [

@@ -1,0 +1,1 @@
+guard next   (계약 있음, session 없음 → begin)

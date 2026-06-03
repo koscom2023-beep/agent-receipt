@@ -1,7 +1,7 @@
 # agent-guard v0.1 golden baseline (A0.5)
 
 - branch: v0.1-verify-check-split
-- 캡처 케이스: 135개
+- 캡처 케이스: 139개
 - 결정론: 고정 git identity(ci/ci@local) + 고정 DATE(2025-01-01T00:00:00 +0000) → headHash 재현
 - 정규화(스냅샷 한정): $HOME→<HOME>, /tmp/claude-1000/ag-gold-*→<FIXTURE>
 
@@ -142,3 +142,7 @@
 | v09-23-note-decision | `guard note --type no-code-decision --message '이미 구현됨 — 변경 불필요'` | 0 |
 | v09-24-note-bogus | `guard note --type bogus   (검증 실패)` | 2 |
 | v09-25-audit-pack-with-note | `guard start … ; guard note --type recon … ; guard audit-pack   (note 포함)` | 0 |
+| v09-26-release-check | `guard release-check --base rel-base` | 0 |
+| v09-27-release-check-no-base | `guard release-check   (no --base → exit 2)` | 2 |
+| v09-28-next-no-session | `guard next   (계약 있음, session 없음 → begin)` | 0 |
+| v09-29-next-changes | `guard start … ; (src/a.ts) ; guard next   (변경 → finish)` | 0 |

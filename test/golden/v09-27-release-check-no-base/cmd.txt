@@ -1,0 +1,1 @@
+guard release-check   (no --base → exit 2)

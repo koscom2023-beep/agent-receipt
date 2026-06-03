@@ -1,0 +1,1 @@
+guard start … ; (src/a.ts) ; guard next   (변경 → finish)
