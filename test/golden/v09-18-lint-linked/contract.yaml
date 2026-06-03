@@ -1,0 +1,13 @@
+id: s6-linked
+title: linked test
+branch:
+  expected: main
+scope:
+  allowed_paths:
+    - "src/**"
+  denied_paths:
+    - ".env*"
+linked_test_paths:
+    - "tests/**"
+required_checks:
+  commands: []

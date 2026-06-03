@@ -5,6 +5,7 @@ import { loadPolicySafe, policyObservations, policyPath } from "./policy.js";
 import { touchedFull } from "./evidence.js";
 import { listReceipts, parseReceiptJson, hasApproval } from "./receiptStore.js";
 import { hashFileOrNull } from "./environment.js";
+import { classifyTouched } from "./linked.js";
 import { LIMIT_NOTE } from "./disclosure.js";
 
 const line = "─".repeat(56);
@@ -92,6 +93,16 @@ export function evaluateCommitCheck(
   });
 
   if (error) advisories.push(`policy.yaml 무시됨: ${error.split("\n")[0]}`);
+
+  // 0.9: linked 가드 테스트 advisory(표시 전용 — outOfScope 14키 의미 불변). linked_test_paths 정의시만.
+  if (contract.linked_test_paths.length) {
+    const linked = classifyTouched(v.touched, contract).linkedTests;
+    if (linked.length) {
+      advisories.push(
+        `linked 가드 테스트 ${linked.length}건(허용 밖이지만 직접 가드 테스트): ${linked.join(", ")} — verify 는 outOfScope 로 표시, 사람 확인 필요`,
+      );
+    }
+  }
 
   if (policy && obs) {
     gates.push({

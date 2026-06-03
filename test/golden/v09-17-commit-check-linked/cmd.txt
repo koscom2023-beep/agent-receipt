@@ -1,0 +1,1 @@
+guard … ; (src + tests/) ; guard commit-check   (linked 가드 테스트 advisory)

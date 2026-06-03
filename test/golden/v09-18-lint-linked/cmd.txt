@@ -1,0 +1,1 @@
+guard lint --contract contract.yaml   (linked_test_paths, expected 없음)

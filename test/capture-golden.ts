@@ -1331,6 +1331,30 @@ const V09_LINKED =
     run(c.repo, "finish", ["--contract", c.contract]), S6_CONTRACT);
 }
 
+// ───────────────────────────── v0.9 C4: linked test 분류(commit-check/lint 표시) ─────────────────────────────
+// linked_test_paths 정의시에만 분류 표시. verify --json outOfScope 14키 의미 불변(s6 등 기존 golden 불변).
+
+// v09-17: commit-check — linked 가드 테스트 touched → advisory(verify 는 여전히 oos 로 차단, exit 1)
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, ".agent-guard"), { recursive: true });
+  mkdirSync(join(c.repo, "src"), { recursive: true });
+  mkdirSync(join(c.repo, "tests"), { recursive: true });
+  writeFileSync(join(c.repo, ".agent-guard", "contract.yaml"), V09_LINKED);
+  run(c.repo, "start", ["--kind", "implementation"]);
+  writeFileSync(join(c.repo, "src", "a.ts"), "export const a = 1;\n");
+  writeFileSync(join(c.repo, "tests", "a.test.ts"), "test\n");
+  emit("v09-17-commit-check-linked", "guard … ; (src + tests/) ; guard commit-check   (linked 가드 테스트 advisory)",
+    run(c.repo, "commit-check", []), null);
+}
+// v09-18: lint — linked_test_paths 있고 expected_linked_tests 없음 → advisory
+{
+  const c = track(newCase());
+  writeFileSync(c.contract, V09_LINKED);
+  emit("v09-18-lint-linked", "guard lint --contract contract.yaml   (linked_test_paths, expected 없음)",
+    run(c.repo, "lint", ["--contract", c.contract]), V09_LINKED);
+}
+
 // ───────────────────────────── 인덱스 + 정리 ─────────────────────────────
 
 const indexLines = [

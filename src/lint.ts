@@ -24,6 +24,11 @@ export function runLint(contract: Contract): never {
     warns.push("required_checks.commands 가 비어 있음 → 'check' 는 항상 통과(vacuous). tsc/test 등을 추가하면 좋습니다.");
   }
 
+  // 0.9: linked test 분류 사용 시 기대 가드 테스트 명시 권장(advisory).
+  if (contract.linked_test_paths.length && contract.expected_linked_tests.length === 0) {
+    warns.push("linked_test_paths 가 있는데 expected_linked_tests 가 비어 있음 — 어떤 가드 테스트를 기대하는지 명시 권장.");
+  }
+
   // Promptia preset(id: promptia) 감지 → 핵심 denied_paths 누락을 사실로만 경고(점수화 없음).
   if (contract.id === "promptia") {
     const denied = new Set(contract.scope.denied_paths);
