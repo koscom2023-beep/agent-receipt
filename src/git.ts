@@ -75,6 +75,29 @@ export function headHash(): string {
   }
 }
 
+// 저장소 최상위 절대경로(환경/출처 캡처용). repo 밖/git 없으면 null.
+export function repoRoot(): string | null {
+  try {
+    return git(["rev-parse", "--show-toplevel"]);
+  } catch {
+    return null;
+  }
+}
+
+// 특정 커밋 해시가 현재 저장소에 존재하는지(replay 검증용). 빈/잘못된 입력은 false.
+export function commitExists(hash: string): boolean {
+  if (!hash || !/^[0-9a-f]{7,40}$/i.test(hash)) return false;
+  try {
+    // ^{commit} 으로 실제 커밋 객체인지까지 확인(태그/트리 오인 방지)
+    execFileSync("git", ["cat-file", "-e", `${hash}^{commit}`], {
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // origin/main 대비 로컬이 몇 커밋 앞/뒤인지 (push 여부 참고용 — 완벽하진 않음)
 export function aheadBehind(upstream: string): { ahead: number; behind: number } | null {
   try {

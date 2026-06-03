@@ -1,6 +1,8 @@
 import type { Contract } from "./schema.js";
 import type { VerifyResult, CheckResult } from "./checks.js";
 import { resolveSession } from "./session.js";
+import { evalTripwire, tripwireLines } from "./tripwire.js";
+import { LIMIT_NOTE } from "./disclosure.js";
 
 const line = "─".repeat(56);
 
@@ -70,6 +72,15 @@ export function printReport(r: VerifyResult, contract?: Contract): void {
   }
   console.log(line);
 
+  // N8 트립와이어: policy.yaml 이 있을 때만 상시규칙(forbidAlways/protectAlways/approvalFor) 관찰을 덧붙인다
+  //   — policy 없으면 빈 배열이라 기존 출력 불변(golden 안전). verify --json(14키)에는 영향 없음(별도 표면).
+  const tw = tripwireLines(evalTripwire());
+  if (tw.length) {
+    console.log("");
+    console.log("상시 규칙(policy):");
+    for (const x of tw) console.log(`   ${x}`);
+  }
+
   // 다음 조치 hint (FAIL + contract 있을 때만 — 표시 전용, 자동 revert 안 함).
   if (!r.ok && contract) {
     const hints = recoveryHints(r, contract);
@@ -93,6 +104,10 @@ export function printReport(r: VerifyResult, contract?: Contract): void {
     }
     console.log("   해결: `agent-receipt reset` 후 `agent-receipt start` 로 새 baseline 을 찍으세요.");
   }
+
+  // 정체성 가드: 한계 고지(이 도구가 못 보는 것). --json 경로엔 출력되지 않음(이건 human 전용).
+  console.log("");
+  console.log(LIMIT_NOTE);
 
   console.log("");
 }
@@ -139,6 +154,9 @@ export function toMarkdown(r: VerifyResult): string {
     for (const v of r.violations) out.push(`- ${v}`);
     out.push("");
   }
+
+  out.push(`> ${LIMIT_NOTE}`);
+  out.push("");
   return out.join("\n");
 }
 

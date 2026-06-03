@@ -1,7 +1,7 @@
 {
   "name": "@promptia-labs/agent-receipt",
-  "version": "0.7.0",
-  "description": "Task-level work-contract verifier for AI coding agents — proves what an agent actually changed in your local git tree.",
+  "version": "0.8.0",
+  "description": "AI work audit receipts — verifies and records what an AI coding agent actually changed in your local git tree. Provides git-based evidence for compliance review (not a compliance guarantee).",
   "license": "MIT",
   "type": "module",
   "bin": {

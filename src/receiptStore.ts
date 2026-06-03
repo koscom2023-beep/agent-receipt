@@ -49,3 +49,21 @@ export function criticalTouchedCount(o: ReceiptJson): number {
   if (!Array.isArray(o.criticalPaths)) return 0;
   return o.criticalPaths.reduce((n, c) => n + (Array.isArray(c?.touched) ? c.touched!.length : 0), 0);
 }
+
+// ── sidecar (approval / signature) 헬퍼 — commit-check·audit-pack·ledger·incident 공용 ──
+export function approvalPath(receiptAbs: string): string {
+  return receiptAbs + ".approval.json";
+}
+export function signaturePath(receiptAbs: string): string {
+  return receiptAbs + ".sig.json";
+}
+export function hasApproval(receiptAbs: string): boolean {
+  return existsSync(approvalPath(receiptAbs));
+}
+export function hasSignature(receiptAbs: string): boolean {
+  return existsSync(signaturePath(receiptAbs));
+}
+// approve 는 receipt 당 sidecar 1개를 덮어쓴다 → count 는 0/1.
+export function approvalsCountFor(receiptAbs: string): number {
+  return hasApproval(receiptAbs) ? 1 : 0;
+}
