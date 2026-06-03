@@ -8,6 +8,7 @@ export const SESSION_REL_PATH = ".agent-guard/session.json";
 
 // verify/evidence 가 "사용자 작업물 아님"으로 제외하는 tool 산출물 집합(단일 출처).
 //   session.json · receipts/ · keys/ · dashboard.html · audit-packs/ · ledger.jsonl · notes/ · decisions/(0.9)
+//   + .agent-guard/ 아래 *.sig.json / *.approval.json 사이드카(0.9.1: 경로 무관 명시 — 도구가 만든 서명/승인 증거).
 // contract.yaml / policy.yaml / README.md 는 사용자가 커밋할 실제 파일이므로 제외하지 않는다(.agent-guard/** 전체 제외 아님).
 export function isToolOutput(f: string): boolean {
   return (
@@ -18,7 +19,8 @@ export function isToolOutput(f: string): boolean {
     f.startsWith(".agent-guard/notes/") ||
     f.startsWith(".agent-guard/decisions/") ||
     f === ".agent-guard/ledger.jsonl" ||
-    f === ".agent-guard/dashboard.html"
+    f === ".agent-guard/dashboard.html" ||
+    (f.startsWith(".agent-guard/") && (f.endsWith(".sig.json") || f.endsWith(".approval.json")))
   );
 }
 
