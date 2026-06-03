@@ -1,1 +1,2 @@
-다음: agent-receipt begin --kind <recon|implementation|...>   (작업 시작 baseline)
+다음: agent-receipt begin --cursor --kind <recon|implementation|...>
+  (baseline 없음 — 작업 시작)

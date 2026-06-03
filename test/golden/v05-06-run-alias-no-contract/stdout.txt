@@ -1,6 +1,4 @@
 
-agent-receipt — 시작하려면 계약이 필요합니다. preset 을 골라 생성하세요:
-  → agent-receipt init --preset promptia   (Promptia: .env/락파일/migrations/vercel/exports 보호)
-  → agent-receipt init --preset generic    (범용 patch-only)
-  자세히: agent-receipt help
+agent-receipt — 계약이 없습니다.
+  다음: agent-receipt init --preset promptia   (또는 generic)
 

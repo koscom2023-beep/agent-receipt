@@ -15,12 +15,10 @@ import { printReport } from "./output.js";
 export function runDefault(): never {
   const cPath = discoverContract();
 
-  // 1) 계약 없음 → init 안내 (preset 선택지 제시)
+  // 1) 계약 없음 → init 안내 (한 명령)
   if (!cPath) {
-    console.log("\nagent-receipt — 시작하려면 계약이 필요합니다. preset 을 골라 생성하세요:");
-    console.log("  → agent-receipt init --preset promptia   (Promptia: .env/락파일/migrations/vercel/exports 보호)");
-    console.log("  → agent-receipt init --preset generic    (범용 patch-only)");
-    console.log("  자세히: agent-receipt help\n");
+    console.log("\nagent-receipt — 계약이 없습니다.");
+    console.log("  다음: agent-receipt init --preset promptia   (또는 generic)\n");
     process.exit(0);
   }
 
@@ -32,37 +30,27 @@ export function runDefault(): never {
     process.exit(2);
   }
 
-  // 2) 계약은 있는데 git repo 아님 → git 무관 명령 안내
+  // 2) 계약은 있는데 git repo 아님 → 한 명령
   if (!g.isGitRepo()) {
     console.log(`\nagent-receipt — 계약 '${contract.id}' 발견. 여기는 git 저장소가 아닙니다.`);
-    console.log("  → agent-receipt check    (required_checks.commands 실행)");
-    console.log("  → agent-receipt lint     (계약 품질 점검)\n");
+    console.log("  다음: agent-receipt check\n");
     process.exit(0);
   }
 
-  // 3) git repo + 계약, session 없음 → start 안내
+  // 3) git repo + 계약, session 없음 → begin 안내(0.9 진입점)
   if (!loadSession()) {
-    console.log(`\nagent-receipt — 계약 '${contract.id}' 발견, baseline(session) 없음.`);
-    console.log("  → agent-receipt start    (작업 시작 baseline 기록 — ambient 노이즈 제거)");
-    console.log("  또는 바로:  agent-receipt verify   (full-tree 검사)\n");
+    console.log(`\nagent-receipt — 계약 '${contract.id}' 발견, baseline 없음.`);
+    console.log("  다음: agent-receipt begin --cursor [--kind recon|implementation|...]\n");
     process.exit(0);
   }
 
-  // 4) session 있음 → verify 실행 후 결과별 다음 명령 안내
+  // 4) session 있음 → verify(상세) 후 next 로 라우팅(한 명령). run=상세, next=한 명령.
   const r = runVerify(contract);
   printReport(r, contract);
-  if (r.ok) {
-    console.log("다음 단계:");
-    console.log("  → agent-receipt check     (required_checks 실행 — 테스트/빌드)");
-    console.log("  → agent-receipt receipt   (AI Work Receipt 저장: 규모/critical/contentHash)");
-    console.log("  → agent-receipt claims --file <claim.json>   (AI 완료보고 ↔ git 대조)");
-    console.log("  통과하면 직접 stage/commit 하세요.\n");
-  } else {
-    console.log("진단 / 복구:");
-    console.log("  → agent-receipt explain   (왜 FAIL 인지 + 규모/critical + 다음 조치)");
-    console.log("  → agent-receipt status    (브랜치/baseline/현재 변경 요약)");
-    console.log("  → agent-receipt reset     (baseline 제거 후 재시작하려면)");
-    console.log("  (자동 수정은 하지 않습니다 — 위 '다음 조치' 참고.)\n");
-  }
+  console.log(
+    r.ok
+      ? "다음: agent-receipt next   (지금 할 한 명령)\n"
+      : "다음: agent-receipt explain   (왜 FAIL 인지 + 다음 조치)\n",
+  );
   process.exit(r.ok ? 0 : 1);
 }

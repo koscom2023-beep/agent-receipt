@@ -21,9 +21,5 @@ NUL 검사      : (대상 없음)
 
 이 도구는 git 작업트리 기준입니다 — .gitignore된 파일·레포 밖·OS 명령·DB write·외부 서비스 변경은 직접 볼 수 없습니다.
 
-진단 / 복구:
-  → agent-receipt explain   (왜 FAIL 인지 + 규모/critical + 다음 조치)
-  → agent-receipt status    (브랜치/baseline/현재 변경 요약)
-  → agent-receipt reset     (baseline 제거 후 재시작하려면)
-  (자동 수정은 하지 않습니다 — 위 '다음 조치' 참고.)
+다음: agent-receipt explain   (왜 FAIL 인지 + 다음 조치)
 

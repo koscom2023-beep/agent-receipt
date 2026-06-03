@@ -15,9 +15,5 @@ NUL 검사      : (대상 없음)
 
 이 도구는 git 작업트리 기준입니다 — .gitignore된 파일·레포 밖·OS 명령·DB write·외부 서비스 변경은 직접 볼 수 없습니다.
 
-다음 단계:
-  → agent-receipt check     (required_checks 실행 — 테스트/빌드)
-  → agent-receipt receipt   (AI Work Receipt 저장: 규모/critical/contentHash)
-  → agent-receipt claims --file <claim.json>   (AI 완료보고 ↔ git 대조)
-  통과하면 직접 stage/commit 하세요.
+다음: agent-receipt next   (지금 할 한 명령)
 

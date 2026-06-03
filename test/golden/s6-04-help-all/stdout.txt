@@ -1,32 +1,36 @@
 
-agent-receipt — AI 작업계약 검수 / 작업 감사 CLI (전체 명령)
+agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
 
-계약/세션:
-  presets / init --preset <name> / draft-contract / review / start / status / mode / reset
-정책(상시 규칙):
-  policy init [--profile solo-founder|vibe-coder|agency-client|team-strict|promptia] / policy check / policy show
-검증:
-  verify [--json] / check / explain / claims --file <c.json> / pre / prompt [--cursor|--claude]
-감사 흐름(요약):
+■ 핵심 루프(대부분 이 6개면 충분):
   begin [--cursor|--claude] [--kind <recon|implementation|docs|test|measure-first|observe-only|release-check>]
-  done [--claim <c.json>] [--client] [--ledger] / commit-check / trailer
-  close-recon / prepare-commit [--message <m>] [--include-linked-tests] / finish [--message <m>] [--client]
-증빙/감사 묶음:
-  report [--type developer|client|audit] [--out] / receipt [--format json|md|client-md] [--redact] [--out]
-  receipts [--latest|--cat|--dir] / audit [--json] / dashboard [--out]
-  audit-pack [--out <dir>] [--claim <c.json>] [--redact] [--ledger]
-  ledger [--json] / ledger rebuild
-  replay --pack <dir>  (별칭 verify-pack) / attest --receipt <p> | --pack <dir>
-  incident [--since <n>]
-서명/승인:
-  keys init / sign --receipt <p> / verify-signature --receipt <p> / approve --receipt <p> [--note] / approvals
-연동(미리보기 — 전송 없음):
+  done / next / audit-pack / prepare-commit [--message <m>] [--include-linked-tests] / explain
+
+■ 세션 / 정찰 / 구현:
+  start / status / mode / reset / close-recon / finish [--message <m>] [--client] / trailer / commit-check / receipt
+
+■ 계약 관리:
+  presets / init --preset <name> / draft-contract / review / lint / doctor
+
+■ 검증(git 실측):
+  verify [--json] / check / claims --file <c.json> / pre / prompt [--cursor|--claude]
+
+■ 증빙 / 감사 묶음(git 증거):
+  report [--type developer|client|audit] / receipt [--format ...] / receipts [--latest|--cat|--dir]
+  audit [--json] / dashboard / ledger [--json] (rebuild) / replay --pack <dir> / attest / incident
+
+■ 정책(상시 규칙):
+  policy init [--profile solo-founder|vibe-coder|agency-client|team-strict|promptia] / policy check / policy show
+
+■ advisory / 참고 (검증 아님 — PASS/FAIL 근거 아님):
+  release-check --base <ref> [--failed-tests <f>] [--observe <ev>]   배포 판단 보조(deploy/push 안 함)
+  note --type <recon|contract-draft|no-code-decision|next-options>   사람이 남긴 메모/판단(git 검증 아님)
+  policy mode measure_first|observe_only                            self-report 체크리스트(강제 아님)
+  claim modeClaims / externalActions                                self-report(git 검증 불가)
+
+■ 연동(experimental — 미리보기, 전송 없음):
   export --format <slack|json|github-pr|otel|langfuse> --receipt <p>
-배포/메모(0.9 — read-only/증거):
-  release-check --base <ref> [--failed-tests <f>] [--observe <ev>] / next
-  note --type <recon|contract-draft|no-code-decision|next-options> [--message <m>]
-점검/기타:
-  doctor / lint / run
+
+■ 기타: run
 
   --contract 생략 시 .agent-guard/contract.yaml 등을 자동 탐색
   한계: git 작업트리 기준 — .gitignore·레포 밖·OS·DB·외부 서비스는 직접 못 봅니다. "컴플라이언스 보장"이 아니라 "git 증거 제공".

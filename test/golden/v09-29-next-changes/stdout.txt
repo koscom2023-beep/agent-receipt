@@ -1,1 +1,2 @@
-다음: agent-receipt finish   (변경 있음 — done+commit-check+audit-pack+커밋블록)
+다음: agent-receipt done
+  (변경 있음 — 현재 변경과 일치하는 receipt 없음)

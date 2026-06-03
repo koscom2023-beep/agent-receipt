@@ -1,5 +1,4 @@
 
-agent-receipt — 계약 's2-src' 발견, baseline(session) 없음.
-  → agent-receipt start    (작업 시작 baseline 기록 — ambient 노이즈 제거)
-  또는 바로:  agent-receipt verify   (full-tree 검사)
+agent-receipt — 계약 's2-src' 발견, baseline 없음.
+  다음: agent-receipt begin --cursor [--kind recon|implementation|...]
 
