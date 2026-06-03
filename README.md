@@ -2,20 +2,20 @@
 
 > npm package **`@promptia-labs/agent-receipt`** · CLI command **`agent-receipt`**
 
-**A task-level work-contract verifier for AI coding agents.** You write a small contract describing what an agent is allowed to touch; after the agent finishes, `agent-receipt` inspects your local git working tree and proves whether the contract was kept.
+**An AI work audit tool for coding agents — the "AI work receipt."** You write a small contract describing what an agent is allowed to touch; after the agent finishes, `agent-receipt` inspects your local **git working tree** and produces auditable evidence of whether the contract was kept. It provides **git-based evidence for compliance review — not a compliance guarantee.**
 
-> **Hooks prevent. Agent Guard proves.**
+> **Hooks prevent. agent-receipt proves.**
 
-Hooks and permission systems stop actions *before* they happen. Agent Guard does the complementary job: it produces an **AI Work Receipt** — a mechanical, after-the-fact check of what actually landed in git.
+Hooks and permission systems stop actions *before* they happen. agent-receipt does the complementary job: it produces an **AI Work Receipt** — a mechanical, after-the-fact check of what actually landed in git.
 
 ---
 
 ## Why this exists
 
-When an AI agent edits your repo, "it said it only changed the auth module" is a claim, not a fact. Agent Guard turns the claim into a checkable receipt:
+When an AI agent edits your repo, "it said it only changed the auth module" is a claim, not a fact. agent-receipt turns the claim into a checkable receipt:
 
 - **Hooks / permissions** are *preventive* — they block a command at the moment it runs.
-- **Agent Guard** is *evidentiary* — it reads the resulting git diff and reports what was actually changed, staged, or left untracked, and whether any forbidden path was touched.
+- **agent-receipt** is *evidentiary* — it reads the resulting git diff and reports what was actually changed, staged, or left untracked, and whether any forbidden path was touched.
 
 It is local-first by design:
 
@@ -50,25 +50,26 @@ Full command list: `agent-receipt help --all`.
 
 ## Quick Start
 
-Install and run via `npx`. The everyday loop (here with the `promptia` preset):
+Install globally and run the everyday **two-command loop**:
 
 ```bash
-npm install -D @promptia-labs/agent-receipt
-npx agent-receipt presets                  # pick a preset
-npx agent-receipt init --preset promptia   # scaffold .agent-guard/contract.yaml
-npx agent-receipt review                   # commit-time checklist (read-only)
-npx agent-receipt mode                      # task vs daily flow + next step
-npx agent-receipt start                     # baseline before the agent works
-npx agent-receipt prompt --cursor           # paste into the agent (or --claude)
-#   … agent works, pastes a completion-claim JSON …
-npx agent-receipt                           # (bare) verify + next-step guidance
-npx agent-receipt check                     # run tsc/tests
-npx agent-receipt claims --file claim.json  # AI said vs Git says
-npx agent-receipt receipt                   # save the AI Work Receipt
-npx agent-receipt receipts --latest         # find it again
+npm install -g @promptia-labs/agent-receipt
+cd <your repo>
+agent-receipt init --preset promptia          # or: generic   (scaffold .agent-guard/contract.yaml)
+agent-receipt policy init --profile promptia   # (optional) standing rules → .agent-guard/policy.yaml
+
+agent-receipt begin --cursor                   # baseline + paste-in agent instructions (or --claude)
+#   … the agent works …
+agent-receipt done                             # verify + check + save the AI Work Receipt + summary
+agent-receipt commit-check                     # gate before you commit (prints a trailer; never commits)
+#   … you stage & commit yourself …
+agent-receipt audit-pack                       # bundle the evidence (review-ready)
+agent-receipt reset                            # clear the baseline for the next task
 ```
 
-> **Early preview.** Published on npm as `@promptia-labs/agent-receipt`. For local development you can also run from source (`npm run build` + `node dist/cli.js ...`). Feature coverage vs the design docs: [`docs/coverage.md`](docs/coverage.md). Full local v1 loop incl. signing/audit/dashboard: [`docs/recipes.md`](docs/recipes.md).
+Re-verify a saved bundle later with `agent-receipt replay --pack <dir>`. Full command list: `agent-receipt help --all`.
+
+> The lower-level commands (`start` / `prompt` / `verify` / `check` / `claims` / `receipt`) still exist — `begin` and `done` simply compose them. See **Commands** below. Feature coverage vs the design docs: [`docs/coverage.md`](docs/coverage.md); recipes (worktree/CI/hooks): [`docs/recipes.md`](docs/recipes.md).
 
 Once installed, the CLI is invoked as `agent-receipt`. (The single-letter `ag` alias was dropped to avoid clashing with other tools.)
 
@@ -103,8 +104,8 @@ If you omit `--contract`, the contract is auto-discovered (see below).
 | `verify [--json]` | State checks only (no commands run). Human report, or a stable one-line JSON with `--json`. | yes |
 | `check` | Run `required_checks.commands`; all must match their `required_exit`. | no |
 | `prompt [--cursor\|--claude]` | Print a paste-in instruction block for the agent. Variants differ only in header/tone; the completion-claim JSON is identical (so `claims` works either way). | no |
-| `report [--out <file>]` | Run `verify` and write a Markdown report. | yes |
-| `receipt [--format json\|md\|client-md] [--out <file>]` | Run `verify` + `check` and save an **AI Work Receipt** to `.agent-guard/receipts/` (change magnitude, critical-path attestation, integrity `contentHash`). `client-md` is a trimmed client-facing render. Saving outside the default dir warns (verify won't exclude it). | yes |
+| `report [--type developer\|client\|audit] [--out <file>]` | Run `verify` and write a Markdown report — `developer` (default, detailed), `client` (trimmed), or `audit` (contract/policy/receipt/environment-centric). | yes |
+| `receipt [--format json\|md\|client-md] [--redact] [--out <file>]` | Run `verify` + `check` and save an **AI Work Receipt** to `.agent-guard/receipts/` (change magnitude, critical-path attestation, environment/provenance, integrity `contentHash`). `client-md` is a trimmed client-facing render; `--redact` best-effort masks secret-looking values. Saving outside the default dir warns (verify won't exclude it). | yes |
 | `receipts [--latest\|--cat\|--dir]` | Find saved receipts under `.agent-guard/receipts/`: list newest-first (default), `--latest` summary (ok/contractId/timestamp/contentHash/magnitude), `--cat` latest content, `--dir` directory path. No receipts → guidance, exit `0`. | no |
 | `mode` | Read-only explanation of whether you're in **task** or **daily** flow (contract/session/baseline state + recommended next command). No file written. | no |
 | `claims --file <claim.json>` | Compare an agent's completion report (JSON) against the actual git state — surfaces hidden/over-claimed changes as **AI said / Git says**. Mismatch → exit `1`. | yes |
@@ -116,13 +117,28 @@ If you omit `--contract`, the contract is auto-discovered (see below).
 | `verify-signature --receipt <path>` | Verify the sidecar signature with the public key. PASS → `0`, FAIL → `1`. | no |
 | `approve --receipt <path> [--note <text>]` | Record a local approval sidecar `<receipt>.approval.json` (approver from git config, timestamp, contentHash, note). No git commit, no network. | no |
 | `approvals` | List local approval sidecars. | no |
-| `export --format <slack\|json> --receipt <path>` | Print an external-transport payload **preview to stdout only** (Slack blocks / summary JSON). Never POSTs; no token/URL. | no |
+| `export --format <slack\|json\|github-pr\|otel\|langfuse> --receipt <path>` | Print an external-transport payload **preview to stdout only** (Slack blocks / summary JSON / PR-comment markdown / OTLP log / Langfuse trace). Never POSTs; no token/URL. | no |
 | `pre` | Pre-start check (correct branch, nothing already staged). | yes |
 | `doctor` | Environment/setup health check (git / contract / baseline). | no |
 | `lint` | Advisory contract-quality checks (scope / denied / forbidden_actions). | no |
 | `help` | Usage. | no |
 | `run` | Alias for the no-args single-command routing below. | — |
 | *(no args)* | Single-command routing: inspects state and points to the next step (`init` / `start` / `check`), or runs `verify` when a baseline exists; on PASS it suggests `check` / `receipt` / `claims`, on FAIL it suggests `explain` / `status` / `reset`. | — |
+
+### Audit workflow commands (v0.8)
+
+| Command | What it does | Needs git repo |
+|---|---|---|
+| `begin [--cursor\|--claude\|--generic]` | Start a task in one step: check `policy`, record the baseline (`start`), and print the paste-in agent instructions (`prompt`). | yes |
+| `done [--claim <c.json>] [--client] [--ledger]` | Finish a task in one step: `verify` + `check`, save the receipt, summarize, optionally reconcile a `--claim` and append to the ledger. | yes |
+| `policy init [--profile <solo-founder\|vibe-coder\|agency-client\|team-strict\|promptia>] \| check \| show` | Manage `.agent-guard/policy.yaml` — **standing** project rules (`forbidAlways` / `requireApprovalFor` / `protectAlways` / `requireReceipt` …). The contract scopes one task; the policy governs the project. | check: yes |
+| `commit-check` | Gate just before you commit: `verify` PASS, `check` PASS, a receipt matching the current change, and policy rules satisfied. **Never commits.** On pass, prints an `Agent-Receipt:` / `Agent-Contract:` / `Agent-Policy:` commit trailer. | yes |
+| `trailer` | Print the commit trailer only (hashes/paths, no values) to paste into a commit message. | yes |
+| `audit-pack [--out <dir>] [--claim <c.json>] [--redact] [--ledger]` | Bundle the evidence (contract, policy, receipt, claim+verify, approval, signature, environment, manifest) into `.agent-guard/audit-packs/<ts>/`. A review bundle — **tamper-evident, not a non-forgeable proof.** | yes |
+| `replay --pack <dir>` (alias `verify-pack`) | Re-verify a saved audit-pack against the current repo: recompute the receipt `contentHash`, confirm the commit exists. Detects tampering. Cannot reproduce external DB/OS effects. | yes |
+| `ledger [--json]` · `ledger rebuild` | Append-only local trail `.agent-guard/ledger.jsonl` — one metadata line per receipt (no diffs/values). `rebuild` regenerates it from `receipts/`. | no |
+| `attest --receipt <p> \| --pack <dir>` | Emit an in-toto **style** Statement (draft) to stdout — provenance over the receipt + commit. Not an SLSA-level claim; tamper-evident, not non-forgeable. | no |
+| `incident [--since <n>]` | Scan recent receipts/ledger for failures, critical-path changes, missing approvals, last PASS. Read-only; no auto-recovery, no scoring. | no |
 
 ### Contract discovery
 
@@ -153,7 +169,7 @@ Real repos are rarely clean — there are often pre-existing untracked files (do
 - **Ambient noise is removed.** Files that were already unstaged/staged/untracked at `start` are excluded from scope checks — `verify` reports only what changed *since* the baseline.
 - **New violations are still caught.** A new out-of-scope or denied file created after `start` is flagged normally.
 - **`denied_paths` is never hidden by a baseline.** Denied matching runs against the **full** current working tree, not the baseline-relative subset. You cannot bury a denied path by baselining it.
-- **Only `.agent-guard/session.json` and `.agent-guard/receipts/` are ignored by `verify`** (tool-generated) — the rest of `.agent-guard/` (e.g. `contract.yaml`) is treated normally.
+- **Tool-generated outputs are ignored by `verify`** — `.agent-guard/session.json`, `receipts/`, `keys/`, `audit-packs/`, `ledger.jsonl`, and `dashboard.html`. The rest of `.agent-guard/` (e.g. `contract.yaml`, `policy.yaml`) is treated normally.
 - **Stale baselines are ignored, safely.** If you switch branches, or the recorded `baselineHead` is no longer an ancestor of `HEAD`, the baseline is dropped and `verify` falls back to full-tree checking (noisier, but it never hides changes). Run `agent-receipt reset` then `agent-receipt start` to re-baseline. Use `agent-receipt status` to see the current baseline state.
 
 ### `start` refuses when a denied path is already dirty
@@ -238,7 +254,7 @@ npx agent-receipt check                    # run required_checks.commands
 
 In short: **`init` creates the contract; `start` (optional) records a baseline on top of it; `verify` / `check` evaluate against it.**
 
-> **Note — running `verify` before `start`:** the files `init` writes (`.agent-guard/contract.yaml`, `.agent-guard/README.md`) are themselves untracked, and `verify` does **not** exclude them — **only `.agent-guard/session.json` is excluded**. So with a restrictive `allowed_paths`, running `verify` *before* `start` may report them as `outOfScope`. **This is normal.** Avoid it by following the recommended order (`init` → edit → **`start`** → `verify`/`check`, which baselines them away), or by adding `.agent-guard/contract.yaml` / `.agent-guard/README.md` to `allowed_paths` (or committing / gitignoring them).
+> **Note — running `verify` before `start`:** the files `init` writes (`.agent-guard/contract.yaml`, `.agent-guard/README.md`) are themselves untracked, and `verify` does **not** exclude them — only **tool-generated outputs** (`session.json`, `receipts/`, `keys/`, `audit-packs/`, `ledger.jsonl`, `dashboard.html`) are excluded. So with a restrictive `allowed_paths`, running `verify` *before* `start` may report them as `outOfScope`. **This is normal.** Avoid it by following the recommended order (`init` → edit → **`start`** → `verify`/`check`, which baselines them away), or by adding `.agent-guard/contract.yaml` / `.agent-guard/README.md` to `allowed_paths` (or committing / gitignoring them).
 
 ---
 
@@ -254,7 +270,7 @@ All five are starting points — edit the generated `.agent-guard/contract.yaml`
 
 ---
 
-## What Agent Guard catches
+## What agent-receipt catches
 
 Run by `verify` against the combined set of unstaged + staged + untracked changes:
 
@@ -271,7 +287,7 @@ Run by `check`:
 
 ---
 
-## What Agent Guard does **not** do
+## What agent-receipt does **not** do
 
 Read this before relying on it:
 
@@ -331,7 +347,11 @@ The claim file is plain JSON; every field is optional and only provided fields a
 
 ## Package status
 
-Early preview, published on npm as **`@promptia-labs/agent-receipt`** (latest published `0.2.1`; `0.7.x` is in local development — a **local-first v1+ candidate**). `0.7.x` adds `presets` / `draft-contract` / `review`, `prompt --cursor|--claude`, `strict`/`relaxed` presets, `receipt --format client-md`, ed25519 `keys`/`sign`/`verify-signature`, and local `audit` / `dashboard` / `approve` / `export` (dry-run) — on top of `0.6.x` (`mode`, `receipts`), `0.5.x` (`promptia` preset, `run`), and `0.4.x` (`claims`, `explain`, receipt integrity). Cloud/SaaS/remote collaboration is intentionally deferred. Feature coverage: [`docs/coverage.md`](docs/coverage.md). For local development:
+Published on npm as **`@promptia-labs/agent-receipt`** — **latest `0.8.0`** (the AI work audit protocol). This branch (`v0.1-verify-check-split`) prepares a **`0.8.1` README-only patch** to align the public docs with the shipped 0.8.0 commands (no code change). Next milestone is **`1.0.0`** after Promptia real-use stabilization. Cloud/SaaS, real Slack/webhook transport, remote approval, and any "compliance guarantee" remain intentionally out of scope. Feature coverage vs the design docs: [`docs/coverage.md`](docs/coverage.md).
+
+Version ladder: `0.7.0` (work receipts) → **`0.8.0` (AI work audit protocol)** → `1.0.0` (stable, after real-world use).
+
+For local development:
 
 ```bash
 npm run build           # emit dist/  (also runs via prepack on npm pack/publish)
