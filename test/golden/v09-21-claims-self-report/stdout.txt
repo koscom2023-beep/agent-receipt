@@ -25,11 +25,13 @@ modeClaims (self-report — git 작업트리 밖, 검증 불가):
   · studioLogOnly: true
   · scoreReplacement: 0
   · coverage: partial
+  → unverified by git · advisory only · PASS/FAIL 근거 아님
 externalActions (self-report — git 작업트리 밖, 검증 불가):
   · memoryWrite: 0
   · npmPublish: 0
   · push: 0
   · deploy: 0
+  → unverified by git · advisory only · PASS/FAIL 근거 아님
 ────────────────────────────────────────────────────────
 결과: 일치 ✅  (AI 보고 = git 실측)
 ────────────────────────────────────────────────────────

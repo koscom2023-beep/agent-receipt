@@ -1,6 +1,7 @@
 
 ────────────────────────────────────────────────────────
 agent-receipt release-check (배포 전 read-only 분석 — push/deploy 안 함)
+  advisory only — 배포 판단 보조입니다. 사람이 최종 판단하세요(이 도구는 배포 승인/배포를 하지 않습니다).
 ────────────────────────────────────────────────────────
 base           : rel-base  (06f4e1cfbd6a5a4019d7d182ee6f61f757a6354e)
 head           : 92f89b0d8c20ca2fb40f84ca0cc44dfdbcd11046
@@ -16,7 +17,8 @@ risk class (휴리스틱 — 커밋 제목/파일 기반 추정, 점수 아님):
    - behavior-change(추정): 코드 파일 변경 — 동작 영향 가능, 검토 필요
 notVerified (이 도구가 확인 못 한 것):
    - failed test ∩ changed 미검사 (--failed-tests <file> 로 제공)
+   - origin/main 직접 재실행 안 함 — production 실제 동작/기존 실패는 미확인
 ────────────────────────────────────────────────────────
-  push/deploy/checkout/reset 는 하지 않습니다(read-only 분석).
+  push/deploy/checkout/reset 는 하지 않습니다(read-only 분석). 최종 배포 판단은 사람이.
   이 도구는 git 작업트리 기준입니다 — .gitignore된 파일·레포 밖·OS 명령·DB write·외부 서비스 변경은 직접 볼 수 없습니다.
 

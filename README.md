@@ -142,7 +142,7 @@ If you omit `--contract`, the contract is auto-discovered (see below).
 
 ### Convenience & release commands (v0.9)
 
-These shorten the real-world loop. **None of them run git, npm, or any deploy** — they print paste-in blocks or read-only analysis. `verify --json`'s 14 keys are unchanged.
+These shorten the real-world loop. **None of them run git, npm, or any deploy** — they print paste-in blocks or read-only analysis. `verify --json`'s 14 keys are unchanged. **Git is the only evidence**; `note`, `release-check`, `policy mode`, and a claim's `modeClaims`/`externalActions` are **advisory / self-report — never PASS/FAIL inputs.**
 
 | Command | What it does | Needs git repo |
 |---|---|---|
@@ -150,8 +150,8 @@ These shorten the real-world loop. **None of them run git, npm, or any deploy** 
 | `close-recon` | Close a read-only recon session in one step. **Only when there are zero changes** (touched/staged/untracked/denied/out-of-scope all 0): save a receipt, build an audit-pack, and `reset`. Refuses (no reset) if anything changed, or if the session is `kind=implementation`. | yes |
 | `prepare-commit [--message <m>] [--include-linked-tests]` | Generate a safe copy-paste commit block — `git add` candidates + message + `Agent-Receipt` trailer — with the **commit block and reset block physically separated** (no `EOF`+`reset` on one line). Never commits. Suppresses the block on denied / true out-of-scope / branch mismatch / NUL. | yes |
 | `finish [--message <m>] [--client]` | Implementation wrap-up in one step: `done` → `commit-check` → `audit-pack` → commit block, with per-stage PASS/FAIL labels and a single "next command" on failure. No auto add/commit/reset/push. | yes |
-| `note --type <recon\|contract-draft\|no-code-decision\|next-options> [--message <m>]` | Record a no-code recon/decision as evidence (`.agent-guard/notes/` or `/decisions/`, pinned to `headHash`). Included in audit-packs. Tool output — excluded from `verify`. | yes |
-| `release-check --base <ref> [--failed-tests <file>] [--observe <event>]` | Pre-deploy **read-only** analysis: base/head, ahead/behind, rollbackBase, changed files, commits, a heuristic risk class (labeled — not a score), failed∩changed (only if the file is given), and post-deploy events to watch. **Never push/deploy/checkout/reset.** | yes |
+| `note --type <recon\|contract-draft\|no-code-decision\|next-options> [--message <m>]` | Record a no-code recon/decision as a **note/claim — not git-verified evidence** (`.agent-guard/notes/` or `/decisions/`, pinned to `headHash`). Included in audit-packs *as a user memo*. Tool output — excluded from `verify`. | yes |
+| `release-check --base <ref> [--failed-tests <file>] [--observe <event>]` | Pre-deploy **read-only, advisory** analysis: base/head, ahead/behind, rollbackBase, changed files, commits, a heuristic risk class (labeled — not a score), failed∩changed (heuristic, only if the file is given), and post-deploy events to watch. **Never push/deploy/checkout/reset; does not approve a deploy** — a human decides. | yes |
 | `next` | Recommend the single next command for the current state. | (discovers) |
 
 Contracts may also declare `linked_test_paths` / `expected_linked_tests` (optional) so a guard test outside `allowed_paths` is shown as a *linked guard test (human-confirm)* in `commit-check`/`prepare-commit` — `verify`'s `outOfScope` meaning is unchanged. Policies may set `mode: measure_first | observe_only` to print a self-report checklist in `commit-check` (display only — the tool sees git diffs, not intent).
@@ -363,7 +363,7 @@ The claim file is plain JSON; every field is optional and only provided fields a
 
 ## Package status
 
-Published on npm as **`@promptia-labs/agent-receipt`** — **latest `0.8.0`** (the AI work audit protocol). This branch (`v0.1-verify-check-split`) prepares a **`0.8.1` README-only patch** to align the public docs with the shipped 0.8.0 commands (no code change). Next milestone is **`1.0.0`** after Promptia real-use stabilization. Cloud/SaaS, real Slack/webhook transport, remote approval, and any "compliance guarantee" remain intentionally out of scope. Feature coverage vs the design docs: [`docs/coverage.md`](docs/coverage.md).
+Published on npm as **`@promptia-labs/agent-receipt`** — **latest `0.8.1`**. **`0.9.0`** (convenience/integration polish: `begin --kind`, `close-recon`, `prepare-commit`/`finish`, `note`, `release-check`, `next`, plus git-evidence/advisory separation) is **implemented locally on this branch (`v0.1-verify-check-split`) — not yet published.** Next: a publish decision. Cloud/SaaS, real Slack/webhook transport, remote approval, and any "compliance guarantee" remain intentionally out of scope. Feature coverage vs the design docs: [`docs/coverage.md`](docs/coverage.md).
 
 Version ladder: `0.7.0` (work receipts) → **`0.8.0` (AI work audit protocol)** → `1.0.0` (stable, after real-world use).
 

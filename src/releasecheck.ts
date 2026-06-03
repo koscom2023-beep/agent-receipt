@@ -55,6 +55,7 @@ export function runReleaseCheck(
   console.log("");
   console.log(line);
   console.log("agent-receipt release-check (배포 전 read-only 분석 — push/deploy 안 함)");
+  console.log("  advisory only — 배포 판단 보조입니다. 사람이 최종 판단하세요(이 도구는 배포 승인/배포를 하지 않습니다).");
   console.log(line);
   console.log(`base           : ${base}  (${baseHash})`);
   console.log(`head           : ${g.headHash()}`);
@@ -74,13 +75,14 @@ export function runReleaseCheck(
     if (existsSync(failedTestsFile)) {
       const failed = readFileSync(failedTestsFile, "utf8").split("\n").map((s) => s.trim()).filter(Boolean);
       const inter = failed.filter((f) => changed.includes(f));
-      console.log(`실패 테스트 ∩ 변경: ${inter.length}건${inter.length ? " — " + inter.join(", ") : ""}`);
+      console.log(`실패 테스트 ∩ 변경: ${inter.length}건${inter.length ? " — " + inter.join(", ") : ""}  (휴리스틱 — base 재실행 아님)`);
     } else {
       notVerified.push(`failed-tests 파일 없음: ${failedTestsFile}`);
     }
   } else {
     notVerified.push("failed test ∩ changed 미검사 (--failed-tests <file> 로 제공)");
   }
+  notVerified.push("origin/main 직접 재실행 안 함 — production 실제 동작/기존 실패는 미확인");
 
   if (observeEvents.length) {
     console.log("배포 후 관측(postDeployObserve):");
@@ -93,7 +95,7 @@ export function runReleaseCheck(
   }
 
   console.log(line);
-  console.log("  push/deploy/checkout/reset 는 하지 않습니다(read-only 분석).");
+  console.log("  push/deploy/checkout/reset 는 하지 않습니다(read-only 분석). 최종 배포 판단은 사람이.");
   console.log("  " + LIMIT_NOTE);
   console.log("");
   process.exit(0);

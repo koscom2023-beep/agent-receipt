@@ -24,6 +24,7 @@ export function runNote(typeArg: string | undefined, message: string | undefined
   const record = {
     kind: "agent-receipt.note",
     type,
+    verified: false, // 사용자 메모/주장 — git 검증 결과(증거) 아님
     message: message ?? "",
     headHash: g.headHash(),
     branch: g.currentBranch(),
@@ -33,7 +34,7 @@ export function runNote(typeArg: string | undefined, message: string | undefined
   writeFileSync(join(cwd, rel), JSON.stringify(record, null, 2) + "\n");
 
   console.log(`note 저장(${type}): ${rel}`);
-  console.log("  코드 변경 없는 정찰/판단도 audit-pack 에 증거로 포함됩니다 (tool 산출 — verify 제외).");
+  console.log("  이것은 사용자가 남긴 메모/주장입니다 — git 검증 결과(증거)가 아닙니다. audit-pack 에 참고로 포함(verify 제외).");
   console.log("  " + LIMIT_NOTE);
   process.exit(0);
 }

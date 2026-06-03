@@ -27,10 +27,10 @@ const PolicySchema = z.object({
 // 0.9: 모드별 self-report 체크리스트(도구는 git diff 만 봄 — 의미 위반은 자동검출 불가, 사람/AI self-report).
 export function modePrinciples(mode: string): string[] {
   if (mode === "measure_first") {
-    return ["작업 모드 measure_first — self-report 확인(git diff 만 보므로 의미 위반 자동검출 불가): AI호출 0 · DB write 0 · 관측부착 0 · pipeline wiring 0 · 점수교체 0"];
+    return ["작업 모드 measure_first 체크리스트(self-report·guidance — 강제 아님, 사람 검토 필요): AI호출 0 · DB write 0 · 관측부착 0 · pipeline wiring 0 · 점수교체 0 (git diff 로는 의미 위반 자동검출 불가)"];
   }
   if (mode === "observe_only") {
-    return ["작업 모드 observe_only — self-report 확인(git diff 만 봄): DB write 0 · 점수교체 0 · trigger 변경 0 · 차단/fail-closed 0 · behavior 변경 0"];
+    return ["작업 모드 observe_only 체크리스트(self-report·guidance — 강제 아님, 사람 검토 필요): DB write 0 · 점수교체 0 · trigger 변경 0 · 차단/fail-closed 0 · behavior 변경 0 (git diff 로는 의미 위반 자동검출 불가)"];
   }
   return [];
 }

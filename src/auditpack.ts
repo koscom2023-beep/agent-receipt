@@ -107,7 +107,7 @@ export function buildAuditPack(
       if (parsed) {
         const cv = claimVerify(parsed, r.touched, r.untracked, r.deniedHits);
         claimMatched = cv.ok;
-        writePack("claim-verify.json", JSON.stringify({ ok: cv.ok, fields: cv.fields, note: "AI 주장 ↔ git 실측 대조" }, null, 2) + "\n");
+        writePack("claim-verify.json", JSON.stringify({ ok: cv.ok, fields: cv.fields, note: "AI 주장 ↔ git 실측 대조 — changedFiles/newFiles/deniedHits/tests 만. modeClaims/externalActions 등 self-report 는 git 검증 대상 아님(advisory)." }, null, 2) + "\n");
       }
     }
   }

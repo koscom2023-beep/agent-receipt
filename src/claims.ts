@@ -27,6 +27,7 @@ function printSelfReportBlock(label: string, obj: unknown): void {
   } else {
     console.log(`  · ${String(obj)}`);
   }
+  console.log("  → unverified by git · advisory only · PASS/FAIL 근거 아님");
 }
 
 const cleanPath = (p: string): string => p.replace(/^\.\//, "");

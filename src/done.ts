@@ -61,6 +61,10 @@ export function runDone(
           if (f.hidden.length) console.log(`  ✗ ${f.field}: AI 미보고(git 존재) — ${f.hidden.join(", ")}`);
           if (f.extra.length) console.log(`  ✗ ${f.field}: git 에 없는 주장 — ${f.extra.join(", ")}`);
         }
+        const pc = (parsed && typeof parsed === "object" ? parsed : {}) as Record<string, unknown>;
+        if (pc["modeClaims"] !== undefined || pc["externalActions"] !== undefined) {
+          console.log("  ⓘ modeClaims/externalActions 는 self-report — git 검증 대상 아님(advisory). 상세: agent-receipt claims --file");
+        }
       } catch {
         console.log(`claim: JSON 파싱 실패(${claimArg}) — 대조 생략`);
       }

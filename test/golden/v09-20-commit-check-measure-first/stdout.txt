@@ -8,7 +8,7 @@ agent-receipt commit-check: s6  (커밋 직전 — 자동 commit/revert 안 함)
   ✓ 상시금지(forbidAlways): 없음
 
 참고(advisory):
-  · 작업 모드 measure_first — self-report 확인(git diff 만 보므로 의미 위반 자동검출 불가): AI호출 0 · DB write 0 · 관측부착 0 · pipeline wiring 0 · 점수교체 0
+  · 작업 모드 measure_first 체크리스트(self-report·guidance — 강제 아님, 사람 검토 필요): AI호출 0 · DB write 0 · 관측부착 0 · pipeline wiring 0 · 점수교체 0 (git diff 로는 의미 위반 자동검출 불가)
 ────────────────────────────────────────────────────────
 결과: OK ✅ — 사람이 직접 stage/commit 하세요. 아래 트레일러를 커밋 메시지에 붙일 수 있습니다(선택):
 
