@@ -1,0 +1,8 @@
+id: s6-claims
+scope:
+  allowed_paths:
+    - "src/**"
+  denied_paths:
+    - ".env*"
+required_checks:
+  commands: []

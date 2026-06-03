@@ -13,6 +13,20 @@ interface Claim {
   deniedHits?: unknown;
   tests?: unknown;
   summary?: unknown;
+  modeClaims?: unknown; // 0.9: 작업 모드 self-report(AI호출/DB write/관측 등) — git 으로 검증 불가
+  externalActions?: unknown; // 0.9: git 밖 행동 self-report(memoryWrite/npmPublish/push/deploy 등)
+}
+
+// 0.9: self-report 블록(git 으로 검증 불가 — '주장'으로만 표시, mismatch 집계 안 함).
+function printSelfReportBlock(label: string, obj: unknown): void {
+  console.log(`${label} (self-report — git 작업트리 밖, 검증 불가):`);
+  if (obj && typeof obj === "object" && !Array.isArray(obj)) {
+    for (const [k, val] of Object.entries(obj as Record<string, unknown>)) {
+      console.log(`  · ${k}: ${String(val)}`);
+    }
+  } else {
+    console.log(`  · ${String(obj)}`);
+  }
 }
 
 const cleanPath = (p: string): string => p.replace(/^\.\//, "");
@@ -115,6 +129,8 @@ export function runClaims(contract: Contract, fileArg: string | undefined): neve
   if (claim.summary !== undefined) {
     console.log(`summary  : ${String(claim.summary)}  (참고용 — 검증 안 함)`);
   }
+  if (claim.modeClaims !== undefined) printSelfReportBlock("modeClaims", claim.modeClaims);
+  if (claim.externalActions !== undefined) printSelfReportBlock("externalActions", claim.externalActions);
 
   console.log(line);
   console.log(

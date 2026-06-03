@@ -1,7 +1,7 @@
 # agent-guard v0.1 golden baseline (A0.5)
 
 - branch: v0.1-verify-check-split
-- 캡처 케이스: 128개
+- 캡처 케이스: 131개
 - 결정론: 고정 git identity(ci/ci@local) + 고정 DATE(2025-01-01T00:00:00 +0000) → headHash 재현
 - 정규화(스냅샷 한정): $HOME→<HOME>, /tmp/claude-1000/ag-gold-*→<FIXTURE>
 
@@ -135,3 +135,6 @@
 | v09-16-finish-blocked | `guard … ; (.env.local) ; guard finish   (commit-check 차단)` | 1 |
 | v09-17-commit-check-linked | `guard … ; (src + tests/) ; guard commit-check   (linked 가드 테스트 advisory)` | 1 |
 | v09-18-lint-linked | `guard lint --contract contract.yaml   (linked_test_paths, expected 없음)` | 0 |
+| v09-19-policy-show-mode | `guard policy show   (mode=measure_first)` | 0 |
+| v09-20-commit-check-measure-first | `guard … ; guard commit-check   (mode=measure_first self-report)` | 0 |
+| v09-21-claims-self-report | `guard claims --file claim.json   (modeClaims + externalActions self-report)` | 0 |

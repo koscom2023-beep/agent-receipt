@@ -1,0 +1,1 @@
+guard policy show   (mode=measure_first)

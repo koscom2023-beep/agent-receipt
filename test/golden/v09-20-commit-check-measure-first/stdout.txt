@@ -1,0 +1,20 @@
+
+────────────────────────────────────────────────────────
+agent-receipt commit-check: s6  (커밋 직전 — 자동 commit/revert 안 함)
+────────────────────────────────────────────────────────
+  ✓ verify 상태: PASS
+  ✓ check 명령: 명령 없음(통과 처리)
+  ✓ 금지 경로(denied): 없음
+  ✓ 상시금지(forbidAlways): 없음
+
+참고(advisory):
+  · 작업 모드 measure_first — self-report 확인(git diff 만 보므로 의미 위반 자동검출 불가): AI호출 0 · DB write 0 · 관측부착 0 · pipeline wiring 0 · 점수교체 0
+────────────────────────────────────────────────────────
+결과: OK ✅ — 사람이 직접 stage/commit 하세요. 아래 트레일러를 커밋 메시지에 붙일 수 있습니다(선택):
+
+  Agent-Receipt: sha256:b0ba66e52fd03eafab69b6525020072026d1d4560ef0a179d798277ba0655886
+  Agent-Contract: sha256:490ef991bb6db9d3d7bc0fc35fd0c821ff25cc0c038d749e0ed1685222da9c58
+  Agent-Policy: sha256:0cd96337b9d1d6dff49355e1131d55ca99060f72567f764e332896711f314dba
+────────────────────────────────────────────────────────
+  이 도구는 git 작업트리 기준입니다 — .gitignore된 파일·레포 밖·OS 명령·DB write·외부 서비스 변경은 직접 볼 수 없습니다.
+

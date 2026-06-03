@@ -1,0 +1,14 @@
+
+────────────────────────────────────────────────────────
+agent-receipt policy (상시 규칙 — contract 와 별개)
+────────────────────────────────────────────────────────
+mode           : measure_first
+requireReceipt : false
+requireClaims  : false
+requireCheck   : false
+maxUntracked   : (제한 없음)
+forbidAlways   : .env*
+protectAlways  : (없음)
+approvalFor    : (없음)
+────────────────────────────────────────────────────────
+

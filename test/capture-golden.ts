@@ -1355,6 +1355,49 @@ const V09_LINKED =
     run(c.repo, "lint", ["--contract", c.contract]), V09_LINKED);
 }
 
+// ───────────────────────────── v0.9 C5: policy modes + modeClaims/externalActions self-report ─────────────────────────────
+// mode 는 standard 아닐 때만 표시(기존 standard policy golden 불변). self-report 는 검증 불가 라벨 + mismatch 집계 안 함.
+const V09_POLICY_MF =
+  `mode: measure_first\nrequireReceipt: false\nrequireClaims: false\nrequireCheck: false\n` +
+  `forbidAlways:\n  - ".env*"\n`;
+const V09_CLAIMS_CONTRACT =
+  `id: s6-claims\nscope:\n  allowed_paths:\n    - "src/**"\n  denied_paths:\n    - ".env*"\nrequired_checks:\n  commands: []\n`;
+
+// v09-19: policy show — mode=measure_first → mode 라인 표시
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, ".agent-guard"), { recursive: true });
+  writeFileSync(join(c.repo, ".agent-guard", "policy.yaml"), V09_POLICY_MF);
+  emit("v09-19-policy-show-mode", "guard policy show   (mode=measure_first)", run(c.repo, "policy", ["show"]), null);
+}
+// v09-20: commit-check — measure_first self-report 체크리스트 advisory (verify PASS → OK + trailer)
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, ".agent-guard"), { recursive: true });
+  mkdirSync(join(c.repo, "src"), { recursive: true });
+  writeFileSync(join(c.repo, ".agent-guard", "contract.yaml"), S6_CONTRACT);
+  writeFileSync(join(c.repo, ".agent-guard", "policy.yaml"), V09_POLICY_MF);
+  run(c.repo, "start", []);
+  writeFileSync(join(c.repo, "src", "a.ts"), "export const a = 1;\n");
+  emit("v09-20-commit-check-measure-first", "guard … ; guard commit-check   (mode=measure_first self-report)",
+    run(c.repo, "commit-check", []), null);
+}
+// v09-21: claims — modeClaims + externalActions self-report 표시(검증 불가 라벨, mismatch 0)
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, "src"), { recursive: true });
+  writeFileSync(c.contract, V09_CLAIMS_CONTRACT);
+  writeFileSync(join(c.repo, "src", "a.ts"), "export const a = 1;\n");
+  const claim = join(c.base, "claim.json");
+  writeFileSync(claim, JSON.stringify({
+    changedFiles: ["src/a.ts"], newFiles: ["src/a.ts"], deniedHits: [], tests: true, summary: "measure-only",
+    modeClaims: { aiCall: 0, dbWrite: 0, studioLogOnly: true, scoreReplacement: 0, coverage: "partial" },
+    externalActions: { memoryWrite: 0, npmPublish: 0, push: 0, deploy: 0 },
+  }, null, 2) + "\n");
+  emit("v09-21-claims-self-report", "guard claims --file claim.json   (modeClaims + externalActions self-report)",
+    run(c.repo, "claims", ["--file", claim, "--contract", c.contract]), V09_CLAIMS_CONTRACT, c.base);
+}
+
 // ───────────────────────────── 인덱스 + 정리 ─────────────────────────────
 
 const indexLines = [

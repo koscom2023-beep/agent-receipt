@@ -1,7 +1,7 @@
 import type { Contract } from "./schema.js";
 import { runVerify, runCheck } from "./checks.js";
 import { buildReceipt, type Receipt } from "./receipt.js";
-import { loadPolicySafe, policyObservations, policyPath } from "./policy.js";
+import { loadPolicySafe, policyObservations, policyPath, modePrinciples } from "./policy.js";
 import { touchedFull } from "./evidence.js";
 import { listReceipts, parseReceiptJson, hasApproval } from "./receiptStore.js";
 import { hashFileOrNull } from "./environment.js";
@@ -147,6 +147,11 @@ export function evaluateCommitCheck(
     if (obs.protectAlwaysHits.length) {
       advisories.push(`protectAlways 경로 변경: ${obs.protectAlwaysHits.join(", ")} (차단 아님 — 검토 권장)`);
     }
+  }
+
+  // 0.9: 작업 모드 self-report 체크리스트(measure_first/observe_only — 표시 전용, 게이트 아님).
+  if (policy && policy.mode !== "standard") {
+    for (const ln of modePrinciples(policy.mode)) advisories.push(ln);
   }
 
   const allOk = gates.every((g) => g.ok);

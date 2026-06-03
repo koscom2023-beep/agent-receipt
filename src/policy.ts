@@ -13,6 +13,8 @@ import { touchedFull } from "./evidence.js";
 export const POLICY_REL = join(".agent-guard", "policy.yaml");
 
 const PolicySchema = z.object({
+  // 0.9: 작업 모드(standard 기본 — 하위호환). measure_first/observe_only 는 commit-check self-report 체크리스트만.
+  mode: z.enum(["standard", "measure_first", "observe_only"]).default("standard"),
   requireReceipt: z.boolean().default(false),
   requireClaims: z.boolean().default(false),
   requireCheck: z.boolean().default(false),
@@ -21,6 +23,17 @@ const PolicySchema = z.object({
   protectAlways: z.array(z.string()).default([]),
   maxUntrackedAllowed: z.number().optional(),
 });
+
+// 0.9: 모드별 self-report 체크리스트(도구는 git diff 만 봄 — 의미 위반은 자동검출 불가, 사람/AI self-report).
+export function modePrinciples(mode: string): string[] {
+  if (mode === "measure_first") {
+    return ["작업 모드 measure_first — self-report 확인(git diff 만 보므로 의미 위반 자동검출 불가): AI호출 0 · DB write 0 · 관측부착 0 · pipeline wiring 0 · 점수교체 0"];
+  }
+  if (mode === "observe_only") {
+    return ["작업 모드 observe_only — self-report 확인(git diff 만 봄): DB write 0 · 점수교체 0 · trigger 변경 0 · 차단/fail-closed 0 · behavior 변경 0"];
+  }
+  return [];
+}
 
 export type Policy = z.infer<typeof PolicySchema>;
 
@@ -145,6 +158,7 @@ function runPolicyShow(cwd: string): never {
   console.log(line);
   console.log("agent-receipt policy (상시 규칙 — contract 와 별개)");
   console.log(line);
+  if (policy.mode !== "standard") console.log(`mode           : ${policy.mode}`);
   console.log(`requireReceipt : ${policy.requireReceipt}`);
   console.log(`requireClaims  : ${policy.requireClaims}`);
   console.log(`requireCheck   : ${policy.requireCheck}`);
