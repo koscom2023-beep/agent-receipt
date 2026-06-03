@@ -1,0 +1,13 @@
+
+────────────────────────────────────────────────────────
+agent-receipt close-recon: s6
+────────────────────────────────────────────────────────
+정찰 세션 종료 — 변경 파일 0, 커밋 불필요.
+  receipt 저장   : .agent-guard/receipts/receipt-<TS>.json
+  audit-pack 생성: .agent-guard/audit-packs/<TS>/ (5 files)
+  baseline reset : 완료 (.agent-guard/session.json 제거)
+
+다음 작업은 새 begin 으로 시작하세요(정찰↔구현 경계 분리).
+────────────────────────────────────────────────────────
+  이 도구는 git 작업트리 기준입니다 — .gitignore된 파일·레포 밖·OS 명령·DB write·외부 서비스 변경은 직접 볼 수 없습니다.
+

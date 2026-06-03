@@ -1,0 +1,1 @@
+guard begin --kind recon ; (src/a.ts 변경) ; guard close-recon

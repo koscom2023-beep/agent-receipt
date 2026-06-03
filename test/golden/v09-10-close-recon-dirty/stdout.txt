@@ -1,0 +1,12 @@
+
+────────────────────────────────────────────────────────
+agent-receipt close-recon: s6
+────────────────────────────────────────────────────────
+변경 감지: touched 1, untracked 1 — 정찰 세션이 아닙니다(코드 변경 있음).
+   - src/a.ts
+
+close-recon 은 변경 0 일 때만 자동 정리합니다 — baseline reset 안 함.
+  구현이면:  agent-receipt finish  /  agent-receipt prepare-commit  → 사람이 커밋 → reset
+────────────────────────────────────────────────────────
+  이 도구는 git 작업트리 기준입니다 — .gitignore된 파일·레포 밖·OS 명령·DB write·외부 서비스 변경은 직접 볼 수 없습니다.
+

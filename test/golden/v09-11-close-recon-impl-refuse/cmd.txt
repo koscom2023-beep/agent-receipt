@@ -1,0 +1,1 @@
+guard begin --kind implementation ; guard close-recon   (구현 세션 거부)

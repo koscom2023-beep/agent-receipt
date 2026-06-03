@@ -1,6 +1,6 @@
 import type { Contract } from "./schema.js";
 import { runVerify, runCheck } from "./checks.js";
-import { buildReceipt } from "./receipt.js";
+import { buildReceipt, type Receipt } from "./receipt.js";
 import { loadPolicySafe, policyObservations, policyPath } from "./policy.js";
 import { touchedFull } from "./evidence.js";
 import { listReceipts, parseReceiptJson, hasApproval } from "./receiptStore.js";
@@ -46,7 +46,21 @@ export function runTrailer(contract: Contract, contractPath: string | undefined,
  * 게이트: verify PASS · check PASS · 최신 receipt 가 현재 변경과 일치 · policy(require·forbid·approval) 충족.
  * exit 0(통과) / 1(게이트 실패) / 2(env).
  */
-export function runCommitCheck(contract: Contract, contractPath: string | undefined, cwd: string = process.cwd()): never {
+export interface CommitCheckEval {
+  gates: Gate[];
+  advisories: string[];
+  allOk: boolean;
+  fresh: Receipt;
+  latestRel: string | null;
+  policyHash: string | null;
+}
+
+// 비-exit core: commit-check 게이트 평가(출력/exit 없음). finish 가 재사용. runCommitCheck 출력은 불변.
+export function evaluateCommitCheck(
+  contract: Contract,
+  contractPath: string | undefined,
+  cwd: string = process.cwd(),
+): CommitCheckEval {
   const v = runVerify(contract);
   const chk = runCheck(contract);
   const { policy, error } = loadPolicySafe(cwd);
@@ -125,30 +139,35 @@ export function runCommitCheck(contract: Contract, contractPath: string | undefi
   }
 
   const allOk = gates.every((g) => g.ok);
+  const policyHash = policy ? hashFileOrNull(policyPath(cwd)) : null;
+  return { gates, advisories, allOk, fresh, latestRel: latestEntry?.rel ?? null, policyHash };
+}
+
+export function runCommitCheck(contract: Contract, contractPath: string | undefined, cwd: string = process.cwd()): never {
+  const e = evaluateCommitCheck(contract, contractPath, cwd);
 
   console.log("");
   console.log(line);
   console.log(`agent-receipt commit-check: ${contract.id}  (커밋 직전 — 자동 commit/revert 안 함)`);
   console.log(line);
-  for (const g of gates) console.log(`  ${g.ok ? "✓" : "✗"} ${g.label}: ${g.detail}`);
-  if (advisories.length) {
+  for (const g of e.gates) console.log(`  ${g.ok ? "✓" : "✗"} ${g.label}: ${g.detail}`);
+  if (e.advisories.length) {
     console.log("");
     console.log("참고(advisory):");
-    for (const a of advisories) console.log(`  · ${a}`);
+    for (const a of e.advisories) console.log(`  · ${a}`);
   }
   console.log(line);
-  if (allOk) {
+  if (e.allOk) {
     console.log("결과: OK ✅ — 사람이 직접 stage/commit 하세요. 아래 트레일러를 커밋 메시지에 붙일 수 있습니다(선택):");
     console.log("");
-    const polHash = policy ? hashFileOrNull(policyPath(cwd)) : null;
-    for (const ln of buildTrailer(fresh.contentHash, latestEntry?.rel ?? null, hashFileOrNull(contractPath), polHash)) {
+    for (const ln of buildTrailer(e.fresh.contentHash, e.latestRel, hashFileOrNull(contractPath), e.policyHash)) {
       console.log(`  ${ln}`);
     }
   } else {
-    console.log(`결과: 차단 ❌ — 게이트 ${gates.filter((g) => !g.ok).length}건 미충족. (자동 revert 안 함 — 위 항목을 해결 후 다시.)`);
+    console.log(`결과: 차단 ❌ — 게이트 ${e.gates.filter((g) => !g.ok).length}건 미충족. (자동 revert 안 함 — 위 항목을 해결 후 다시.)`);
   }
   console.log(line);
   console.log("  " + LIMIT_NOTE);
   console.log("");
-  process.exit(allOk ? 0 : 1);
+  process.exit(e.allOk ? 0 : 1);
 }

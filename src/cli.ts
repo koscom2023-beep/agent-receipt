@@ -29,6 +29,7 @@ import { runBegin } from "./begin.js";
 import { runDone } from "./done.js";
 import { runCommitCheck, runTrailer } from "./commitcheck.js";
 import { runAuditPack } from "./auditpack.js";
+import { runCloseRecon } from "./closerecon.js";
 import { runLedger, runLedgerRebuild } from "./ledger.js";
 import { runReplay } from "./replay.js";
 import { runAttest } from "./attest.js";
@@ -310,6 +311,12 @@ function main(): void {
     case "audit-pack": {
       requireRepo();
       runAuditPack(contract, contractPath, getArg("--out"), getArg("--claim"), hasFlag("--redact"), hasFlag("--ledger"));
+      break;
+    }
+
+    case "close-recon": {
+      requireRepo();
+      runCloseRecon(contract, contractPath);
       break;
     }
 

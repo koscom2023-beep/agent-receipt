@@ -44,7 +44,16 @@ export function claimVerify(claimRaw: unknown, touched: string[], untracked: str
  * `agent-receipt audit-pack [--out <dir>] [--claim <path>] [--redact] [--ledger]`
  * 작업 증거를 한 폴더로 묶는다(복사·요약 — 재계산 아님). "위조 불가 증명"이 아니라 "감사 검토용 증거 묶음"이다.
  */
-export function runAuditPack(
+export interface AuditPackResult {
+  relDir: string;
+  fileCount: number;
+  ok: boolean;
+  redacted: boolean;
+  ledgered: boolean;
+}
+
+// 비-exit core: 증거 묶음 생성(파일 쓰기). close-recon/finish 가 재사용. 출력/exit 없음.
+export function buildAuditPack(
   contract: Contract,
   contractPath: string | undefined,
   outArg: string | undefined,
@@ -52,7 +61,7 @@ export function runAuditPack(
   redact: boolean,
   toLedger: boolean,
   cwd: string = process.cwd(),
-): never {
+): AuditPackResult {
   const r = buildReceipt(contract, contractPath);
   const stamp = r.timestamp.replace(/[:.]/g, "-");
   const relDir = outArg ?? join(PACKS_REL, stamp);
@@ -141,9 +150,22 @@ export function runAuditPack(
     appendLedger(ledgerEntryFromReceipt(r, join(relDir, "receipt.json"), approvalsCount, claimMatched), cwd);
   }
 
-  console.log(`audit-pack 생성: ${relDir}/ (${manifest.files.length} files, ok=${r.ok}${redact ? ", redacted" : ""})`);
-  console.log(`  재검증: agent-receipt replay --pack ${relDir}`);
-  if (toLedger) console.log(`  원장 적립: ${LEDGER_REL}`);
+  return { relDir, fileCount: manifest.files.length, ok: r.ok, redacted: redact, ledgered: toLedger };
+}
+
+export function runAuditPack(
+  contract: Contract,
+  contractPath: string | undefined,
+  outArg: string | undefined,
+  claimArg: string | undefined,
+  redact: boolean,
+  toLedger: boolean,
+  cwd: string = process.cwd(),
+): never {
+  const res = buildAuditPack(contract, contractPath, outArg, claimArg, redact, toLedger, cwd);
+  console.log(`audit-pack 생성: ${res.relDir}/ (${res.fileCount} files, ok=${res.ok}${res.redacted ? ", redacted" : ""})`);
+  console.log(`  재검증: agent-receipt replay --pack ${res.relDir}`);
+  if (res.ledgered) console.log(`  원장 적립: ${LEDGER_REL}`);
   console.log("  " + LIMIT_NOTE);
   process.exit(0);
 }

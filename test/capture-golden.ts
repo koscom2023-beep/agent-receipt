@@ -1239,6 +1239,39 @@ function s6Fixture(): { base: string; repo: string } {
   emit("v09-08-mode-kind", "guard start --kind recon … ; guard mode", run(c.repo, "mode", []), null);
 }
 
+// ───────────────────────────── v0.9 C2: close-recon ─────────────────────────────
+// 정찰 세션 1발 종료(변경 0일 때만 receipt+audit-pack+reset). 구현/dirty 는 거부. core 추출은 기존 출력 불변.
+
+// v09-09: close-recon — clean recon 세션 → receipt+audit-pack+reset, exit 0 (스탬프 <TS> 정규화)
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, ".agent-guard"), { recursive: true });
+  writeFileSync(join(c.repo, ".agent-guard", "contract.yaml"), S6_CONTRACT);
+  run(c.repo, "begin", ["--kind", "recon"]); // baseline kind=recon, 변경 0
+  emit("v09-09-close-recon-clean", "guard begin --kind recon ; (변경 0) ; guard close-recon",
+    run(c.repo, "close-recon", []), null);
+}
+// v09-10: close-recon — 변경 있음 → 거부(reset 안 함), exit 1
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, ".agent-guard"), { recursive: true });
+  mkdirSync(join(c.repo, "src"), { recursive: true });
+  writeFileSync(join(c.repo, ".agent-guard", "contract.yaml"), S6_CONTRACT);
+  run(c.repo, "begin", ["--kind", "recon"]);
+  writeFileSync(join(c.repo, "src", "a.ts"), "export const a = 1;\n"); // 변경 발생
+  emit("v09-10-close-recon-dirty", "guard begin --kind recon ; (src/a.ts 변경) ; guard close-recon",
+    run(c.repo, "close-recon", []), null);
+}
+// v09-11: close-recon — implementation 세션 → 자동 정리 거부, exit 1
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, ".agent-guard"), { recursive: true });
+  writeFileSync(join(c.repo, ".agent-guard", "contract.yaml"), S6_CONTRACT);
+  run(c.repo, "begin", ["--kind", "implementation"]);
+  emit("v09-11-close-recon-impl-refuse", "guard begin --kind implementation ; guard close-recon   (구현 세션 거부)",
+    run(c.repo, "close-recon", []), null);
+}
+
 // ───────────────────────────── 인덱스 + 정리 ─────────────────────────────
 
 const indexLines = [
