@@ -1,0 +1,1 @@
+guard … ; (src + tests/) ; guard prepare-commit --include-linked-tests

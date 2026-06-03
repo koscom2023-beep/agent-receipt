@@ -1,0 +1,1 @@
+guard … ; (outsider.txt) ; guard prepare-commit   (범위 밖 → 차단)

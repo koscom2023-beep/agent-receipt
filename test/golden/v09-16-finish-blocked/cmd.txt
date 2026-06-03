@@ -1,0 +1,1 @@
+guard … ; (.env.local) ; guard finish   (commit-check 차단)

@@ -1,0 +1,16 @@
+
+────────────────────────────────────────────────────────
+agent-receipt finish: s6  (done+commit-check+audit-pack+커밋블록 — 자동 git 없음)
+────────────────────────────────────────────────────────
+  [1/4] done         : FAIL ❌ — receipt .agent-guard/receipts/receipt-<TS>.json
+  [2/4] commit-check : 차단 ❌ (2건)
+         ✗ verify 상태: 위반 2건
+         ✗ 금지 경로(denied): .env.local
+  [3/4] audit-pack   : .agent-guard/audit-packs/<TS>/ (5 files)
+────────────────────────────────────────────────────────
+  [4/4] 커밋 블록    : 생략 — commit-check 차단.
+
+다음 한 명령:  agent-receipt explain   (왜 차단인지) → 해결 후 다시 finish
+────────────────────────────────────────────────────────
+  이 도구는 git 작업트리 기준입니다 — .gitignore된 파일·레포 밖·OS 명령·DB write·외부 서비스 변경은 직접 볼 수 없습니다.
+

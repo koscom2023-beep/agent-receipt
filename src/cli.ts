@@ -30,6 +30,8 @@ import { runDone } from "./done.js";
 import { runCommitCheck, runTrailer } from "./commitcheck.js";
 import { runAuditPack } from "./auditpack.js";
 import { runCloseRecon } from "./closerecon.js";
+import { runPrepareCommit } from "./preparecommit.js";
+import { runFinish } from "./finish.js";
 import { runLedger, runLedgerRebuild } from "./ledger.js";
 import { runReplay } from "./replay.js";
 import { runAttest } from "./attest.js";
@@ -317,6 +319,18 @@ function main(): void {
     case "close-recon": {
       requireRepo();
       runCloseRecon(contract, contractPath);
+      break;
+    }
+
+    case "prepare-commit": {
+      requireRepo();
+      runPrepareCommit(contract, contractPath, getArg("--message"), hasFlag("--include-linked-tests"));
+      break;
+    }
+
+    case "finish": {
+      requireRepo();
+      runFinish(contract, contractPath, getArg("--message"), hasFlag("--client"));
       break;
     }
 

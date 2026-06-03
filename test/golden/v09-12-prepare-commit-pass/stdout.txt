@@ -1,0 +1,27 @@
+
+────────────────────────────────────────────────────────
+agent-receipt prepare-commit: s6  (자동 commit/add 안 함 — 복붙 블록만)
+────────────────────────────────────────────────────────
+허용 변경         : 1
+   - src/a.ts
+진짜 범위 밖      : 0
+────────────────────────────────────────────────────────
+── 커밋 블록 (복사해서 실행) ──
+
+git add src/a.ts
+
+git commit -F - <<'EOF'
+chore(s6): <요약 작성>
+
+Agent-Receipt: sha256:16903b9c92af48e5fa60bb0a1abdf00757bf1ae70074402d3cc3c626e48f77b8
+Agent-Contract: sha256:490ef991bb6db9d3d7bc0fc35fd0c821ff25cc0c038d749e0ed1685222da9c58
+Agent-Policy: none
+EOF
+
+── reset 블록 (커밋 성공 후에만 — 위 블록과 별도로 실행) ──
+
+agent-receipt reset
+
+────────────────────────────────────────────────────────
+  이 도구는 git 작업트리 기준입니다 — .gitignore된 파일·레포 밖·OS 명령·DB write·외부 서비스 변경은 직접 볼 수 없습니다.
+

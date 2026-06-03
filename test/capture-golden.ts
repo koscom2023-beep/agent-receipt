@@ -1272,6 +1272,65 @@ function s6Fixture(): { base: string; repo: string } {
     run(c.repo, "close-recon", []), null);
 }
 
+// ───────────────────────────── v0.9 C3: prepare-commit / finish ─────────────────────────────
+// 자동 git 0 — 복붙 블록 생성만. 커밋 블록/reset 블록 물리 분리. denied/진짜 범위 밖/브랜치/NUL → 블록 생략.
+const V09_LINKED =
+  `id: s6-linked\ntitle: linked test\nbranch:\n  expected: main\n` +
+  `scope:\n  allowed_paths:\n    - "src/**"\n  denied_paths:\n    - ".env*"\n` +
+  `linked_test_paths:\n    - "tests/**"\nrequired_checks:\n  commands: []\n`;
+
+// v09-12: prepare-commit PASS — in-scope 변경 → 커밋 블록 + reset 블록 분리(contentHash 결정론)
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, "src"), { recursive: true });
+  writeFileSync(c.contract, S6_CONTRACT);
+  run(c.repo, "start", ["--kind", "implementation", "--contract", c.contract]);
+  writeFileSync(join(c.repo, "src", "a.ts"), "export const a = 1;\n");
+  emit("v09-12-prepare-commit-pass", "guard start --kind implementation … ; guard prepare-commit",
+    run(c.repo, "prepare-commit", ["--contract", c.contract]), S6_CONTRACT);
+}
+// v09-13: prepare-commit BLOCK — 진짜 범위 밖 → 커밋 블록 생략, exit 1
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, "src"), { recursive: true });
+  writeFileSync(c.contract, S6_CONTRACT);
+  run(c.repo, "start", ["--kind", "implementation", "--contract", c.contract]);
+  writeFileSync(join(c.repo, "outsider.txt"), "out of scope\n");
+  emit("v09-13-prepare-commit-block-oos", "guard … ; (outsider.txt) ; guard prepare-commit   (범위 밖 → 차단)",
+    run(c.repo, "prepare-commit", ["--contract", c.contract]), S6_CONTRACT);
+}
+// v09-14: prepare-commit + linked test — verify 는 oos 로 보지만 사람 확인하에 포함(--include-linked-tests)
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, "src"), { recursive: true });
+  mkdirSync(join(c.repo, "tests"), { recursive: true });
+  writeFileSync(c.contract, V09_LINKED);
+  run(c.repo, "start", ["--kind", "implementation", "--contract", c.contract]);
+  writeFileSync(join(c.repo, "src", "a.ts"), "export const a = 1;\n");
+  writeFileSync(join(c.repo, "tests", "a.test.ts"), "test\n");
+  emit("v09-14-prepare-commit-linked", "guard … ; (src + tests/) ; guard prepare-commit --include-linked-tests",
+    run(c.repo, "prepare-commit", ["--include-linked-tests", "--contract", c.contract]), V09_LINKED);
+}
+// v09-15: finish PASS — 4단계 라벨 + 커밋 블록 (receipt/audit-pack 스탬프 <TS> 정규화)
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, "src"), { recursive: true });
+  writeFileSync(c.contract, S6_CONTRACT);
+  run(c.repo, "start", ["--kind", "implementation", "--contract", c.contract]);
+  writeFileSync(join(c.repo, "src", "a.ts"), "export const a = 1;\n");
+  emit("v09-15-finish-pass", "guard … ; guard finish", run(c.repo, "finish", ["--contract", c.contract]), S6_CONTRACT);
+}
+// v09-16: finish BLOCKED — denied(.env) → commit-check 차단, 커밋 블록 생략, exit 1
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, "src"), { recursive: true });
+  writeFileSync(c.contract, S6_CONTRACT);
+  run(c.repo, "start", ["--kind", "implementation", "--contract", c.contract]);
+  writeFileSync(join(c.repo, ".env.local"), "SECRET=1\n");
+  emit("v09-16-finish-blocked", "guard … ; (.env.local) ; guard finish   (commit-check 차단)",
+    run(c.repo, "finish", ["--contract", c.contract]), S6_CONTRACT);
+}
+
 // ───────────────────────────── 인덱스 + 정리 ─────────────────────────────
 
 const indexLines = [

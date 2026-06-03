@@ -22,6 +22,10 @@ export const ContractSchema = z.object({
     denied_paths: z.array(z.string()).default([]),
   }),
 
+  // 0.9: linked test 분류(표시 전용 — verify --json outOfScope 14키 의미 불변). 둘 다 optional.
+  linked_test_paths: z.array(z.string()).default([]),
+  expected_linked_tests: z.array(z.string()).default([]),
+
   forbidden_actions: z.array(z.string()).default([]),
 
   required_checks: z
