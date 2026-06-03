@@ -37,6 +37,7 @@ import { runReplay } from "./replay.js";
 import { runAttest } from "./attest.js";
 import { runIncident } from "./incident.js";
 import { runReport } from "./report.js";
+import { runNote } from "./note.js";
 
 function getArg(flag: string): string | undefined {
   const i = process.argv.indexOf(flag);
@@ -180,6 +181,10 @@ function main(): void {
   }
   if (command === "incident") {
     runIncident(getArg("--since"));
+  }
+  if (command === "note") {
+    requireRepo();
+    runNote(getArg("--type"), getArg("--message"));
   }
   if (command === "receipts") {
     const sub: ReceiptsMode = hasFlag("--latest")

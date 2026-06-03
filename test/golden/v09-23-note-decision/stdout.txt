@@ -1,0 +1,3 @@
+note 저장(no-code-decision): .agent-guard/decisions/no-code-decision-<TS>.json
+  코드 변경 없는 정찰/판단도 audit-pack 에 증거로 포함됩니다 (tool 산출 — verify 제외).
+  이 도구는 git 작업트리 기준입니다 — .gitignore된 파일·레포 밖·OS 명령·DB write·외부 서비스 변경은 직접 볼 수 없습니다.

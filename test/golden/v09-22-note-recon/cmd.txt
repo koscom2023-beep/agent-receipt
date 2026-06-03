@@ -1,0 +1,1 @@
+guard note --type recon --message '정찰: 변경 불필요'

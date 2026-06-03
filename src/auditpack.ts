@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { extname, isAbsolute, join } from "node:path";
 import type { Contract } from "./schema.js";
 import { buildReceipt, renderReceipt } from "./receipt.js";
@@ -129,6 +129,16 @@ export function buildAuditPack(
 
   // 6) environment.json
   writePack("environment.json", JSON.stringify(r.environment, null, 2) + "\n");
+
+  // 6.5) notes/decisions — 코드 변경 없는 정찰/판단 증거(있으면 포함). 0.9
+  for (const [sub, prefix] of [["notes", "note"], ["decisions", "decision"]] as const) {
+    const ndir = join(cwd, ".agent-guard", sub);
+    if (existsSync(ndir)) {
+      for (const f of readdirSync(ndir).filter((x) => x.endsWith(".json")).sort()) {
+        writePack(`${prefix}-${f}`, maybeRedact(readFileSync(join(ndir, f), "utf8")));
+      }
+    }
+  }
 
   // 7) manifest.json (마지막 — files 목록 확정 후)
   const manifest = {

@@ -1398,6 +1398,42 @@ const V09_CLAIMS_CONTRACT =
     run(c.repo, "claims", ["--file", claim, "--contract", c.contract]), V09_CLAIMS_CONTRACT, c.base);
 }
 
+// ───────────────────────────── v0.9 C6: note / decisions (코드 변경 없는 증거) ─────────────────────────────
+// notes/ · decisions/ 는 tool 산출(verify 제외) → audit-pack 에 포함. 파일명 스탬프는 <TS> 정규화.
+
+// v09-22: note --type recon → notes/ 저장
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, ".agent-guard"), { recursive: true });
+  writeFileSync(join(c.repo, ".agent-guard", "contract.yaml"), S6_CONTRACT);
+  emit("v09-22-note-recon", "guard note --type recon --message '정찰: 변경 불필요'",
+    run(c.repo, "note", ["--type", "recon", "--message", "정찰: 변경 불필요"]), null);
+}
+// v09-23: note --type no-code-decision → decisions/ 저장
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, ".agent-guard"), { recursive: true });
+  writeFileSync(join(c.repo, ".agent-guard", "contract.yaml"), S6_CONTRACT);
+  emit("v09-23-note-decision", "guard note --type no-code-decision --message '이미 구현됨 — 변경 불필요'",
+    run(c.repo, "note", ["--type", "no-code-decision", "--message", "이미 구현됨 — 변경 불필요"]), null);
+}
+// v09-24: note --type bogus → exit 2
+{
+  const c = track(newCase());
+  emit("v09-24-note-bogus", "guard note --type bogus   (검증 실패)", run(c.repo, "note", ["--type", "bogus"]), null);
+}
+// v09-25: audit-pack — note 포함(manifest 에 note-recon-<TS>.json)
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, ".agent-guard"), { recursive: true });
+  writeFileSync(join(c.repo, ".agent-guard", "contract.yaml"), S6_CONTRACT);
+  run(c.repo, "start", []); // baseline: contract.yaml ambient
+  run(c.repo, "note", ["--type", "recon", "--message", "정찰 결과"]);
+  const r = run(c.repo, "audit-pack", ["--out", join(".agent-guard", "audit-packs", "PK")]);
+  emit("v09-25-audit-pack-with-note", "guard start … ; guard note --type recon … ; guard audit-pack   (note 포함)", r, null);
+  saveArtifact("v09-25-audit-pack-with-note", c.repo, join(".agent-guard", "audit-packs", "PK", "manifest.json"), "created-manifest.json", false);
+}
+
 // ───────────────────────────── 인덱스 + 정리 ─────────────────────────────
 
 const indexLines = [

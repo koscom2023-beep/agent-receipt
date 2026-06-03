@@ -1,0 +1,1 @@
+guard note --type bogus   (검증 실패)
