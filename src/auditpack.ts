@@ -1,5 +1,5 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { basename, extname, isAbsolute, join } from "node:path";
+import { extname, isAbsolute, join } from "node:path";
 import type { Contract } from "./schema.js";
 import { buildReceipt, renderReceipt } from "./receipt.js";
 import { loadPolicySafe, policyPath } from "./policy.js";

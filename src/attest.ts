@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import type { Receipt } from "./receipt.js";
-import { hasApproval, approvalsCountFor } from "./receiptStore.js";
+import { approvalsCountFor } from "./receiptStore.js";
 import { LIMIT_NOTE } from "./disclosure.js";
 
 // in-toto Statement 스타일(표준형 증명 "초안"). 실제 SLSA level 주장/완전 준수 단정 금지.
@@ -45,7 +45,6 @@ export function runAttest(receiptArg: string | undefined, packArg: string | unde
   const env = r.environment ?? ({} as Receipt["environment"]);
   const crit = Array.isArray(r.criticalPaths) ? r.criticalPaths.reduce((n, c) => n + (c.touched?.length ?? 0), 0) : 0;
   const approvals = approvalsCountFor(receiptPath); // <receipt>.approval.json sidecar 기준
-  const signed = hasApproval(receiptPath); // (정보용)
 
   const statement = {
     _type: "https://in-toto.io/Statement/v1",
