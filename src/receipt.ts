@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync, statSync } from "node:fs";
 import { join, dirname, isAbsolute, relative } from "node:path";
+import * as g from "./git.js";
 import type { Contract } from "./schema.js";
 import { runVerify, runCheck } from "./checks.js";
 import { resolveSession } from "./session.js";
@@ -11,8 +12,12 @@ import { loadPolicySafe, policyObservations, policyPath, type PolicyObs } from "
 import { redactText } from "./redact.js";
 import { LIMIT_NOTE } from "./disclosure.js";
 
+// receipt JSON 스키마 버전(downstream/CI 가 안전하게 의존). additive only. verify --json 14키와 무관.
+export const RECEIPT_SCHEMA_VERSION = "1.0";
+
 // AI Work Receipt — verify(상태) + check(명령) 결과 스냅샷. verify --json(14키)와 별개 스키마.
 export interface Receipt {
+  schemaVersion: string; // receipt 스키마 버전(contentHash 입력엔 미포함 — metadata).
   ok: boolean;
   contractId: string;
   title: string | null;
@@ -32,7 +37,8 @@ export interface Receipt {
   policy: PolicyObs | null; // N8 트립와이어: policy.yaml 상시규칙 관찰(없으면 null)
   environment: Environment; // 환경/출처 캡처(git/node/os + 계약·정책 해시). contentHash 입력엔 미포함.
   disclosure: string; // 한계 고지(이 도구가 못 보는 것)
-  contentHash: string; // sha256 무결성 해시(timestamp/environment 제외 — 아래 receiptHash 입력 참고)
+  contentHashes?: Array<{ path: string; sha256: string | null; bytes: number }>; // --content 일 때만: touched 파일 sha256(내용 저장 안 함). 있을 때만 contentHash 입력에 포함.
+  contentHash: string; // sha256 무결성 해시(timestamp/environment/schemaVersion 제외 — 아래 receiptHash 입력 참고)
 }
 
 // 키를 정렬해 직렬화(객체 순서 비의존). 배열은 호출부에서 미리 정렬해 넣는다.
@@ -63,13 +69,46 @@ export function receiptHash(r: Receipt): string {
     magnitude: r.magnitude,
     criticalTouched: r.criticalPaths.flatMap((c) => c.touched).sort(),
     checks: r.checks.map((c) => `${c.name}:${c.exitCode}:${c.requiredExit}:${c.ok}`).sort(),
+    // contentHashes 는 있을 때만 포함 → 없으면 기존 contentHash 와 동일(backward-compatible · replay 호환).
+    ...(r.contentHashes && r.contentHashes.length
+      ? { contentHashes: r.contentHashes.map((c) => `${c.path}:${c.sha256 ?? "null"}`).sort() }
+      : {}),
   };
   return "sha256:" + createHash("sha256").update(stableStringify(payload)).digest("hex");
 }
 
+// --content: touched 파일들의 sha256 만 기록(내용 저장 0 — council C4). 대용량은 해시 null + 바이트만(size cap).
+const CONTENT_CAP_BYTES = 5 * 1024 * 1024;
+function computeContentHashes(paths: string[]): NonNullable<Receipt["contentHashes"]> {
+  const root = g.repoRoot() ?? process.cwd();
+  const out: NonNullable<Receipt["contentHashes"]> = [];
+  for (const p of [...new Set(paths)].sort()) {
+    const abs = isAbsolute(p) ? p : join(root, p);
+    try {
+      const st = statSync(abs);
+      if (!st.isFile()) {
+        out.push({ path: p, sha256: null, bytes: 0 });
+      } else if (st.size > CONTENT_CAP_BYTES) {
+        out.push({ path: p, sha256: null, bytes: st.size }); // 대용량 → 해시 생략(메모리 보호)
+      } else {
+        out.push({ path: p, sha256: "sha256:" + createHash("sha256").update(readFileSync(abs)).digest("hex"), bytes: st.size });
+      }
+    } catch {
+      out.push({ path: p, sha256: null, bytes: 0 }); // 삭제됨/못 읽음
+    }
+  }
+  return out;
+}
+
 // ── 순수 빌드: verify+check+env+policy 를 모아 Receipt 객체를 만든다(write 없음). ──
 // audit-pack·ledger·commit-check·done 이 재사용한다.
-export function buildReceipt(contract: Contract, contractPath?: string): Receipt {
+export interface BuildOpts {
+  content?: boolean; // --content: touched 파일 sha256 기록
+  agent?: string; // --agent: provenance(명시값)
+  model?: string; // --model: provenance(명시값)
+}
+
+export function buildReceipt(contract: Contract, contractPath?: string, opts: BuildOpts = {}): Receipt {
   const v = runVerify(contract);
   const chk = runCheck(contract);
   const sess = resolveSession();
@@ -77,6 +116,7 @@ export function buildReceipt(contract: Contract, contractPath?: string): Receipt
   const polObs = policy ? policyObservations(policy, touchedFull()) : null;
   const ppath = policy ? policyPath() : undefined;
   const r: Receipt = {
+    schemaVersion: RECEIPT_SCHEMA_VERSION,
     ok: v.ok && chk.ok,
     contractId: v.contractId,
     title: v.title ?? null,
@@ -101,8 +141,9 @@ export function buildReceipt(contract: Contract, contractPath?: string): Receipt
     magnitude: collectMagnitude(),
     criticalPaths: criticalPathHits(touchedFull()),
     policy: polObs,
-    environment: captureEnvironment({ contractPath, policyPath: ppath }),
+    environment: captureEnvironment({ contractPath, policyPath: ppath, agent: opts.agent, model: opts.model }),
     disclosure: LIMIT_NOTE,
+    ...(opts.content ? { contentHashes: computeContentHashes(v.touched) } : {}),
     contentHash: "",
   };
   r.contentHash = receiptHash(r); // 나머지 필드 확정 후 봉인.
@@ -117,6 +158,7 @@ function envMdLines(e: Environment): string[] {
     `- node: ${e.nodeVersion}  npm: ${e.npmVersion ?? "?"}  git: ${e.gitVersion ?? "?"}`,
     `- os: ${e.os.platform}/${e.os.arch} (${e.os.release})`,
     `- agent-receipt: ${e.agentReceiptVersion}  contractHash: \`${e.contractHash ?? "?"}\`  policyHash: \`${e.policyHash ?? "none"}\``,
+    `- provenance: agent=${e.provenance.agent ?? "(미지정)"} model=${e.provenance.model ?? "(미지정)"} (source: ${e.provenance.source})`,
     "",
   ];
 }
@@ -170,6 +212,11 @@ export function toReceiptMd(r: Receipt): string {
   L.push("");
   for (const ln of policyMdLines(r.policy)) L.push(ln);
   for (const ln of envMdLines(r.environment)) L.push(ln);
+  if (r.contentHashes && r.contentHashes.length) {
+    L.push(`## Content hashes (--content — touched ${r.contentHashes.length}, 해시만 저장)`);
+    for (const c of r.contentHashes) L.push(`- \`${c.path}\`: ${c.sha256 ?? "(skip — 대용량/삭제)"} (${c.bytes}B)`);
+    L.push("");
+  }
   L.push("## Integrity");
   L.push(`- contentHash: \`${r.contentHash}\``);
   L.push("");
@@ -193,6 +240,7 @@ export function toClientMd(r: Receipt): string {
   L.push(hit.length ? `- Critical paths touched: ${hit.map((c) => c.glob).join(", ")}` : "- Critical paths: none touched");
   L.push(`- Checks: ${r.checks.length ? r.checks.map((c) => `${c.name} ${c.ok ? "OK" : "✗"}`).join(", ") : "none"}`);
   L.push(`- Environment: node ${r.environment.nodeVersion}, ${r.environment.os.platform}/${r.environment.os.arch}, agent-receipt ${r.environment.agentReceiptVersion}`);
+  L.push(`- Provenance: agent=${r.environment.provenance.agent ?? "(unspecified)"}, model=${r.environment.provenance.model ?? "(unspecified)"}`);
   L.push(`- Integrity (contentHash): \`${r.contentHash}\``);
   L.push(`- Generated at: ${r.timestamp}`);
   L.push("");
@@ -237,17 +285,34 @@ export function writeReceiptFile(
  * `agent-receipt receipt [--format json|md|client-md] [--out <path>] [--redact]`
  * verify(상태) + check(명령) 결과를 .agent-guard/receipts/ 아래 파일로 저장(기본 json). exit = ok ? 0 : 1.
  */
+export interface ReceiptOpts {
+  content?: boolean; // --content: touched 파일 sha256 기록
+  strictRedact?: boolean; // --strict-redact: 강한 비밀 감지 시 파일 쓰기 거부
+  agent?: string; // --agent: provenance(명시값)
+  model?: string; // --model: provenance(명시값)
+}
+
 export function runReceipt(
   contract: Contract,
   contractPath: string | undefined,
   format: string | undefined,
   outArg: string | undefined,
   redact: boolean = false,
+  opts: ReceiptOpts = {},
 ): never {
   const fmt: ReceiptFormat = format === "md" ? "md" : format === "client-md" ? "client-md" : "json";
-  const r = buildReceipt(contract, contractPath);
-  const { rel, out, redactCount } = writeReceiptFile(r, fmt, outArg, redact);
-  console.log(`receipt 저장: ${rel} (ok=${r.ok})${redact ? ` (redact: ${redactCount}건 가림, best-effort)` : ""}`);
+  const r = buildReceipt(contract, contractPath, { content: opts.content, agent: opts.agent, model: opts.model });
+  // strict-redact: 강한 shape 비밀(sk-/ghp_/AKIA/xox/Bearer) 감지 시 파일을 쓰지 않고 거부(exit 2 — council 합의).
+  if (opts.strictRedact) {
+    const probe = redactText(renderReceipt(r, fmt));
+    if (probe.strong > 0) {
+      console.error(`✗ strict-redact: 강한 비밀 패턴 ${probe.strong}건 감지 — receipt 를 쓰지 않습니다. 비밀을 제거 후 다시 실행하세요.`);
+      process.exit(2);
+    }
+  }
+  const effectiveRedact = redact || opts.strictRedact === true;
+  const { rel, out, redactCount } = writeReceiptFile(r, fmt, outArg, effectiveRedact);
+  console.log(`receipt 저장: ${rel} (ok=${r.ok})${effectiveRedact ? ` (redact: ${redactCount}건 가림, best-effort)` : ""}`);
   const rl = relative(join(process.cwd(), ".agent-guard", "receipts"), out);
   if (rl.startsWith("..") || isAbsolute(rl)) {
     console.log("  참고: 기본 위치(.agent-guard/receipts/) 밖이라 다음 verify 가 이 파일을 변경으로 잡을 수 있습니다. 기본 위치 권장.");

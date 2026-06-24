@@ -25,20 +25,33 @@ const TOKEN_SHAPES =
 
 export interface RedactResult {
   text: string;
-  count: number;
+  count: number; // 총 치환 건수
+  strong: number; // 그 중 "값 자체로 식별되는 강한 비밀"(Bearer/sk-/ghp_/AKIA/xox) 건수 — strict-redact 거부 판단용
 }
 
-// 텍스트(파일 내용/로그)에서 민감값을 best-effort 로 가린다. 치환 건수도 함께 반환.
+// 텍스트(파일 내용/로그)에서 민감값을 best-effort 로 가린다. 치환 건수 + 강한-비밀 건수를 함께 반환.
+// strong 은 shape 로 식별되는 고신뢰 토큰만 센다(엔트로피 스캔 안 함 — sha256 등 해시 오탐 방지, council C5).
 export function redactText(input: string): RedactResult {
   let count = 0;
-  const bump = (): string => {
-    count++;
-    return REDACTED;
-  };
+  let strong = 0;
   let out = input;
-  out = out.replace(ENV_ASSIGN, (_m, pre) => `${pre}${bump()}`);
-  out = out.replace(KV_COLON, (_m, pre, q1, _v, q2) => `${pre}${q1}${bump()}${q2}`);
-  out = out.replace(BEARER, (_m, pre) => `${pre}${bump()}`);
-  out = out.replace(TOKEN_SHAPES, () => bump());
-  return { text: out, count };
+  out = out.replace(ENV_ASSIGN, (_m, pre) => {
+    count++;
+    return `${pre}${REDACTED}`;
+  });
+  out = out.replace(KV_COLON, (_m, pre, q1, _v, q2) => {
+    count++;
+    return `${pre}${q1}${REDACTED}${q2}`;
+  });
+  out = out.replace(BEARER, (_m, pre) => {
+    count++;
+    strong++;
+    return `${pre}${REDACTED}`;
+  });
+  out = out.replace(TOKEN_SHAPES, () => {
+    count++;
+    strong++;
+    return REDACTED;
+  });
+  return { text: out, count, strong };
 }

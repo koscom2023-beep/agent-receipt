@@ -24,6 +24,8 @@ export interface Environment {
   package: { name: string; version: string } | null;
   contractHash: string | null;
   policyHash: string | null;
+  // provenance(에이전트/모델) — 명시값만. 자동 추측 0. flag(--agent/--model) > env(AGENT_RECEIPT_AGENT/MODEL) > none.
+  provenance: { agent: string | null; model: string | null; source: "flag" | "env" | "none" };
   note: string;
 }
 
@@ -67,6 +69,20 @@ function selfPackage(): { name: string; version: string } | null {
 export interface CaptureOpts {
   contractPath?: string;
   policyPath?: string;
+  agent?: string; // 명시 에이전트명(--agent). 없으면 env AGENT_RECEIPT_AGENT, 그래도 없으면 null.
+  model?: string; // 명시 모델명(--model). 없으면 env AGENT_RECEIPT_MODEL, 그래도 없으면 null.
+}
+
+// 추론 금지(council C2): flag 우선, 다음 명시 env 변수, 둘 다 없으면 null/none. 도구별 env 추측 안 함.
+function resolveProvenance(opts: CaptureOpts): Environment["provenance"] {
+  const envAgent = process.env.AGENT_RECEIPT_AGENT?.trim() || null;
+  const envModel = process.env.AGENT_RECEIPT_MODEL?.trim() || null;
+  const flagAgent = opts.agent?.trim() || null;
+  const flagModel = opts.model?.trim() || null;
+  const agent = flagAgent ?? envAgent;
+  const model = flagModel ?? envModel;
+  const source: "flag" | "env" | "none" = flagAgent || flagModel ? "flag" : envAgent || envModel ? "env" : "none";
+  return { agent, model, source };
 }
 
 export function captureEnvironment(opts: CaptureOpts = {}): Environment {
@@ -84,6 +100,7 @@ export function captureEnvironment(opts: CaptureOpts = {}): Environment {
     package: pkg,
     contractHash: hashFileOrNull(opts.contractPath),
     policyHash: hashFileOrNull(opts.policyPath),
-    note: "git 작업트리 기준 환경 메타 — .gitignore·레포 밖·OS·DB·외부 서비스는 담지 않음. AI 모델명 자동감지 안 함.",
+    provenance: resolveProvenance(opts),
+    note: "git 작업트리 기준 환경 메타 — .gitignore·레포 밖·OS·DB·외부 서비스는 담지 않음. 에이전트/모델은 자동 추측하지 않고 명시값(--agent/--model 또는 AGENT_RECEIPT_AGENT/MODEL)만 기록.",
   };
 }

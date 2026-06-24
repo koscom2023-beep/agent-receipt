@@ -32,7 +32,7 @@ import { runAuditPack } from "./auditpack.js";
 import { runCloseRecon } from "./closerecon.js";
 import { runPrepareCommit } from "./preparecommit.js";
 import { runFinish } from "./finish.js";
-import { runLedger, runLedgerRebuild } from "./ledger.js";
+import { runLedger, runLedgerRebuild, runLedgerVerify } from "./ledger.js";
 import { runReplay } from "./replay.js";
 import { runAttest } from "./attest.js";
 import { runIncident } from "./incident.js";
@@ -123,8 +123,8 @@ agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
   verify [--json] / check / claims --file <c.json> / pre / prompt [--cursor|--claude]
 
 ■ 증빙 / 감사 묶음(git 증거):
-  report [--type developer|client|audit] / receipt [--format ...] / receipts [--latest|--cat|--dir]
-  audit [--json] / dashboard / ledger [--json] (rebuild) / replay --pack <dir> / attest / incident
+  report [--type developer|client|audit] / receipt [--format ...] [--content] [--strict-redact] [--agent <n>] [--model <m>] / receipts [--latest|--cat|--dir]
+  audit [--json] / dashboard / ledger [--json] (rebuild|verify) / replay --pack <dir> / attest / incident
 
 ■ 정책(상시 규칙):
   policy init [--profile solo-founder|vibe-coder|agency-client|team-strict|promptia] / policy check / policy show
@@ -216,6 +216,7 @@ function main(): void {
   }
   if (command === "ledger") {
     if (process.argv[3] === "rebuild") runLedgerRebuild();
+    if (process.argv[3] === "verify") runLedgerVerify();
     runLedger(hasFlag("--json"));
   }
   if (command === "replay" || command === "verify-pack") {
@@ -393,7 +394,12 @@ function main(): void {
 
     case "receipt": {
       requireRepo();
-      runReceipt(contract, contractPath, getArg("--format"), getArg("--out"), hasFlag("--redact"));
+      runReceipt(contract, contractPath, getArg("--format"), getArg("--out"), hasFlag("--redact"), {
+        content: hasFlag("--content"),
+        strictRedact: hasFlag("--strict-redact"),
+        agent: getArg("--agent"),
+        model: getArg("--model"),
+      });
       break;
     }
 

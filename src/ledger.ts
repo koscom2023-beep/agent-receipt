@@ -1,5 +1,6 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { createHash } from "node:crypto";
 import type { Receipt } from "./receipt.js";
 import {
   listReceipts,
@@ -29,6 +30,8 @@ export interface LedgerEntry {
   magnitude: number; // magnitude.filesChanged (숫자만 — 점수 아님)
   approvalsCount: number;
   claimMatched: boolean | null; // claims 미실행 시 null
+  prevHash?: string; // 직전 라인의 entryHash(해시체인). 레거시 flat 라인엔 없음.
+  entryHash?: string; // 이 라인의 무결성 해시(entryHash 자신 제외, prevHash 포함) — 변조/삭제/재정렬 탐지.
 }
 
 export function ledgerEntryFromReceipt(
@@ -52,10 +55,34 @@ export function ledgerEntryFromReceipt(
   };
 }
 
+// 해시체인용 entryHash — entryHash 자신은 제외하고 결정론적으로 직렬화(prevHash 포함 → 연결 변조 탐지).
+// 새 의존성 0(Node crypto). 같은 내용+같은 prevHash → 같은 entryHash.
+function ledgerEntryHash(e: LedgerEntry): string {
+  const payload = JSON.stringify({
+    timestamp: e.timestamp,
+    contractId: e.contractId,
+    branch: e.branch,
+    headHash: e.headHash,
+    ok: e.ok,
+    receiptPath: e.receiptPath,
+    contentHash: e.contentHash,
+    criticalTouchedCount: e.criticalTouchedCount,
+    magnitude: e.magnitude,
+    approvalsCount: e.approvalsCount,
+    claimMatched: e.claimMatched,
+    prevHash: e.prevHash ?? null,
+  });
+  return "sha256:" + createHash("sha256").update(payload).digest("hex");
+}
+
 export function appendLedger(entry: LedgerEntry, cwd: string = process.cwd()): string {
   const p = join(cwd, LEDGER_REL);
   mkdirSync(dirname(p), { recursive: true });
-  appendFileSync(p, JSON.stringify(entry) + "\n");
+  const prior = existsSync(p) ? readLedger(cwd) : [];
+  const last = prior[prior.length - 1];
+  const chained: LedgerEntry = { ...entry, prevHash: last?.entryHash };
+  chained.entryHash = ledgerEntryHash(chained);
+  appendFileSync(p, JSON.stringify(chained) + "\n");
   return LEDGER_REL;
 }
 
@@ -104,6 +131,43 @@ export function runLedger(json: boolean, cwd: string = process.cwd()): never {
   process.exit(0);
 }
 
+/** `agent-receipt ledger verify` — 해시체인 무결성 검사(read-only). 변조/삭제/재정렬 탐지. 레거시(flat) 라인은 '검증불가'(차단 아님). */
+export function runLedgerVerify(cwd: string = process.cwd()): never {
+  const entries = readLedger(cwd);
+  const problems: string[] = [];
+  let verified = 0;
+  let legacy = 0;
+  let prevEntryHash: string | undefined = undefined;
+  for (let i = 0; i < entries.length; i++) {
+    const e = entries[i] as LedgerEntry;
+    const n = i + 1;
+    if (!e.entryHash) {
+      legacy++;
+      prevEntryHash = undefined; // 레거시 라인은 체인 연속성 기준점이 못 됨
+      continue;
+    }
+    if (ledgerEntryHash(e) !== e.entryHash) {
+      problems.push(`#${n} ${e.timestamp}: entryHash 불일치(라인 내용 변조 가능)`);
+    } else {
+      verified++;
+    }
+    if (prevEntryHash !== undefined && (e.prevHash ?? undefined) !== prevEntryHash) {
+      problems.push(`#${n} ${e.timestamp}: prevHash 가 직전 라인과 불일치(라인 삭제/재정렬 가능)`);
+    }
+    prevEntryHash = e.entryHash;
+  }
+  console.log("");
+  console.log(line);
+  console.log(`agent-receipt ledger verify — ${entries.length}건 (검증 ${verified} · 레거시 ${legacy} · 문제 ${problems.length})`);
+  console.log(line);
+  if (problems.length) for (const p of problems) console.log(`  ✗ ${p}`);
+  else console.log(legacy ? "  체인 OK ✅ (레거시 flat 라인은 검증 대상 아님)" : "  체인 OK ✅");
+  console.log(line);
+  console.log("  " + LIMIT_NOTE + " (해시체인은 tamper-evident — 위조불가 아님)");
+  console.log("");
+  process.exit(problems.length ? 1 : 0);
+}
+
 /** `agent-receipt ledger rebuild` — receipts/ 의 json receipt 들을 읽어 원장을 재생성(덮어씀). */
 export function runLedgerRebuild(cwd: string = process.cwd()): never {
   const receipts = listReceipts(cwd).filter((e) => e.name.endsWith(".json"));
@@ -127,6 +191,13 @@ export function runLedgerRebuild(cwd: string = process.cwd()): never {
   }
   // 시간 오름차순(파일명=timestamp 기반이라 안정 정렬)
   entries.sort((a, b) => (a.timestamp < b.timestamp ? -1 : a.timestamp > b.timestamp ? 1 : 0));
+  // 해시체인 재구성(시간순) — rebuild 후에도 ledger verify 가능.
+  let prev: string | undefined = undefined;
+  for (const e of entries) {
+    e.prevHash = prev;
+    e.entryHash = ledgerEntryHash(e);
+    prev = e.entryHash;
+  }
   const p = join(cwd, LEDGER_REL);
   mkdirSync(dirname(p), { recursive: true });
   writeFileSync(p, entries.map((e) => JSON.stringify(e)).join("\n") + (entries.length ? "\n" : ""));
