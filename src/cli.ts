@@ -43,6 +43,8 @@ import { runNext } from "./nextcmd.js";
 import { installedVersion } from "./version.js";
 import { runInstallHooks, runUninstallHooks } from "./hooks.js";
 import { runSelftest } from "./selftest.js";
+import { runIndex } from "./receiptindex.js";
+import { runGenClaim } from "./genclaim.js";
 
 function getArg(flag: string): string | undefined {
   const i = process.argv.indexOf(flag);
@@ -124,7 +126,7 @@ agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
 
 ■ 증빙 / 감사 묶음(git 증거):
   report [--type developer|client|audit] / receipt [--format ...] [--content] [--strict-redact] [--agent <n>] [--model <m>] / receipts [--latest|--cat|--dir]
-  audit [--json] / dashboard / ledger [--json] (rebuild|verify) / replay --pack <dir> / attest / incident
+  audit [--json] / dashboard / index [--json] / ledger [--json] (rebuild|verify) / replay --pack <dir> / attest / incident
 
 ■ 정책(상시 규칙):
   policy init [--profile solo-founder|vibe-coder|agency-client|team-strict|promptia] / policy check / policy show
@@ -137,6 +139,7 @@ agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
 
 ■ 연동(experimental — 미리보기, 전송 없음):
   export --format <slack|json|github-pr|otel|langfuse> --receipt <p>
+  gen-claim --transcript <jsonl> [--out <claim.json>]   에이전트 transcript → claim.json(이후 claims 로 대조)
 
 ■ 기타: run
 
@@ -260,6 +263,12 @@ function main(): void {
   }
   if (command === "dashboard") {
     runDashboard(getArg("--out"));
+  }
+  if (command === "index") {
+    runIndex(hasFlag("--json"));
+  }
+  if (command === "gen-claim") {
+    runGenClaim(getArg("--transcript"), getArg("--out"));
   }
   if (command === "approve") {
     runApprove(getArg("--receipt"), getArg("--note"));
