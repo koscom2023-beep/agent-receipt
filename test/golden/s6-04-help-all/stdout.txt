@@ -11,6 +11,10 @@ agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
 ■ 계약 관리:
   presets / init --preset <name> / draft-contract / review / lint / doctor
 
+■ 설치 / 자가검증:
+  install-hooks [--force] / uninstall-hooks   git pre-commit·pre-push 게이트 설치/제거(기존 hook 보존, 우회 --no-verify)
+  selftest                                     임시 repo 로 PASS/FAIL·차단·우회 자가검증(설치/PATH 신뢰 확인)
+
 ■ 검증(git 실측):
   verify [--json] / check / claims --file <c.json> / pre / prompt [--cursor|--claude]
 

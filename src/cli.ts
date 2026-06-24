@@ -41,6 +41,8 @@ import { runNote } from "./note.js";
 import { runReleaseCheck } from "./releasecheck.js";
 import { runNext } from "./nextcmd.js";
 import { installedVersion } from "./version.js";
+import { runInstallHooks, runUninstallHooks } from "./hooks.js";
+import { runSelftest } from "./selftest.js";
 
 function getArg(flag: string): string | undefined {
   const i = process.argv.indexOf(flag);
@@ -112,6 +114,10 @@ agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
 
 ■ 계약 관리:
   presets / init --preset <name> / draft-contract / review / lint / doctor
+
+■ 설치 / 자가검증:
+  install-hooks [--force] / uninstall-hooks   git pre-commit·pre-push 게이트 설치/제거(기존 hook 보존, 우회 --no-verify)
+  selftest                                     임시 repo 로 PASS/FAIL·차단·우회 자가검증(설치/PATH 신뢰 확인)
 
 ■ 검증(git 실측):
   verify [--json] / check / claims --file <c.json> / pre / prompt [--cursor|--claude]
@@ -195,6 +201,15 @@ function main(): void {
   }
   if (command === "mode") {
     runMode();
+  }
+  if (command === "install-hooks") {
+    runInstallHooks(hasFlag("--force"));
+  }
+  if (command === "uninstall-hooks") {
+    runUninstallHooks();
+  }
+  if (command === "selftest") {
+    runSelftest();
   }
   if (command === "policy") {
     runPolicy(process.argv[3], getArg("--profile"));
