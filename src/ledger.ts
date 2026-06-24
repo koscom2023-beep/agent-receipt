@@ -57,7 +57,7 @@ export function ledgerEntryFromReceipt(
 
 // 해시체인용 entryHash — entryHash 자신은 제외하고 결정론적으로 직렬화(prevHash 포함 → 연결 변조 탐지).
 // 새 의존성 0(Node crypto). 같은 내용+같은 prevHash → 같은 entryHash.
-function ledgerEntryHash(e: LedgerEntry): string {
+export function ledgerEntryHash(e: LedgerEntry): string {
   const payload = JSON.stringify({
     timestamp: e.timestamp,
     contractId: e.contractId,
@@ -131,9 +131,14 @@ export function runLedger(json: boolean, cwd: string = process.cwd()): never {
   process.exit(0);
 }
 
-/** `agent-receipt ledger verify` — 해시체인 무결성 검사(read-only). 변조/삭제/재정렬 탐지. 레거시(flat) 라인은 '검증불가'(차단 아님). */
-export function runLedgerVerify(cwd: string = process.cwd()): never {
-  const entries = readLedger(cwd);
+export interface ChainResult {
+  problems: string[];
+  verified: number;
+  legacy: number;
+}
+
+// 순수 검증 코어(단위테스트 가능 — 출력/exit 없음). runLedgerVerify 가 이걸 호출한다.
+export function verifyLedgerChain(entries: LedgerEntry[]): ChainResult {
   const problems: string[] = [];
   let verified = 0;
   let legacy = 0;
@@ -156,6 +161,13 @@ export function runLedgerVerify(cwd: string = process.cwd()): never {
     }
     prevEntryHash = e.entryHash;
   }
+  return { problems, verified, legacy };
+}
+
+/** `agent-receipt ledger verify` — 해시체인 무결성 검사(read-only). 변조/삭제/재정렬 탐지. 레거시(flat) 라인은 '검증불가'(차단 아님). */
+export function runLedgerVerify(cwd: string = process.cwd()): never {
+  const entries = readLedger(cwd);
+  const { problems, verified, legacy } = verifyLedgerChain(entries);
   console.log("");
   console.log(line);
   console.log(`agent-receipt ledger verify — ${entries.length}건 (검증 ${verified} · 레거시 ${legacy} · 문제 ${problems.length})`);

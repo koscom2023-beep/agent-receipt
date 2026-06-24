@@ -35,14 +35,8 @@ export function redactText(input: string): RedactResult {
   let count = 0;
   let strong = 0;
   let out = input;
-  out = out.replace(ENV_ASSIGN, (_m, pre) => {
-    count++;
-    return `${pre}${REDACTED}`;
-  });
-  out = out.replace(KV_COLON, (_m, pre, q1, _v, q2) => {
-    count++;
-    return `${pre}${q1}${REDACTED}${q2}`;
-  });
+  // 강한 shape(Bearer/sk-/ghp_/AKIA/xox)를 먼저 가린다 → key:value 안에 있어도 strong 으로 분류
+  // (strict-redact 정확도). 최종 마스킹 텍스트는 순서와 무관하게 동일하다.
   out = out.replace(BEARER, (_m, pre) => {
     count++;
     strong++;
@@ -52,6 +46,14 @@ export function redactText(input: string): RedactResult {
     count++;
     strong++;
     return REDACTED;
+  });
+  out = out.replace(ENV_ASSIGN, (_m, pre) => {
+    count++;
+    return `${pre}${REDACTED}`;
+  });
+  out = out.replace(KV_COLON, (_m, pre, q1, _v, q2) => {
+    count++;
+    return `${pre}${q1}${REDACTED}${q2}`;
   });
   return { text: out, count, strong };
 }
