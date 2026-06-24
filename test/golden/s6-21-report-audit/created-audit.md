@@ -33,6 +33,7 @@
 - node: <NODE>  npm: <NPM>  git: <GIT>
 - os: <OS>
 - agent-receipt: <VER>  contractHash: `sha256:490ef991bb6db9d3d7bc0fc35fd0c821ff25cc0c038d749e0ed1685222da9c58`  policyHash: `sha256:dbe014292e1dbe2413b976ef0cab10db82b310aa191d9c568fdbe6fca83f78a4`
+- provenance: agent=(미지정) model=(미지정) (source: none)
 
 ## Integrity
 - contentHash: `sha256:b0ba66e52fd03eafab69b6525020072026d1d4560ef0a179d798277ba0655886`

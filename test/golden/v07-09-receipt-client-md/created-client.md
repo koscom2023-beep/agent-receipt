@@ -9,6 +9,7 @@
 - Critical paths: none touched
 - Checks: none
 - Environment: <ENV>
+- Provenance: agent=(unspecified), model=(unspecified)
 - Integrity (contentHash): `sha256:685bfa45f1a0d0aed0503bfa49954b831eca3b53f914e6c09990f7c2eee4d47e`
 - Generated at: <TS>
 

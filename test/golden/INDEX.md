@@ -3,7 +3,7 @@
 - branch: v0.1-verify-check-split
 - 캡처 케이스: 143개
 - 결정론: 고정 git identity(ci/ci@local) + 고정 DATE(2025-01-01T00:00:00 +0000) → headHash 재현
-- 정규화(스냅샷 한정): $HOME→<HOME>, /tmp/claude-1000/ag-gold-*→<FIXTURE>
+- 정규화(스냅샷 한정): $HOME→<HOME>, /tmp/ag-gold-*→<FIXTURE>
 
 | case | command | exit |
 |---|---|---|

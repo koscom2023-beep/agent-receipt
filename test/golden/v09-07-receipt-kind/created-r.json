@@ -1,4 +1,5 @@
 {
+  "schemaVersion": "1.0",
   "ok": true,
   "contractId": "s6",
   "title": "sprint6 audit",
@@ -79,7 +80,12 @@
     },
     "contractHash": "sha256:490ef991bb6db9d3d7bc0fc35fd0c821ff25cc0c038d749e0ed1685222da9c58",
     "policyHash": null,
-    "note": "git 작업트리 기준 환경 메타 — .gitignore·레포 밖·OS·DB·외부 서비스는 담지 않음. AI 모델명 자동감지 안 함."
+    "provenance": {
+      "agent": null,
+      "model": null,
+      "source": "none"
+    },
+    "note": "git 작업트리 기준 환경 메타 — .gitignore·레포 밖·OS·DB·외부 서비스는 담지 않음. 에이전트/모델은 자동 추측하지 않고 명시값(--agent/--model 또는 AGENT_RECEIPT_AGENT/MODEL)만 기록."
   },
   "disclosure": "이 도구는 git 작업트리 기준입니다 — .gitignore된 파일·레포 밖·OS 명령·DB write·외부 서비스 변경은 직접 볼 수 없습니다.",
   "contentHash": "sha256:16903b9c92af48e5fa60bb0a1abdf00757bf1ae70074402d3cc3c626e48f77b8"
