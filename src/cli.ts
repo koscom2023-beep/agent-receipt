@@ -46,7 +46,7 @@ import { runSelftest } from "./selftest.js";
 import { runIndex } from "./receiptindex.js";
 import { runGenClaim } from "./genclaim.js";
 import { runCaptureIngest, runCaptureShow, runCaptureReset, runCaptureInstall, runCaptureUninstall } from "./capture.js";
-import { runShareProof } from "./shareproof.js";
+import { runShareProof, runShareProofFromSaved, latestReceiptExists } from "./shareproof.js";
 
 function getArg(flag: string): string | undefined {
   const i = process.argv.indexOf(flag);
@@ -108,7 +108,7 @@ agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
 
 ■ 핵심 루프(대부분 이 6개면 충분):
   begin [--cursor|--claude] [--kind <recon|implementation|docs|test|measure-first|observe-only|release-check>]
-  done / next / audit-pack / prepare-commit [--message <m>] [--include-linked-tests] / explain
+  done / share-proof [--receipt <p>] [--out <p>] / next / audit-pack / prepare-commit [--message <m>] [--include-linked-tests] / explain
 
 ■ 세션 / 정찰 / 구현:
   start / status / mode / reset / close-recon / finish [--message <m>] [--client] / trailer / commit-check / receipt
@@ -139,6 +139,7 @@ agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
 ■ 연동(experimental — 미리보기, 전송 없음):
   export --format <slack|json|github-pr|otel|langfuse> --receipt <p>
   gen-claim --transcript <jsonl> [--out <claim.json>]   에이전트 transcript → claim.json(이후 claims 로 대조)
+  capture [--event pre|post] / show [--json] / reset / install [--write] [--global] / uninstall   git 너머 행위 추적(훅 stdin·값 미저장·alpha)
 
 ■ 기타: run
 
@@ -277,6 +278,12 @@ function main(): void {
     if (sub === "install") runCaptureInstall(hasFlag("--write"), hasFlag("--global"));
     if (sub === "uninstall") runCaptureUninstall(hasFlag("--write"), hasFlag("--global"));
     runCaptureIngest(getArg("--event"));
+  }
+  // share-proof: --receipt 또는 저장된 receipt 가 있으면 그걸 렌더(계약 불필요·done 시점 그대로).
+  // 둘 다 없으면 아래 switch 에서 현재 상태로 fresh build(계약 필요).
+  if (command === "share-proof") {
+    const rp = getArg("--receipt");
+    if (rp || latestReceiptExists()) runShareProofFromSaved(rp, getArg("--out"), hasFlag("--redact"));
   }
   if (command === "approve") {
     runApprove(getArg("--receipt"), getArg("--note"));

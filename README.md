@@ -383,6 +383,31 @@ The claim file is plain JSON; every field is optional and only provided fields a
 
 `agent-receipt prompt` already tells the agent to emit exactly this JSON, so the loop is: brief with `prompt` → agent works → agent pastes the claim → `claims --file` reconciles it with git.
 
+## Capture & share-proof (0.11 alpha)
+
+Two newer commands extend receipts **beyond the git working tree**.
+
+**`capture` — what the agent did that git can't see.** Wire it into Claude Code's `PreToolUse`/`PostToolUse` hooks and it records, append-only, the agent's *actions* — reading a `.env`, calling an external host, creating-then-deleting a file — none of which leave a git trace. **Values are never stored** (paths / hosts / classification only, redacted). It never blocks (evidence, not a gate).
+
+```bash
+agent-receipt capture install            # preview the hooks snippet (no file change)
+agent-receipt capture install --write    # merge hooks into ./.claude/settings.json (idempotent, preserves existing)
+agent-receipt capture show               # git saw: N  ⟷  actions recorded: M
+```
+
+When a capture log exists, `done` / `receipt` embed an `actions` / `actionsSummary` block in the receipt — **additive**: the 14-key `verify --json` and the existing `contentHash` are unchanged, and receipts produced without capture are byte-identical. `agent-receipt begin` clears the log for a fresh audit boundary.
+
+**`share-proof` — a one-page evidence file for your client.** Renders a receipt as a self-contained HTML page (no network, no external resources) you can send to a client: scope result, change magnitude, beyond-git actions, and the integrity hash.
+
+```bash
+agent-receipt share-proof                 # render the latest saved receipt
+agent-receipt share-proof --receipt <p>   # render a specific saved receipt
+```
+
+> Honest scope: **git-based evidence, tamper-evident — not non-forgeable, and not a compliance guarantee.** Capture currently adapts Claude Code hooks (single agent). Cloud / hosted verification links and third-party anchors are intentionally out of scope.
+
+---
+
 ## Local-first / privacy
 
 - Runs entirely locally; no code or diff leaves your machine.

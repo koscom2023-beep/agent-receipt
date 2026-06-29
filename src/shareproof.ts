@@ -1,9 +1,10 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, existsSync, readFileSync } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
 import type { Contract } from "./schema.js";
 import { buildReceipt, type Receipt } from "./receipt.js";
 import { redactText } from "./redact.js";
 import { LIMIT_NOTE } from "./disclosure.js";
+import { listReceipts } from "./receiptStore.js";
 
 // ── share-proof v0 (council B) — 외주사가 클라이언트에 보내는 로컬 self-contained HTML 증거 ──
 // 원칙: network 0(외부 CDN/img/script src 없음 — 오프라인 열람·유출 0) · 모든 동적 문자열 esc(injection 방어)
@@ -85,16 +86,11 @@ export function toProofHtml(r: Receipt): string {
  * `agent-receipt share-proof [--out <path>] [--redact]` — 현재 상태로 receipt 를 만들어
  * 클라이언트 전달용 self-contained HTML 로 저장. exit = ok ? 0 : 1.
  */
-export function runShareProof(
-  contract: Contract,
-  contractPath: string | undefined,
-  outArg: string | undefined,
-  redact: boolean = false,
-): never {
-  const r = buildReceipt(contract, contractPath);
+// 공통 쓰기: Receipt → HTML 파일. fresh build / 저장 receipt 양쪽이 재사용.
+function writeProof(r: Receipt, outArg: string | undefined, redact: boolean): never {
   let html = toProofHtml(r);
   if (redact) html = redactText(html).text;
-  const stamp = r.timestamp.replace(/[:.]/g, "-");
+  const stamp = (r.timestamp ?? "receipt").replace(/[:.]/g, "-");
   const rel = outArg ?? join(".agent-guard", `proof-${stamp}.html`);
   const out = isAbsolute(rel) ? rel : join(process.cwd(), rel);
   mkdirSync(dirname(out), { recursive: true });
@@ -103,4 +99,53 @@ export function runShareProof(
   console.log("  → 브라우저로 열어 확인 후 클라이언트에게 이 파일을 보내세요(로컬 증거·외부 전송 0).");
   console.log(`  ${LIMIT_NOTE}`);
   process.exit(r.ok ? 0 : 1);
+}
+
+/** 현재 상태로 receipt 를 새로 만들어 렌더(계약 필요). 저장 receipt 가 없을 때의 fallback. */
+export function runShareProof(contract: Contract, contractPath: string | undefined, outArg: string | undefined, redact: boolean = false): never {
+  writeProof(buildReceipt(contract, contractPath), outArg, redact);
+}
+
+/** 저장된 receipt(.json)가 하나라도 있나 — cli 가 "기본=최신 렌더 vs fresh build" 분기에 사용. */
+export function latestReceiptExists(cwd: string = process.cwd()): boolean {
+  return listReceipts(cwd).some((e) => e.name.endsWith(".json"));
+}
+
+/**
+ * `agent-receipt share-proof [--receipt <path>]` — 저장된 receipt 를 렌더(기본 최신).
+ * done/receipt 시점 그대로 클라이언트에 증명. 파싱/형식 실패 = exit 2(계약 불필요).
+ */
+export function runShareProofFromSaved(
+  receiptPath: string | undefined,
+  outArg: string | undefined,
+  redact: boolean,
+  cwd: string = process.cwd(),
+): never {
+  let abs: string;
+  if (receiptPath) {
+    abs = isAbsolute(receiptPath) ? receiptPath : join(cwd, receiptPath);
+    if (!existsSync(abs)) {
+      console.error(`share-proof: receipt 파일 없음: ${receiptPath}`);
+      process.exit(2);
+    }
+  } else {
+    const latest = listReceipts(cwd).find((e) => e.name.endsWith(".json"));
+    if (!latest) {
+      console.error("share-proof: 저장된 receipt 없음 — 먼저 `agent-receipt done`/`receipt` 실행하거나 --receipt <경로> 지정.");
+      process.exit(2);
+    }
+    abs = latest.abs;
+  }
+  let r: Receipt;
+  try {
+    r = JSON.parse(readFileSync(abs, "utf8")) as Receipt;
+  } catch {
+    console.error(`share-proof: receipt 파싱 실패(JSON 아님): ${abs}`);
+    process.exit(2);
+  }
+  if (!r || typeof r !== "object" || typeof r.ok !== "boolean") {
+    console.error(`share-proof: receipt 형식이 아님: ${abs}`);
+    process.exit(2);
+  }
+  writeProof(r, outArg, redact);
 }
