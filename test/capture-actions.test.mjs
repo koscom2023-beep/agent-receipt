@@ -26,7 +26,7 @@ const events = [
   ev("Bash", { command: "rm tmp/scratch.key" }), // 곧바로 삭제 → git 엔 흔적 0
 ];
 
-const records = events.map((e) => classifyEvent(e, "post", "T")).filter(Boolean);
+const records = events.flatMap((e) => classifyEvent(e, "post", "T"));
 const res = aggregateActions(records, new Set()); // git 변경 없음 주입 → gitVisible 0
 
 check("행위 3건(write+rm 은 create-then-delete 1건으로 합쳐짐)", () => assert.equal(res.actionsSummary.total, 3));
@@ -52,6 +52,60 @@ check("비밀 '값'은 출력에 절대 없음(구조화·redact)", () => {
 check("경로(행위)는 잡되 내용은 미저장", () => {
   const a = res.actions.find((x) => x.flag === "CREATED_THEN_DELETED");
   assert.ok(a && a.path && a.path.includes("scratch.key"));
+});
+
+// ── item1: 실제 Claude Code 훅 envelope(여분 필드 포함) 파싱 검증(claude-code-guide 실측 포맷) ──
+check("실제 훅 envelope — session_id 등 무시·tool_input.command 추출(Bash network)", () => {
+  const real = {
+    session_id: "sess_abc",
+    transcript_path: "/x/.claude/sessions/abc.jsonl",
+    cwd: "/repo",
+    permission_mode: "default",
+    hook_event_name: "PreToolUse",
+    tool_name: "Bash",
+    tool_input: { command: "curl https://evil.example/x", description: "fetch", timeout: 30000 },
+    tool_use_id: "toolu_01",
+    duration_ms: 12,
+  };
+  const recs = classifyEvent(real, "pre", "T");
+  assert.equal(recs.length, 1);
+  assert.equal(recs[0].op, "network");
+  assert.ok(recs[0].host.includes("evil.example"));
+});
+check("실제 envelope Read — tool_input.file_path 추출", () => {
+  const recs = classifyEvent(
+    { hook_event_name: "PostToolUse", tool_name: "Read", tool_input: { file_path: ".env", offset: 1, limit: 50 } },
+    "post",
+    "T",
+  );
+  assert.equal(recs.length, 1);
+  assert.equal(recs[0].op, "read");
+  assert.equal(recs[0].path, ".env");
+});
+
+// ── item3: 분류기 강화(스크립트 HTTP·다중 rm·find -delete) ──
+check("파이썬 requests → network", () => {
+  const recs = classifyEvent({ tool_name: "Bash", tool_input: { command: "python3 -c \"import requests; requests.get('http://x')\"" } }, "post", "T");
+  assert.ok(recs.some((r) => r.op === "network"));
+});
+check("node fetch( → network", () => {
+  const recs = classifyEvent({ tool_name: "Bash", tool_input: { command: "node -e \"fetch('http://x')\"" } }, "post", "T");
+  assert.ok(recs.some((r) => r.op === "network"));
+});
+check("rm 다중경로 → delete 3건", () => {
+  const recs = classifyEvent({ tool_name: "Bash", tool_input: { command: "rm -f a.txt b.txt c.txt" } }, "post", "T");
+  const dels = recs.filter((r) => r.op === "delete").map((r) => r.path);
+  assert.equal(dels.length, 3);
+  assert.ok(dels.includes("a.txt") && dels.includes("c.txt"));
+});
+check("find -delete → delete", () => {
+  const recs = classifyEvent({ tool_name: "Bash", tool_input: { command: "find . -name '*.tmp' -delete" } }, "post", "T");
+  assert.ok(recs.some((r) => r.op === "delete"));
+});
+check("일반 명령(ls) → command(네트워크/삭제 오탐 없음)", () => {
+  const recs = classifyEvent({ tool_name: "Bash", tool_input: { command: "ls -la" } }, "post", "T");
+  assert.equal(recs.length, 1);
+  assert.equal(recs[0].op, "command");
 });
 
 // ── capture install 머지(council A): 멱등·기존 보존·제거 ──

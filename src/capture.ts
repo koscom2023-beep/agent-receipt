@@ -49,9 +49,29 @@ export interface ActionsResult {
 
 // 비밀로 취급하는 경로(읽기 시 READ_SECRET_FILE). 경로 '이름'만 봄(내용 아님).
 const SECRET_PATH = /(^|\/)\.env(\.|$|\b)|\.(key|pem|p12|pfx|keystore)$|(^|\/)(id_rsa|id_ed25519|id_dsa)$|secret|credential/i;
-const NET_CMD = /\b(curl|wget|nc|ncat|telnet)\b/;
+const NET_CMD = /\b(curl|wget|nc|ncat|telnet|scp|rsync|sftp|ssh|aria2c|lynx|httpie)\b/;
+// 스크립트 내부 HTTP(파이썬/노드/루비/PHP 등) — curl 류 외 "외부 호출"도 잡는다(item3 강화).
+const NET_LIB = /(requests\.(?:get|post|put|delete|patch|head|request)|urllib|http\.client|httpx|aiohttp|\bfetch\s*\(|axios|XMLHttpRequest|HTTParty|Net::HTTP|file_get_contents|curl_exec)/;
 const URL_RE = /https?:\/\/([^/\s'"]+)/i;
-const RM_RE = /\brm\b\s+(?:-[a-zA-Z]+\s+)*['"]?([^\s'"|;&]+)/;
+const FIND_DELETE_RE = /\bfind\b[^|;&]*-delete\b/;
+
+// Bash 명령에서 삭제 대상 경로들 추출 — rm a b c · rm -rf x · unlink · find … -delete (다중 경로·item3).
+function extractDeletePaths(cmd: string): string[] {
+  const out: string[] = [];
+  if (FIND_DELETE_RE.test(cmd)) {
+    const root = cmd.match(/\bfind\s+([^\s|;&]+)/);
+    out.push(root?.[1] ?? "(find -delete)");
+  }
+  for (const seg of cmd.split(/[;&|]+/)) {
+    const m = seg.match(/\b(?:rm|unlink)\b(.*)/);
+    if (!m) continue;
+    for (const tok of m[1].split(/\s+/)) {
+      if (!tok || tok.startsWith("-")) continue;
+      out.push(tok.replace(/^['"]|['"]$/g, ""));
+    }
+  }
+  return out;
+}
 
 function toRel(p: string): string {
   const root = g.repoRoot();
@@ -64,37 +84,36 @@ function clean(s: string | undefined): string | undefined {
   return s ? redactText(s).text : s;
 }
 
-/** Claude Code 훅 payload(또는 {tool,input}) → 정규화된 CaptureRecord(없으면 null). 값 미저장. */
-export function classifyEvent(payload: unknown, phase: "pre" | "post" = "post", ts = ""): CaptureRecord | null {
+/** Claude Code 훅 payload(또는 {tool,input}) → CaptureRecord[](없으면 []). 값 미저장. 실제 envelope의 여분 필드(session_id 등)는 무시. */
+export function classifyEvent(payload: unknown, phase: "pre" | "post" = "post", ts = ""): CaptureRecord[] {
   const o = payload as { tool_name?: string; tool?: string; tool_input?: Record<string, unknown>; input?: Record<string, unknown> };
   const tool = String(o?.tool_name ?? o?.tool ?? "");
-  if (!tool) return null;
+  if (!tool) return [];
   const input = (o?.tool_input ?? o?.input ?? {}) as Record<string, unknown>;
   const base = { ts, phase, tool };
-  const fp = () => clean(toRel(String(input.file_path ?? input.notebook_path ?? input.path ?? "")));
+  const filePath = (): string | undefined => clean(toRel(String(input.file_path ?? input.notebook_path ?? input.path ?? "")));
 
   if (tool === "Read" || tool === "NotebookRead") {
-    const path = fp();
-    return path ? { ...base, op: "read", path } : null;
+    const path = filePath();
+    return path ? [{ ...base, op: "read", path }] : [];
   }
   if (tool === "Write" || tool === "Edit" || tool === "MultiEdit" || tool === "NotebookEdit") {
-    const path = fp();
-    return path ? { ...base, op: "write", path } : null;
+    const path = filePath();
+    return path ? [{ ...base, op: "write", path }] : [];
   }
   if (tool === "Bash") {
     const cmd = String(input.command ?? input.cmd ?? "");
     const url = cmd.match(URL_RE);
-    if (url || NET_CMD.test(cmd)) {
-      return { ...base, op: "network", host: clean(url?.[1]) ?? "(unknown-host)" };
+    if (url || NET_CMD.test(cmd) || NET_LIB.test(cmd)) {
+      return [{ ...base, op: "network", host: clean(url?.[1]) ?? "(unknown-host)" }];
     }
-    const rm = cmd.match(RM_RE);
-    if (rm && rm[1]) {
-      const path = clean(toRel(rm[1]));
-      return path ? { ...base, op: "delete", path } : null;
+    const dels = extractDeletePaths(cmd);
+    if (dels.length) {
+      return dels.map((p) => ({ ...base, op: "delete" as const, path: clean(toRel(p)) ?? p }));
     }
-    return { ...base, op: "command" };
+    return [{ ...base, op: "command" }];
   }
-  return null; // 그 외 도구는 alpha 행위추적 비대상
+  return []; // 그 외 도구는 alpha 행위추적 비대상
 }
 
 /** records → actions[] + 요약. gitChangedPaths(주입 가능·테스트 결정론) ∩ 행위경로 = gitVisible. */
@@ -179,11 +198,11 @@ export function runCaptureIngest(event: string | undefined): never {
   } catch {
     process.exit(0); // 파싱 실패도 통과(증거지 게이트 아님)
   }
-  const rec = classifyEvent(payload, phase, new Date().toISOString());
-  if (rec) {
+  const recs = classifyEvent(payload, phase, new Date().toISOString());
+  if (recs.length) {
     const f = capFile();
     mkdirSync(dirname(f), { recursive: true });
-    appendFileSync(f, JSON.stringify(rec) + "\n");
+    appendFileSync(f, recs.map((r) => JSON.stringify(r)).join("\n") + "\n");
   }
   process.exit(0);
 }
