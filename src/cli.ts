@@ -88,16 +88,12 @@ function printHelp(): void {
   console.log(`
 agent-receipt — AI 작업 감사 영수증 (git 작업트리 기준 — git 만 증거)
 
-자주 쓰는 흐름(이 6개면 충분):
+핵심 흐름 (이 둘이면 충분):
   agent-receipt begin [--cursor|--claude] [--kind ...]   작업 시작(baseline + 지시문)
-  agent-receipt done                          작업 종료(verify+check+receipt 저장)
-  agent-receipt next                          지금 할 한 명령 추천
-  agent-receipt audit-pack                     증거 묶음 생성(감사 검토용)
-  agent-receipt prepare-commit                 커밋 블록 생성(자동 commit/add 안 함)
-  agent-receipt explain                        왜 PASS/FAIL 인지 + 이 도구가 못 보는 것
+  agent-receipt done                                     작업 종료(verify+check+receipt 저장)
 
-  정찰: begin --kind recon → close-recon      구현: begin --kind implementation → finish → (사람 커밋) → reset
-  전체 명령: agent-receipt help --all
+  왜 PASS/FAIL 인지 + 이 도구가 못 보는 것:   agent-receipt explain
+  전체 명령(세션·정찰·증빙·정책·연동 등):     agent-receipt help --all
   git 만 증거입니다 — self-report·메모(note)·release 판단은 참고(advisory)이며 PASS/FAIL 근거가 아닙니다.
   한계: .gitignore·레포 밖·OS·DB·외부 서비스는 못 봅니다("컴플라이언스 보장" 아님).
 `);
