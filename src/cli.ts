@@ -45,6 +45,7 @@ import { runInstallHooks, runUninstallHooks } from "./hooks.js";
 import { runSelftest } from "./selftest.js";
 import { runIndex } from "./receiptindex.js";
 import { runGenClaim } from "./genclaim.js";
+import { runCaptureIngest, runCaptureShow, runCaptureReset } from "./capture.js";
 
 function getArg(flag: string): string | undefined {
   const i = process.argv.indexOf(flag);
@@ -265,6 +266,13 @@ function main(): void {
   }
   if (command === "gen-claim") {
     runGenClaim(getArg("--transcript"), getArg("--out"));
+  }
+  // capture (alpha) — 훅 stdin 행위 기록 / 집계 / 초기화. hook 호출용(기본 help 미노출).
+  if (command === "capture") {
+    const sub = process.argv[3];
+    if (sub === "show") runCaptureShow(hasFlag("--json"));
+    if (sub === "reset") runCaptureReset();
+    runCaptureIngest(getArg("--event"));
   }
   if (command === "approve") {
     runApprove(getArg("--receipt"), getArg("--note"));
