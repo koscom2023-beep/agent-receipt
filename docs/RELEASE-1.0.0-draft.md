@@ -1,5 +1,11 @@
 # agent-receipt 1.0.0 — Release Notes (DRAFT)
 
+> 🛑 **DEFERRED / SUPERSEDED (2026-06-29).** 이 "기능 만빵 1.0" 방향은 **보류**되었습니다.
+> 4차 council 결과 1.0은 *기능 수*가 아니라 **"git 너머 캡처 해자 + share-proof 검증"으로 재정의**됩니다.
+> 아래 기능 목록(install-hooks·ledger·dashboard·attest·sign·keys…)은 1.0 헤드라인이 아니라 **기본 표면에서 숨긴 채석장**(council #4)으로 강등됐습니다.
+> 다음 릴리스는 **0.11.0(초점 알파)** 이며 버전 확정·태그·`npm publish` 는 owner 결정입니다.
+> 근거: `docs/VERSION-DECISION-2026-06-29.md`. (history 보존용으로 삭제하지 않습니다.)
+
 > ⚠️ **DRAFT — 아직 publish 전.** 아래 "릴리스 전 체크리스트"를 통과한 뒤 확정합니다.
 > 현재 1.0 기능은 `v0.1-verify-check-split` 브랜치에 로컬 구현(커밋 `3661128`·`34d8179`·`4423706`)되어 있고, tsc(build)만 green 입니다. golden 재생성·런타임 실측·`npm publish` 전입니다.
 
