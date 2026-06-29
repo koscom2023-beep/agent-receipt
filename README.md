@@ -413,3 +413,17 @@ npm run guard -- verify --contract .agent-guard/contract.yaml
 ## Contract schema
 
 The authoritative schema — every field, default, and the YAML/JSON parsing rules — lives in [`CONTRACT.md`](CONTRACT.md). The source of truth is `src/schema.ts`; if this README and `CONTRACT.md` ever disagree, `CONTRACT.md` (and the code) win.
+
+---
+
+## Feedback
+
+This package is **actively maintained**, and your input shapes it. With a small but real user base, a few thoughtful notes are worth more than any download count.
+
+If you've tried `agent-receipt` — even once, or on a real project — I'd love to hear:
+
+- What was confusing — in the CLI or the docs?
+- Which feature is missing for your workflow?
+- Would you recommend it to someone else? Why, or why not?
+
+Please **[open an Issue](../../issues)** (bugs, rough edges, ideas) or **start a [Discussion](../../discussions)** (questions, general feedback). Even a one-line reply genuinely helps. Thank you for trying it.
