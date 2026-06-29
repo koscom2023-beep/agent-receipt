@@ -269,13 +269,14 @@ Slice A 의 원칙은 **"출력 0 변경"** 이다. 아래 5개 명령의 **stdo
 
 ---
 
-## 11.6 receipt 확장 필드 (magnitude / critical paths / contentHash)
+## 11.6 receipt 확장 필드 (magnitude / critical paths / contentHash / actions)
 
 `receipt` 가 저장하는 **AI Work Receipt** 는 `verify --json`(14키, §12)와 **별개 스키마**다. v0.4 에서 3개 필드가 추가됐다(다른 명령 출력·14키 JSON 에는 영향 없음):
 
 - **`magnitude`** `{ filesChanged, added, deleted, newFiles }` — `git diff HEAD --numstat`(추적 파일 라인 수) + untracked 신규 파일 수. **full working tree 기준(baseline-relative 아님)**, 숫자만(점수화/판단 없음). 비ASCII 경로와 무관(경로 문자열 미사용).
 - **`criticalPaths`** `[{ glob, touched[] }]` — 고정 **코드 상수**(계약 스키마 필드 아님)인 고위험 글롭(`​.env*`, `package-lock.json`, `pnpm-lock.yaml`, `supabase/migrations/**`, `vercel.json`, `.github/workflows/**`)에 full-tree 변경이 닿았는지 표시. `denied_paths` 와 겹쳐도 됨. **표시만**(차단 아님).
-- **`contentHash`** `"sha256:<hex>"` — Node 내장 `crypto`(sha256, **새 의존성 없음**)로 만든 무결성 해시. 입력은 결정론적 git 실측: `headHash` + `touched`/`staged`/`untracked`/`outOfScope`/`deniedHits`(정렬) + `magnitude` + critical 의 touched + `checks`. **`timestamp` 은 입력에서 제외**(시간마다 바뀌므로 — 같은 git 상태면 같은 hash). ed25519 **서명은 백로그**(이 버전 미구현).
+- **`contentHash`** `"sha256:<hex>"` — Node 내장 `crypto`(sha256, **새 의존성 없음**)로 만든 무결성 해시. 입력은 결정론적 git 실측: `headHash` + `touched`/`staged`/`untracked`/`outOfScope`/`deniedHits`(정렬) + `magnitude` + critical 의 touched + `checks`. **`timestamp`·`environment`·`schemaVersion`·`actions` 는 입력에서 제외**(시간/머신/메타마다 바뀌므로 — 같은 git 상태면 같은 hash). ed25519 **서명은 백로그**(이 버전 미구현).
+- **`actions` / `actionsSummary`** (0.11 alpha — `capture`) — `capture`(beyond-git 행위 추적)가 `.agent-guard/capture.jsonl` 에 누적한 행위. **레코드가 있을 때만** receipt 에 등장한다(없으면 키 자체가 없어 **기존 receipt 와 바이트동일** — capture 안 쓰는 사용자 영향 0). `actions[]` = `{ tool, op, path?, host?, flag }` — **값은 저장하지 않는다**(경로/호스트/행위분류만, redact 경유). `actionsSummary` = `{ total, secretFilesRead, externalCalls, createdThenDeleted, gitVisible }`(`gitVisible` = 행위 경로 ∩ git 변경집합 — "git 이 본 것 ⟷ 행위" 대비). **contentHash 입력에서 제외**(metadata·additive — `environment`/`schemaVersion` 과 동일) → capture 를 써도 기존 무결성 해시 불변. 누적 로그는 `capture reset` 으로 초기화. 한계(alpha): 어댑터=Claude Code 단일.
 
 ## 11.7 completion claim verifier (`claims`)
 

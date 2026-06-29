@@ -393,9 +393,9 @@ The claim file is plain JSON; every field is optional and only provided fields a
 
 ## Package status
 
-Published on npm as **`@promptia-labs/agent-receipt`** — **latest `0.9.0`** (convenience/integration: `begin --kind`, `close-recon`, `prepare-commit`/`finish`, `note`, `release-check`, `next`, plus git-evidence/advisory separation). **`0.9.1`** (real-use defect patch from Promptia dogfooding: `--version`/`-v`/`version` command, `doctor` install/version diagnostics, `next` verify-FAIL cause summary, explicit `*.sig.json`/`*.approval.json` tool-output exclusion + regression test, and these install-smoke docs) is **implemented locally on this branch (`v0.1-verify-check-split`) — not yet published.** Cloud/SaaS, real Slack/webhook transport, remote approval, and any "compliance guarantee" remain intentionally out of scope. Feature coverage vs the design docs: [`docs/coverage.md`](docs/coverage.md).
+Current version **`0.10.0`** (`@promptia-labs/agent-receipt`). The 0.9.x line added convenience/integration (`begin --kind`, `close-recon`, `prepare-commit`/`finish`, `note`, `release-check`, `next`) and git-evidence/advisory separation; **`0.10.0`** added `schemaVersion`, provenance, hash-chain ledger, content hashing, and strict-redact. Cloud/SaaS, real Slack/webhook transport, remote approval, and any "compliance guarantee" remain intentionally out of scope. Feature coverage vs the design docs: [`docs/coverage.md`](docs/coverage.md).
 
-Version ladder: `0.7.0` (work receipts) → **`0.8.0` (AI work audit protocol)** → `0.9.x` (convenience + dogfood fixes) → `1.0.0` (stable, after real-world use).
+Version ladder: `0.7.0` (work receipts) → `0.8.0` (AI work audit protocol) → `0.9.x` (convenience + dogfood fixes) → **`0.10.0` (integrity: schemaVersion / provenance / hash-chain ledger)** → **`0.11.0` (focused alpha: tightened surface + `capture` — beyond-git action trace; in progress).** A feature-maximal `1.0.0` is **deferred** in favor of a focused product — see [`docs/VERSION-DECISION-2026-06-29.md`](docs/VERSION-DECISION-2026-06-29.md).
 
 For local development:
 
