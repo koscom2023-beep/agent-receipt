@@ -3,6 +3,7 @@ import { startCore, type SessionKind } from "./start.js";
 import { buildPrompt, type PromptVariant } from "./output.js";
 import { evalTripwire, tripwireLines } from "./tripwire.js";
 import { LIMIT_NOTE } from "./disclosure.js";
+import { clearCaptureLog } from "./capture.js";
 
 const line = "─".repeat(56);
 
@@ -39,6 +40,7 @@ export function runBegin(contract: Contract, variant: PromptVariant, kind?: Sess
     console.log("   baseline 을 이어 쓰면 감사 경계가 섞입니다.");
   } else if (res.ok) {
     console.log(res.message);
+    clearCaptureLog(); // 새 baseline = 새 감사 경계 → 직전 세션 capture 누적 비움(무출력). council A #1
   }
   console.log("");
 

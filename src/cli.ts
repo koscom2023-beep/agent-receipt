@@ -45,7 +45,7 @@ import { runInstallHooks, runUninstallHooks } from "./hooks.js";
 import { runSelftest } from "./selftest.js";
 import { runIndex } from "./receiptindex.js";
 import { runGenClaim } from "./genclaim.js";
-import { runCaptureIngest, runCaptureShow, runCaptureReset } from "./capture.js";
+import { runCaptureIngest, runCaptureShow, runCaptureReset, runCaptureInstall, runCaptureUninstall } from "./capture.js";
 
 function getArg(flag: string): string | undefined {
   const i = process.argv.indexOf(flag);
@@ -272,6 +272,8 @@ function main(): void {
     const sub = process.argv[3];
     if (sub === "show") runCaptureShow(hasFlag("--json"));
     if (sub === "reset") runCaptureReset();
+    if (sub === "install") runCaptureInstall(hasFlag("--write"), hasFlag("--global"));
+    if (sub === "uninstall") runCaptureUninstall(hasFlag("--write"), hasFlag("--global"));
     runCaptureIngest(getArg("--event"));
   }
   if (command === "approve") {

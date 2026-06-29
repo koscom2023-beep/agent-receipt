@@ -3,7 +3,7 @@
 //  git 은 0 으로 보이며(gitVisible 0), 비밀 '값'은 출력에 절대 안 남는다."
 // 순수함수(classifyEvent/aggregateActions)만 검증 — git 변경집합은 빈 Set 주입(결정론). `node test/capture-actions.test.mjs`.
 import assert from "node:assert/strict";
-import { classifyEvent, aggregateActions } from "../dist/capture.js";
+import { classifyEvent, aggregateActions, mergeCaptureHooks, removeCaptureHooks } from "../dist/capture.js";
 
 let pass = 0;
 const fail = [];
@@ -52,6 +52,49 @@ check("비밀 '값'은 출력에 절대 없음(구조화·redact)", () => {
 check("경로(행위)는 잡되 내용은 미저장", () => {
   const a = res.actions.find((x) => x.flag === "CREATED_THEN_DELETED");
   assert.ok(a && a.path && a.path.includes("scratch.key"));
+});
+
+// ── capture install 머지(council A): 멱등·기존 보존·제거 ──
+check("빈 settings → Pre/PostToolUse 둘 다 추가", () => {
+  const { merged, changed } = mergeCaptureHooks({});
+  assert.equal(changed, true);
+  assert.ok(Array.isArray(merged.hooks.PreToolUse) && merged.hooks.PreToolUse.length === 1);
+  assert.ok(Array.isArray(merged.hooks.PostToolUse) && merged.hooks.PostToolUse.length === 1);
+});
+check("멱등 — 두 번째 머지는 changed=false·중복 0", () => {
+  const once = mergeCaptureHooks({}).merged;
+  const { merged, changed } = mergeCaptureHooks(once);
+  assert.equal(changed, false);
+  assert.equal(merged.hooks.PreToolUse.length, 1);
+  assert.equal(merged.hooks.PostToolUse.length, 1);
+});
+check("기존 사용자 hooks·top-level 키 보존", () => {
+  const existing = {
+    model: "opus",
+    hooks: { PreToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command: "my-own-guard" }] }] },
+  };
+  const { merged } = mergeCaptureHooks(existing);
+  assert.equal(merged.model, "opus"); // 무관 키 보존
+  // 기존 사용자 항목 보존 + 우리 것 추가 = 2
+  assert.equal(merged.hooks.PreToolUse.length, 2);
+  assert.ok(merged.hooks.PreToolUse.some((e) => e.hooks.some((h) => h.command === "my-own-guard")));
+  assert.ok(merged.hooks.PreToolUse.some((e) => e.hooks.some((h) => h.command.startsWith("agent-receipt capture"))));
+});
+check("remove — 우리 것만 제거·기존 보존", () => {
+  const existing = {
+    hooks: { PreToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command: "my-own-guard" }] }] },
+  };
+  const installed = mergeCaptureHooks(existing).merged;
+  const { merged, changed } = removeCaptureHooks(installed);
+  assert.equal(changed, true);
+  assert.equal(merged.hooks.PreToolUse.length, 1);
+  assert.equal(merged.hooks.PreToolUse[0].hooks[0].command, "my-own-guard");
+  assert.ok(!merged.hooks.PostToolUse); // 우리만 있던 Post 는 빈 배열→삭제
+});
+check("입력 비변형(순수함수)", () => {
+  const input = { hooks: {} };
+  mergeCaptureHooks(input);
+  assert.deepEqual(input, { hooks: {} }); // 원본 불변
 });
 
 if (fail.length) {
