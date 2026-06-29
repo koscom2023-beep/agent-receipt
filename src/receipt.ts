@@ -11,6 +11,7 @@ import { captureEnvironment, type Environment } from "./environment.js";
 import { loadPolicySafe, policyObservations, policyPath, type PolicyObs } from "./policy.js";
 import { redactText } from "./redact.js";
 import { LIMIT_NOTE } from "./disclosure.js";
+import { loadCapturedActions, type CaptureAction, type ActionsResult } from "./capture.js";
 
 // receipt JSON 스키마 버전(downstream/CI 가 안전하게 의존). additive only. verify --json 14키와 무관.
 export const RECEIPT_SCHEMA_VERSION = "1.0";
@@ -38,7 +39,9 @@ export interface Receipt {
   environment: Environment; // 환경/출처 캡처(git/node/os + 계약·정책 해시). contentHash 입력엔 미포함.
   disclosure: string; // 한계 고지(이 도구가 못 보는 것)
   contentHashes?: Array<{ path: string; sha256: string | null; bytes: number }>; // --content 일 때만: touched 파일 sha256(내용 저장 안 함). 있을 때만 contentHash 입력에 포함.
-  contentHash: string; // sha256 무결성 해시(timestamp/environment/schemaVersion 제외 — 아래 receiptHash 입력 참고)
+  actions?: CaptureAction[]; // capture(git 너머 행위) — capture.jsonl 있을 때만. contentHash 입력엔 미포함(metadata·additive). 없으면 키 부재 → 기존 출력 바이트동일.
+  actionsSummary?: ActionsResult["actionsSummary"]; // 행위 요약(gitVisible 대비). 〃(해시 제외)
+  contentHash: string; // sha256 무결성 해시(timestamp/environment/schemaVersion/actions 제외 — 아래 receiptHash 입력 참고)
 }
 
 // 키를 정렬해 직렬화(객체 순서 비의존). 배열은 호출부에서 미리 정렬해 넣는다.
@@ -144,9 +147,15 @@ export function buildReceipt(contract: Contract, contractPath?: string, opts: Bu
     environment: captureEnvironment({ contractPath, policyPath: ppath, agent: opts.agent, model: opts.model }),
     disclosure: LIMIT_NOTE,
     ...(opts.content ? { contentHashes: computeContentHashes(v.touched) } : {}),
+    // capture(git 너머 행위) — capture.jsonl 레코드 있을 때만. gitVisible = receipt 의 touched∪staged∪untracked 재사용.
+    // receiptHash 입력엔 미포함(metadata) → capture 안 쓰면 키 부재·contentHash 불변(기존 사용자 바이트동일).
+    ...(() => {
+      const ca = loadCapturedActions(new Set([...v.touched, ...v.staged, ...v.untracked]));
+      return ca ? { actions: ca.actions, actionsSummary: ca.actionsSummary } : {};
+    })(),
     contentHash: "",
   };
-  r.contentHash = receiptHash(r); // 나머지 필드 확정 후 봉인.
+  r.contentHash = receiptHash(r); // 나머지 필드 확정 후 봉인(actions 는 receiptHash 입력에서 제외 — :61 참고).
   return r;
 }
 
@@ -215,6 +224,14 @@ export function toReceiptMd(r: Receipt): string {
   if (r.contentHashes && r.contentHashes.length) {
     L.push(`## Content hashes (--content — touched ${r.contentHashes.length}, 해시만 저장)`);
     for (const c of r.contentHashes) L.push(`- \`${c.path}\`: ${c.sha256 ?? "(skip — 대용량/삭제)"} (${c.bytes}B)`);
+    L.push("");
+  }
+  if (r.actions && r.actions.length) {
+    const s = r.actionsSummary;
+    L.push(`## Beyond-git actions (capture — git 가 못 보는 행위 ${r.actions.length})`);
+    for (const a of r.actions) L.push(`- ⚠️ ${a.flag}: \`${a.path ?? a.host ?? ""}\``);
+    if (s) L.push(`- git 가 보는 것: ${s.gitVisible}  ⟷  영수증이 본 행위: ${s.total}`);
+    L.push("> capture 범위 = 마지막 `capture reset` 이후 누적(수동). 값 미저장 — 경로/호스트/분류만.");
     L.push("");
   }
   L.push("## Integrity");

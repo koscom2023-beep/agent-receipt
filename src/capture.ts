@@ -128,6 +128,17 @@ function capFile(): string {
   const root = g.repoRoot() ?? process.cwd();
   return join(root, ".agent-guard", "capture.jsonl");
 }
+
+/**
+ * 누적 capture.jsonl → ActionsResult. 레코드가 0이면 **null**(영수증 임베드 시 필드 자체를 안 단다 →
+ * capture 안 쓰는 기존 사용자 receipt 바이트불변). gitChangedPaths 주입 가능(receipt 의 touched∪staged∪untracked
+ * 재사용 → git 추가호출 0). council embed Decision #3.
+ */
+export function loadCapturedActions(gitChangedPaths: Set<string> = new Set()): ActionsResult | null {
+  const records = readRecords();
+  if (records.length === 0) return null;
+  return aggregateActions(records, gitChangedPaths);
+}
 function safeList(fn: () => string[]): string[] {
   try {
     return fn();
