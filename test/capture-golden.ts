@@ -24,6 +24,9 @@ const repoRoot = dirname(here);
 const tsxBin = join(repoRoot, "node_modules", ".bin", "tsx");
 const cli = join(repoRoot, "src", "cli.ts");
 const goldenDir = join(here, "golden");
+// --check: 골든 재생성(write) 대신 현재 출력을 봉인 골든과 비교(diff). drift 시 exit 1. (test 잠금 — embed/test #2)
+const CHECK = process.argv.includes("--check");
+const checkFails: string[] = [];
 
 if (!existsSync(tsxBin)) {
   console.error(`ENV ERROR: tsx 없음 (${tsxBin}). 먼저 'npm install'.`);
@@ -102,6 +105,7 @@ function norm(s: string): string {
   if (!s) return s;
   let out = s;
   out = out.replace(new RegExp(escapeRe(TMP) + "/ag-gold-[^\\s\"']*", "g"), "<FIXTURE>");
+  out = out.split(repoRoot).join("<REPO>"); // repo 절대경로(clone/rename 위치) → <REPO>: 위치·폴더명 독립(HOME 치환 전에)
   if (HOME) out = out.split(HOME).join("<HOME>");
   out = normVolatile(out);
   return out;
@@ -126,13 +130,32 @@ function emit(
   // fixtureBase 가 주어지면 그 절대경로만 <FIXTURE> 로 치환(접미사 보존). 없으면 기존 동작 그대로.
   const pre = (s: string): string => (fixtureBase ? s.split(fixtureBase).join("<FIXTURE>") : s);
   const dir = join(goldenDir, name);
+  const curExit = `${res.status}\n`;
+  const curStdout = norm(pre(res.stdout ?? ""));
+  const curStderr = norm(pre(res.stderr ?? ""));
+  if (CHECK) {
+    // 비교 모드: 봉인된 골든과 현재 출력(정규화) 대조. 행동 계약(exit/stdout/stderr)만 비교(cmd/contract=입력).
+    captures.push({ name, cmdline, exit: res.status });
+    const cmp = (file: string, cur: string): void => {
+      const p = join(dir, file);
+      const expected = existsSync(p) ? readFileSync(p, "utf8") : file === "stderr.txt" ? "" : null;
+      if (expected === null) {
+        checkFails.push(`${name}/${file}: 골든 없음(신규 케이스 — 먼저 재생성 필요)`);
+        return;
+      }
+      if (cur !== expected) checkFails.push(`${name}/${file}: 불일치`);
+    };
+    cmp("exit_code.txt", curExit);
+    cmp("stdout.txt", curStdout);
+    cmp("stderr.txt", curStderr);
+    return;
+  }
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "cmd.txt"), cmdline + "\n");
-  writeFileSync(join(dir, "exit_code.txt"), `${res.status}\n`);
-  writeFileSync(join(dir, "stdout.txt"), norm(pre(res.stdout ?? "")));
-  const e = norm(pre(res.stderr ?? ""));
+  writeFileSync(join(dir, "exit_code.txt"), curExit);
+  writeFileSync(join(dir, "stdout.txt"), curStdout);
   const stderrPath = join(dir, "stderr.txt");
-  if (e.length) writeFileSync(stderrPath, e);
+  if (curStderr.length) writeFileSync(stderrPath, curStderr);
   else rmSync(stderrPath, { force: true }); // 재캡처 시 이전 실행의 stderr 잔재 제거
   if (contractText != null) writeFileSync(join(dir, "contract.yaml"), contractText);
   captures.push({ name, cmdline, exit: res.status });
@@ -1507,23 +1530,35 @@ for (const [nm, flag, label] of [
 
 // ───────────────────────────── 인덱스 + 정리 ─────────────────────────────
 
-const indexLines = [
-  "# agent-guard v0.1 golden baseline (A0.5)",
-  "",
-  `- branch: v0.1-verify-check-split`,
-  `- 캡처 케이스: ${captures.length}개`,
-  `- 결정론: 고정 git identity(ci/ci@local) + 고정 DATE(${FIXED_DATE}) → headHash 재현`,
-  `- 정규화(스냅샷 한정): $HOME→<HOME>, ${TMP}/ag-gold-*→<FIXTURE>`,
-  "",
-  "| case | command | exit |",
-  "|---|---|---|",
-  ...captures.map((c) => `| ${c.name} | \`${c.cmdline}\` | ${c.exit} |`),
-  "",
-];
-writeFileSync(join(goldenDir, "INDEX.md"), indexLines.join("\n"));
+if (!CHECK) {
+  const indexLines = [
+    "# agent-guard v0.1 golden baseline (A0.5)",
+    "",
+    `- branch: v0.1-verify-check-split`,
+    `- 캡처 케이스: ${captures.length}개`,
+    `- 결정론: 고정 git identity(ci/ci@local) + 고정 DATE(${FIXED_DATE}) → headHash 재현`,
+    `- 정규화(스냅샷 한정): $HOME→<HOME>, ${TMP}/ag-gold-*→<FIXTURE>`,
+    "",
+    "| case | command | exit |",
+    "|---|---|---|",
+    ...captures.map((c) => `| ${c.name} | \`${c.cmdline}\` | ${c.exit} |`),
+    "",
+  ];
+  writeFileSync(join(goldenDir, "INDEX.md"), indexLines.join("\n"));
+}
 
 for (const b of bases) {
   try { rmSync(b, { recursive: true, force: true }); } catch { /* tmp 정리 best-effort */ }
+}
+
+if (CHECK) {
+  if (checkFails.length) {
+    console.error(`\n골든 비교 실패: ${checkFails.length}건 / ${captures.length} 케이스`);
+    for (const f of checkFails.slice(0, 40)) console.error(`  ✗ ${f}`);
+    process.exit(1);
+  }
+  console.log(`\n골든 비교(--check): ${captures.length} cases 전부 PASS ✅`);
+  process.exit(0);
 }
 
 console.log(`\ngolden 캡처 완료: ${captures.length} cases → test/golden/`);
