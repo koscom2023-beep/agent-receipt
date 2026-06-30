@@ -4,6 +4,8 @@ import {
   verify as edVerify,
   createPrivateKey,
   createPublicKey,
+  createHash,
+  type KeyObject,
 } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, basename, relative } from "node:path";
@@ -19,6 +21,32 @@ function abs(p: string, cwd: string): string {
 function rel(p: string, cwd: string): string {
   const r = relative(cwd, p);
   return r.startsWith("..") || isAbsolute(r) ? p : r;
+}
+
+// ── Stage 1(anchor) 재사용 헬퍼 — 기존 서명 인프라(ed25519/.agent-guard/keys)를 DRY 로 공유. 값 미노출.
+/** private.pem 로드(없으면 null). anchor 가 DSSE PAE 서명에 재사용. */
+export function loadPrivateKey(cwd: string = process.cwd()): KeyObject | null {
+  const p = join(cwd, PRIV_REL);
+  if (!existsSync(p)) return null;
+  try {
+    return createPrivateKey(readFileSync(p));
+  } catch {
+    return null;
+  }
+}
+/** public key 지문(DSSE keyid 용 — 키 식별이지 신원 증명 아님). 없으면 null. */
+export function publicKeyFingerprint(cwd: string = process.cwd()): string | null {
+  const p = join(cwd, PUB_REL);
+  if (!existsSync(p)) return null;
+  try {
+    return "sha256:" + createHash("sha256").update(readFileSync(p)).digest("hex").slice(0, 16);
+  } catch {
+    return null;
+  }
+}
+/** public.pem 상대경로(anchor 출력의 검증 명령에 사용). */
+export function publicKeyRelPath(): string {
+  return PUB_REL;
 }
 
 /** `agent-receipt keys init` — ed25519 키쌍 생성(PEM). 이미 있으면 덮어쓰지 않음(exit 1). */
