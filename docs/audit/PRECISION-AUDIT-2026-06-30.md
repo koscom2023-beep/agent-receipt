@@ -38,7 +38,7 @@
 ---
 
 ## C. 보류·후속 후보 (owner 결정)
-1. **동시쓰기 레이스 방어**(capture.ts) — 파일 락 또는 원자적 append+재시도. 병렬 tool 훅 환경에서 가치. (worth=True·이번엔 단일훅 가정으로 보류)
+1. ~~동시쓰기 레이스 방어(capture.ts)~~ → **2차 심층감사(14차)에서 해결됨**(아래 E).
 2. **`risk --redact` 패리티** — 위험 신호 출력의 경로 마스킹(형제 일관성). 경미.
 3. 미관: 임계 상수 명명·미사용 export 정리 — churn 대비 이득 작음.
 
@@ -48,5 +48,24 @@
 - **기능 30개 4층 실상태 감사**(회계 장부→감사→컨설팅 매핑): 결과는 메모리 `agent-receipt-strategy-state.md` + 커밋 이력. (완전성·노이즈·멀티에이전트·규제매핑·분석 실기능화 확인)
 - **회계 프로세스 마이닝(11차)·부채 탐지(12차) 회의**: 산출물 = 대사(reconcileCapture)·증거위계 tier·`risk` 명령(commit `c264919`).
 - 이 문서는 그 위에서 돌린 **코드 정밀 감사(13차)** 결과다.
+
+---
+
+## E. 2차 심층 감사 (14차 council·"무결점 추구"·commit `38791b0`)
+owner "무결점" 지시 → 첫 감사가 덜 판 **프런티어**(동시성·내 수정 회귀·엣지/불변식)를 13에이전트로 재감사 + 적대적 검증. 확정 8건 전부 수정:
+
+| # | 차원 | 위치 | 결함 | 수정 |
+|---|---|---|---|---|
+| 1 | **invariant(high)** | `keys.ts` | **개인키 데이터 손실** — `ensureSigningKey` 가드가 `!priv \|\| !pub`라, public.pem만 지워도 개인키를 *재생성·덮어쓰기* → 과거 서명·Rekor 앵커 전부 무효·옛 키 영구 소실(무경고) | priv 있으면 **재생성 금지**, pub는 `createPublicKey(priv)`로 유도. 신규=atomic(0o600). 메모리 키쌍 반환 |
+| 2 | concurrency(high) | `capture.ts` | appendCapture 무락 → 병렬 훅 2개가 같은 tail 읽어 **포크**(중복 seq·같은 prevHash) → `verify`가 정직한 로그를 *변조/누락으로 오탐*(tamper 도구가 늑대 외침) | `withFileLock`로 read→append→writeHead 직렬화. 락 실패=degraded 마커 |
+| 3 | concurrency(med) | `keys.ts` | 동시 anchor 시 priv/pub **불일치 쌍** 서명 → 깨진 봉인을 '✅ 성공' 보고 | 락 + 메모리 키쌍 반환(디스크 재읽기 제거) |
+| 4 | concurrency(med) | `ledger.ts` | appendLedger 동일 무락 포크 | `withFileLock` 직렬화 |
+| 5 | edge(low) | `ledger.ts`/index | 전체 덮어쓰기 'w' truncate → 인터럽트 시 부분파일 | `writeFileAtomic`(temp+rename) |
+| 6·7·8 | loader-safety/invariant(med) | `receiptStore.ts` | 공용 로더가 `criticalPaths[].touched`·`branch.current`·`magnitude`·`staged/untracked/deniedHits` 미검증 → 형제(controls/risk/share-proof)가 게이트 통과 후 deref 크래시 | `loadSavedReceipt`가 consumer deref 필드 *전부* 검증→clean exit 2(정상 영수증 불변) |
+
+신규: `src/lock.ts`(stdlib·의존성0 — `withFileLock` O_EXCL+Atomics.wait 백오프+stale 강탈·`writeFileAtomic`). 테스트 `lock-keys.test.mjs` 7(원자쓰기·재진입 차단·stale 강탈·**개인키 보존**·매칭쌍).
+제외(2차): anchor 409 Location 헤더(바디 추출 충분)·로더가 risk 좁힘(의도된 정합).
+
+> **"무결점"에 대한 정직**: 이 2라운드로 *알려진 진짜 결함을 0*으로 만들고 더 깊이 팠다. 그러나 **완전 무결점은 *선언*하지 않는다** — '결함 없음'의 양성 증명은 원리적으로 불가(우리 도구가 capture 완전성에 대해 스스로 인정하는 바로 그 한계). 무결점은 *추구*하되 *단정*하지 않는다.
 
 > 한계(정직): 이 감사는 통합·정합·버그·중복을 본다. 코드의 *품질/복잡도/보안패턴*(AST 영역)은 의도적으로 보지 않는다 — 그건 우리 도구 정체성 밖(README "코드 좋은지는 안 봄").
