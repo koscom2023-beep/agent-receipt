@@ -2,7 +2,7 @@
 // 잠금: 변조/삭제/재정렬/중간누락 탐지 · 레거시 분리 · degraded 는 행위에서 제외(영수증 byte 안전) · 체인필드는 actions 에 누출 안 됨.
 // `node test/capture-chain.test.mjs`.
 import assert from "node:assert/strict";
-import { captureEntryHash, verifyCaptureChain, aggregateActions, classifyEvent, COVERED_TOOLS } from "../dist/capture.js";
+import { captureEntryHash, verifyCaptureChain, aggregateActions, classifyEvent, COVERED_TOOLS, splitActionsForDisplay, isNotableAction } from "../dist/capture.js";
 
 let pass = 0;
 const fail = [];
@@ -115,6 +115,34 @@ check("COVERED_TOOLS = 훅 matcher 와 동일 7종", () => {
   // classifyEvent 가 실제로 이 도구들을 분류하는지(대표 2종)
   assert.equal(classifyEvent({ tool_name: "Read", tool_input: { file_path: "/x/.env" } }, "post", "t").length, 1);
   assert.equal(classifyEvent({ tool_name: "WebFetch", tool_input: { url: "http://x" } }, "post", "t").length, 0); // 범위 밖
+});
+
+// ── 노이즈 필터(council5 #2) — 무서운 행위만 notable, 일반 read/command 강등(muted). 강등 케이스 직접 검증(감사 partial→done). ──
+check("노이즈 필터 — 무서운 3종만 notable, 일반은 muted 강등", () => {
+  const actions = [
+    { tool: "Read", op: "read", path: ".env", flag: "READ_SECRET_FILE" },
+    { tool: "Bash", op: "network", host: "x", flag: "EXTERNAL_NETWORK_CALL" },
+    { tool: "Read", op: "read", path: "a.ts", flag: "FILE_READ" },
+    { tool: "Bash", op: "command", flag: "COMMAND_RUN" },
+    { tool: "Write", op: "write", path: "b.ts", flag: "FILE_WRITE" },
+  ];
+  const { notable, mutedCount } = splitActionsForDisplay(actions);
+  assert.equal(notable.length, 2, "notable = secret+network");
+  assert.equal(mutedCount, 3, "muted = file_read+command+file_write");
+  assert.ok(notable.every((a) => isNotableAction(a)));
+});
+check("노이즈 필터 — created-then-deleted 는 notable", () => {
+  const { notable, mutedCount } = splitActionsForDisplay([
+    { flag: "CREATED_THEN_DELETED" },
+    { flag: "FILE_READ" },
+  ]);
+  assert.equal(notable.length, 1);
+  assert.equal(mutedCount, 1);
+});
+check("노이즈 필터 — 전부 일반이면 notable 0·전수 muted(접힘)", () => {
+  const { notable, mutedCount } = splitActionsForDisplay([{ flag: "FILE_READ" }, { flag: "COMMAND_RUN" }, { flag: "FILE_WRITE" }]);
+  assert.equal(notable.length, 0);
+  assert.equal(mutedCount, 3);
 });
 
 if (fail.length) {
