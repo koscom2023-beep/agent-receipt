@@ -25,9 +25,9 @@ It is local-first by design:
 
 ---
 
-## AI work audit protocol (v0.8)
+## AI work audit protocol
 
-Beyond a single receipt, v0.8 closes the evidence loop with a short, git-native audit flow:
+Beyond a single receipt, agent-receipt closes the evidence loop with a short, git-native audit flow:
 
 ```
 begin → (agent works) → done → explain (if FAIL)
@@ -158,7 +158,7 @@ If you omit `--contract`, the contract is auto-discovered (see below).
 | `run` | Alias for the no-args single-command routing below. | — |
 | *(no args)* | Single-command routing: inspects state and points to the next step (`init` / `start` / `check`), or runs `verify` when a baseline exists; on PASS it suggests `check` / `receipt` / `claims`, on FAIL it suggests `explain` / `status` / `reset`. | — |
 
-### Audit workflow commands (v0.8)
+### Audit workflow commands
 
 | Command | What it does | Needs git repo |
 |---|---|---|
@@ -177,7 +177,7 @@ If you omit `--contract`, the contract is auto-discovered (see below).
 
 > **Retention & independent verification** are provided by the commands above — there is no separate `archive`/`verify-proof` command (it would duplicate them). **Retention:** `ledger` is the append-only, hash-chained long-term trail and `audit-pack` bundles per-task evidence; the **retention *period*** (e.g. EU AI Act's ≥6-month floor) is an operational policy you set, not a tool feature. **Independent verification by a recipient:** `replay --pack` re-checks a bundle's `contentHash` + commit, `verify-signature` checks the ed25519 sidecar, and a Rekor-`anchor`ed receipt is verifiable in the public transparency log without trusting the issuer.
 
-### Convenience & release commands (v0.9)
+### Convenience & release commands
 
 These shorten the real-world loop. **None of them run git, npm, or any deploy** — they print paste-in blocks or read-only analysis. `verify --json`'s 14 keys are unchanged. **Git is the only evidence**; `note`, `release-check`, `policy mode`, and a claim's `modeClaims`/`externalActions` are **advisory / self-report — never PASS/FAIL inputs.**
 
@@ -390,7 +390,7 @@ The claim file is plain JSON; every field is optional and only provided fields a
 
 `agent-receipt prompt` already tells the agent to emit exactly this JSON, so the loop is: brief with `prompt` → agent works → agent pastes the claim → `claims --file` reconciles it with git.
 
-## Capture & share-proof (0.11 alpha)
+## Capture & share-proof (alpha)
 
 Two newer commands extend receipts **beyond the git working tree**.
 
@@ -437,9 +437,9 @@ On success it writes a `<receipt>.rekor.json` sidecar next to the receipt (entry
 
 ## Package status
 
-Current version **`0.11.0`** (`@promptia-labs/agent-receipt`). `0.10.0` added `schemaVersion`, provenance, the hash-chain ledger, content hashing, and strict-redact; **`0.11.0`** tightens the surface and adds **`capture`** (a beyond-git action trace, *alpha*), **`anchor`** (a third-party Rekor seal + in-proof verification link), and the read-only **`insights`** / **`risk`** / **`controls`** projections. Cloud/SaaS, real Slack/webhook transport, remote approval, and any "compliance guarantee" remain intentionally out of scope. Feature coverage vs the design docs: [coverage](https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/coverage.md).
+Current version **`0.11.1`** (`@promptia-labs/agent-receipt`). `0.10.0` added `schemaVersion`, provenance, the hash-chain ledger, content hashing, and strict-redact; **`0.11.0`** tightens the surface and adds **`capture`** (a beyond-git action trace, *alpha*), **`anchor`** (a third-party Rekor seal + in-proof verification link), and the read-only **`insights`** / **`risk`** / **`controls`** projections. Cloud/SaaS, real Slack/webhook transport, remote approval, and any "compliance guarantee" remain intentionally out of scope. Feature coverage vs the design docs: [coverage](https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/coverage.md).
 
-Version ladder: `0.7.0` (work receipts) → `0.8.0` (AI work audit protocol) → `0.9.x` (convenience + dogfood fixes) → `0.10.0` (integrity: schemaVersion / provenance / hash-chain ledger) → **`0.11.0` (focused: tightened surface + `capture` — beyond-git action trace (alpha) + `anchor` — third-party Rekor seal & in-proof verification link).** A feature-maximal `1.0.0` is **deferred** in favor of a focused product — see [the version-decision note](https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/VERSION-DECISION-2026-06-29.md).
+Version ladder: `0.7.0` (work receipts) → `0.8.0` (AI work audit protocol) → `0.9.x` (convenience + dogfood fixes) → `0.10.0` (integrity: schemaVersion / provenance / hash-chain ledger) → **`0.11.0` (focused: tightened surface + `capture` — beyond-git action trace (alpha) + `anchor` — third-party Rekor seal & in-proof verification link)** → `0.11.1` (patch: executable `npx` bin + heading clarity). A feature-maximal `1.0.0` is **deferred** in favor of a focused product — see [the version-decision note](https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/VERSION-DECISION-2026-06-29.md).
 
 For local development:
 

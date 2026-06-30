@@ -1,6 +1,6 @@
 {
   "name": "@promptia-labs/agent-receipt",
-  "version": "0.11.0",
+  "version": "0.11.1",
   "description": "AI work audit receipts — verifies and records what an AI coding agent actually changed in your local git tree. Provides git-based evidence for compliance review (not a compliance guarantee).",
   "license": "MIT",
   "repository": {
@@ -29,7 +29,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node -e \"require('fs').chmodSync('dist/cli.js', 0o755)\"",
     "test": "npm run build && tsx test/run-fixtures.ts && tsx test/close-recon-tool-output.test.ts && node test/unit-newlogic.mjs && node test/capture-actions.test.mjs && node test/shareproof.test.mjs && node test/attest.test.mjs && node test/anchor.test.mjs && node test/rekor-anchor.test.mjs && node test/capture-chain.test.mjs && node test/capture-proof.test.mjs && node test/multiagent-envelope.test.mjs && node test/controls.test.mjs && node test/insights.test.mjs && node test/risk.test.mjs && node test/audit-fixes.test.mjs && node test/lock-keys.test.mjs && tsx test/capture-golden.ts --check",
     "test:golden": "tsx test/capture-golden.ts --check",
     "test:golden:update": "tsx test/capture-golden.ts",
