@@ -95,5 +95,6 @@ export function runAttest(receiptArg: string | undefined, packArg: string | unde
   const statement = buildAiWorkStatement(r, approvals);
   process.stdout.write(JSON.stringify(statement, null, 2) + "\n");
   process.stderr.write("note: in-toto style 초안을 stdout 으로만 출력했습니다 — 전송/등록/자동서명 없음.\n");
+  process.stderr.write("      DSSE 서명 + 제3자 봉인(Rekor 투명성 로그)이 필요하면: agent-receipt anchor [--upload]  (같은 Statement 를 ed25519 서명·앵커).\n");
   process.exit(0);
 }
