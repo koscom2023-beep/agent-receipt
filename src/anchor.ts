@@ -92,8 +92,8 @@ export function runAnchor(receiptArg: string | undefined, cwd: string = process.
   console.log("");
   console.log("  ⚠️ 아직 Rekor 미등록 — 등록해야 제3자(시간·존재) 봉인이 됩니다.");
   console.log("  Rekor 공개 로그에 등록(수동·외부 publish·해시/서명만 공개):");
-  console.log(`    rekor-cli upload --type dsse --artifact ${outRel} --public-key ${publicKeyRelPath()}`);
-  console.log("    (rekor-cli 또는 cosign 설치 필요 · 플래그는 도구 버전에 맞춰 확인)");
+  console.log(`    rekor-cli upload --type dsse --artifact ${outRel} --public-key ${publicKeyRelPath()} --pki-format x509`);
+  console.log("    (rekor-cli 설치 필요 · ed25519 PEM 공개키라 --pki-format x509 필수)");
   console.log("");
   console.log("  정직: Rekor 는 '시간·존재'를 제3자로 봉인(issuer 백데이트·삭제 불가)하지만,");
   console.log("        자기관리 ed25519 키이므로 keyless(Fulcio/OIDC) 신원 비가역 증명은 아닙니다.");
