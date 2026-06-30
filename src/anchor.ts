@@ -75,9 +75,28 @@ async function uploadToRekor(envelope: DsseEnvelope, publicPem: string): Promise
   if (res.status !== 201 && res.status !== 409) {
     throw new Error(`Rekor HTTP ${res.status}: ${txt.slice(0, 300)}`);
   }
-  const obj = JSON.parse(txt) as Record<string, { logIndex?: number }>;
-  const uuid = Object.keys(obj)[0];
-  return { uuid, logIndex: obj[uuid]?.logIndex ?? null };
+  const got = extractRekorUuid(txt);
+  if (!got) throw new Error(`Rekor ${res.status}: 응답에서 UUID 추출 실패 — ${txt.slice(0, 200)}`);
+  return got;
+}
+
+/**
+ * 순수: Rekor 응답 바디 → {uuid, logIndex} 또는 null. 13차 council(#6).
+ * 201=엔트리맵(키=UUID·logIndex 포함). 409=이미 등록(바디={code,message}) → 키를 UUID 로 오인하면 가짜 sidecar.
+ * 키가 UUID-shape(긴 hex)일 때만 신뢰, 아니면 메시지에서 UUID 추출, 둘 다 실패면 null(=가짜 증거 안 만듦).
+ */
+export function extractRekorUuid(txt: string): { uuid: string; logIndex: number | null } | null {
+  let obj: Record<string, { logIndex?: number }> = {};
+  try {
+    obj = JSON.parse(txt) as Record<string, { logIndex?: number }>;
+  } catch {
+    /* 비-JSON 바디 → 아래 메시지 정규식으로 */
+  }
+  const key = (obj && typeof obj === "object" ? Object.keys(obj)[0] : "") ?? "";
+  if (/^[0-9a-f]{16,}$/i.test(key)) return { uuid: key, logIndex: obj[key]?.logIndex ?? null };
+  const m = txt.match(/[0-9a-f]{16,}/i); // 409 already-exists 메시지의 실제 UUID
+  if (m) return { uuid: m[0], logIndex: null };
+  return null;
 }
 
 interface Prepared {

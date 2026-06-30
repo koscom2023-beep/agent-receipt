@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
+import type { Receipt } from "./receipt.js";
 
 // receipt 저장 위치(고정) — receipt.ts 의 기본 --out 과 동일. verify 는 이 디렉터리를 제외한다.
 export const RECEIPTS_REL = join(".agent-guard", "receipts");
@@ -39,6 +40,42 @@ export type ReceiptJson = {
   touched?: string[];
   checks?: Array<{ name?: string; ok?: boolean }>;
 };
+
+/**
+ * 저장 receipt 적재 SSOT (13차 council) — explicit `--receipt` 또는 최신 `.json` 해석 → parse → *영수증 형식* 검증.
+ * 형식 = ok:boolean + checks/criticalPaths/touched 배열 존재(verify --json 같은 부분 JSON 은 거부 → 렌더 크래시 방지).
+ * 실패 시 cmd 접두 stderr + exit 2. 반환 {abs, receipt}(abs 는 `.rekor.json` sidecar 조회용). controls/risk/share-proof 공용.
+ */
+export function loadSavedReceipt(receiptArg: string | undefined, cmd: string, cwd: string = process.cwd()): { abs: string; receipt: Receipt } {
+  let abs: string;
+  if (receiptArg) {
+    abs = isAbsolute(receiptArg) ? receiptArg : join(cwd, receiptArg);
+    if (!existsSync(abs)) {
+      console.error(`${cmd}: receipt 파일 없음: ${receiptArg}`);
+      process.exit(2);
+    }
+  } else {
+    const latest = listReceipts(cwd).find((e) => e.name.endsWith(".json"));
+    if (!latest) {
+      console.error(`${cmd}: 저장된 receipt 없음 — 먼저 \`agent-receipt done\`/\`receipt\` 실행하거나 --receipt <경로> 지정.`);
+      process.exit(2);
+    }
+    abs = latest.abs;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(abs, "utf8"));
+  } catch {
+    console.error(`${cmd}: receipt 파싱 실패(JSON 아님): ${abs}`);
+    process.exit(2);
+  }
+  const o = parsed as Partial<Receipt> | null;
+  if (!o || typeof o !== "object" || typeof o.ok !== "boolean" || !Array.isArray(o.checks) || !Array.isArray(o.criticalPaths) || !Array.isArray(o.touched)) {
+    console.error(`${cmd}: receipt 형식이 아님 — 저장된 영수증이 필요합니다(verify --json 출력 아님): ${abs}`);
+    process.exit(2);
+  }
+  return { abs, receipt: o as Receipt };
+}
 
 export function parseReceiptJson(abs: string): ReceiptJson | null {
   try {

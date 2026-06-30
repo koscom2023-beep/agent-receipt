@@ -1,6 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
-import { isAbsolute, join } from "node:path";
-import { listReceipts, loadRekorAnchor } from "./receiptStore.js";
+import { loadRekorAnchor, loadSavedReceipt } from "./receiptStore.js";
 import { LIMIT_NOTE } from "./disclosure.js";
 import { redactText } from "./redact.js";
 import type { Receipt } from "./receipt.js";
@@ -217,32 +215,7 @@ export function renderControlJson(r: Receipt, hasAnchor: boolean): string {
  * receipt 미변경(투영). 파싱/형식 실패 = exit 2.
  */
 export function runControls(receiptPath: string | undefined, format: string | undefined, redact: boolean, cwd: string = process.cwd()): never {
-  let abs: string;
-  if (receiptPath) {
-    abs = isAbsolute(receiptPath) ? receiptPath : join(cwd, receiptPath);
-    if (!existsSync(abs)) {
-      console.error(`controls: receipt 파일 없음: ${receiptPath}`);
-      process.exit(2);
-    }
-  } else {
-    const latest = listReceipts(cwd).find((e) => e.name.endsWith(".json"));
-    if (!latest) {
-      console.error("controls: 저장된 receipt 없음 — 먼저 `agent-receipt done`/`receipt` 실행하거나 --receipt <경로> 지정.");
-      process.exit(2);
-    }
-    abs = latest.abs;
-  }
-  let r: Receipt;
-  try {
-    r = JSON.parse(readFileSync(abs, "utf8")) as Receipt;
-  } catch {
-    console.error(`controls: receipt 파싱 실패(JSON 아님): ${abs}`);
-    process.exit(2);
-  }
-  if (!r || typeof r !== "object" || typeof r.ok !== "boolean") {
-    console.error(`controls: receipt 형식이 아님: ${abs}`);
-    process.exit(2);
-  }
+  const { abs, receipt: r } = loadSavedReceipt(receiptPath, "controls", cwd); // 13차 council: 공용 로더(경로해석+검증→exit2)
   const hasAnchor = loadRekorAnchor(abs) !== null;
   let out = format === "json" ? renderControlJson(r, hasAnchor) : renderControlMd(r, hasAnchor);
   if (redact) out = redactText(out).text;

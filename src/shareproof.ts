@@ -1,11 +1,11 @@
-import { mkdirSync, writeFileSync, existsSync, readFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
 import type { Contract } from "./schema.js";
 import { buildReceipt, type Receipt } from "./receipt.js";
 import { splitActionsForDisplay, COVERED_TOOLS } from "./capture.js";
 import { redactText } from "./redact.js";
 import { LIMIT_NOTE } from "./disclosure.js";
-import { listReceipts, loadRekorAnchor, type RekorAnchor } from "./receiptStore.js";
+import { listReceipts, loadRekorAnchor, loadSavedReceipt, type RekorAnchor } from "./receiptStore.js";
 
 // ── share-proof v0 (council B) — 외주사가 클라이언트에 보내는 로컬 self-contained HTML 증거 ──
 // 원칙: 자동로드 0(외부 CDN/img/script "src" 없음 — 열람만으로 유출 0) · 모든 동적 문자열 esc(injection 방어)
@@ -157,32 +157,7 @@ export function runShareProofFromSaved(
   redact: boolean,
   cwd: string = process.cwd(),
 ): never {
-  let abs: string;
-  if (receiptPath) {
-    abs = isAbsolute(receiptPath) ? receiptPath : join(cwd, receiptPath);
-    if (!existsSync(abs)) {
-      console.error(`share-proof: receipt 파일 없음: ${receiptPath}`);
-      process.exit(2);
-    }
-  } else {
-    const latest = listReceipts(cwd).find((e) => e.name.endsWith(".json"));
-    if (!latest) {
-      console.error("share-proof: 저장된 receipt 없음 — 먼저 `agent-receipt done`/`receipt` 실행하거나 --receipt <경로> 지정.");
-      process.exit(2);
-    }
-    abs = latest.abs;
-  }
-  let r: Receipt;
-  try {
-    r = JSON.parse(readFileSync(abs, "utf8")) as Receipt;
-  } catch {
-    console.error(`share-proof: receipt 파싱 실패(JSON 아님): ${abs}`);
-    process.exit(2);
-  }
-  if (!r || typeof r !== "object" || typeof r.ok !== "boolean") {
-    console.error(`share-proof: receipt 형식이 아님: ${abs}`);
-    process.exit(2);
-  }
+  const { abs, receipt: r } = loadSavedReceipt(receiptPath, "share-proof", cwd); // 13차 council: 공용 로더
   // Stage 1b: 이 영수증이 Rekor 에 앵커됐으면(.rekor.json sidecar) 검증 링크를 임베드. 없으면 null → 기존과 바이트 동일.
   writeProof(r, outArg, redact, loadRekorAnchor(abs));
 }

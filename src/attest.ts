@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import type { Receipt } from "./receipt.js";
-import { approvalsCountFor } from "./receiptStore.js";
+import { approvalsCountFor, listReceipts } from "./receiptStore.js";
 import { LIMIT_NOTE } from "./disclosure.js";
 
 // in-toto Statement 스타일(표준형 증명 "초안"). 실제 SLSA level 주장/완전 준수 단정 금지.
@@ -78,8 +78,13 @@ export function runAttest(receiptArg: string | undefined, packArg: string | unde
     receiptPath = join(d, "receipt.json");
   }
   if (!receiptPath) {
-    console.error("attest: --receipt <path> 또는 --pack <dir> 가 필요합니다.");
-    process.exit(2);
+    // 13차 council(#3): 인자 없으면 최신 영수증으로 폴백(형제 risk/controls/anchor/share-proof 규약 일치).
+    const latest = listReceipts(cwd).find((e) => e.name.endsWith(".json"));
+    if (!latest) {
+      console.error("attest: receipt 없음 — --receipt <path> / --pack <dir> 지정하거나 먼저 `done`/`receipt` 실행.");
+      process.exit(2);
+    }
+    receiptPath = latest.abs;
   }
   if (!existsSync(receiptPath)) {
     console.error(`attest: receipt 없음: ${receiptPath}`);

@@ -33,7 +33,7 @@ function ledgerClaimFails(cwd: string): number {
  */
 export function runIncident(sinceArg: string | undefined, cwd: string = process.cwd()): never {
   const all = listReceipts(cwd).filter((e) => e.name.endsWith(".json")); // 최신 우선
-  const since = sinceArg ? Math.max(1, Number(sinceArg) || 0) : all.length;
+  const since = sinceArg ? Math.max(1, Number(sinceArg) || all.length) : all.length; // 13차 council(#4): 무효값→전체(insights 와 정합·사고 은폐 방향 제거)
   const recent = all.slice(0, since);
 
   const failed: string[] = [];

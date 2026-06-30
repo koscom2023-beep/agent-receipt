@@ -131,6 +131,9 @@ agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
   report [--type developer|client|audit] / receipt [--format ...] [--content] [--strict-redact] [--agent <n>] [--model <m>] / receipts [--latest|--cat|--dir]
   audit [--json] / insights [--since <n>] [--format md|json] / risk [--format md|json] / dashboard / index [--json] / ledger [--json] (rebuild|verify) / replay --pack <dir> / attest / anchor [--upload] / controls [--format md|json] / incident
 
+■ 서명 / 승인(로컬·ed25519):
+  keys init / sign --receipt <p> / verify-signature --receipt <p> / approve --receipt <p> [--note <t>] / approvals
+
 ■ 정책(상시 규칙):
   policy init [--profile solo-founder|vibe-coder|agency-client|team-strict|promptia] / policy check / policy show
 

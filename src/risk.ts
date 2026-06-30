@@ -1,6 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
-import { isAbsolute, join } from "node:path";
-import { listReceipts } from "./receiptStore.js";
+import { loadSavedReceipt } from "./receiptStore.js";
 import { LIMIT_NOTE } from "./disclosure.js";
 import type { Receipt } from "./receipt.js";
 
@@ -90,32 +88,7 @@ export function renderRiskJson(r: Receipt): string {
 
 /** `agent-receipt risk [--receipt <p>] [--format md|json]` — 저장 receipt 의 AI 작업 위험 신호(읽기전용 투영). receipt 미변경. */
 export function runRisk(receiptPath: string | undefined, format: string | undefined, cwd: string = process.cwd()): never {
-  let abs: string;
-  if (receiptPath) {
-    abs = isAbsolute(receiptPath) ? receiptPath : join(cwd, receiptPath);
-    if (!existsSync(abs)) {
-      console.error(`risk: receipt 파일 없음: ${receiptPath}`);
-      process.exit(2);
-    }
-  } else {
-    const latest = listReceipts(cwd).find((e) => e.name.endsWith(".json"));
-    if (!latest) {
-      console.error("risk: 저장된 receipt 없음 — 먼저 `agent-receipt done`/`receipt` 실행하거나 --receipt <경로> 지정.");
-      process.exit(2);
-    }
-    abs = latest.abs;
-  }
-  let r: Receipt;
-  try {
-    r = JSON.parse(readFileSync(abs, "utf8")) as Receipt;
-  } catch {
-    console.error(`risk: receipt 파싱 실패(JSON 아님): ${abs}`);
-    process.exit(2);
-  }
-  if (!r || typeof r !== "object" || typeof r.ok !== "boolean") {
-    console.error(`risk: receipt 형식이 아님: ${abs}`);
-    process.exit(2);
-  }
+  const { receipt: r } = loadSavedReceipt(receiptPath, "risk", cwd); // 13차 council: 공용 로더
   process.stdout.write((format === "json" ? renderRiskJson(r) : renderRiskMd(r)) + "\n");
   process.exit(0);
 }
