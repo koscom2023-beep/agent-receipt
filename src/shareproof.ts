@@ -5,19 +5,20 @@ import { buildReceipt, type Receipt } from "./receipt.js";
 import { splitActionsForDisplay } from "./capture.js";
 import { redactText } from "./redact.js";
 import { LIMIT_NOTE } from "./disclosure.js";
-import { listReceipts } from "./receiptStore.js";
+import { listReceipts, loadRekorAnchor, type RekorAnchor } from "./receiptStore.js";
 
 // ── share-proof v0 (council B) — 외주사가 클라이언트에 보내는 로컬 self-contained HTML 증거 ──
-// 원칙: network 0(외부 CDN/img/script src 없음 — 오프라인 열람·유출 0) · 모든 동적 문자열 esc(injection 방어)
+// 원칙: 자동로드 0(외부 CDN/img/script "src" 없음 — 열람만으로 유출 0) · 모든 동적 문자열 esc(injection 방어)
 //        · 정직 라벨(제목=AI Work Receipt·tamper-evident·컴플라이언스 보장 아님) · buildReceipt 재사용(새 계산 0).
-// 범위 밖(hard-stop): cloud/hosted 검증 링크·제3자 anchor·서명(다음 단계).
+// Stage 1b(6차 council): 영수증을 Rekor 에 앵커한 경우(.rekor.json sidecar 존재)만 *클릭형* 검증 링크(href)를 추가.
+//   href 는 사용자가 직접 누를 때만 외부와 통신 → '열람만으로 유출 0' 원칙 유지. 앵커 없으면 출력은 기존과 바이트 동일.
 
 function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-/** 순수함수: Receipt → 고객 전달용 self-contained HTML(외부 리소스 0). */
-export function toProofHtml(r: Receipt): string {
+/** 순수함수: Receipt(+선택 Rekor 앵커) → 고객 전달용 self-contained HTML(자동로드 리소스 0). 앵커 미전달 시 출력은 앵커 도입 전과 바이트 동일. */
+export function toProofHtml(r: Receipt, anchor?: RekorAnchor | null): string {
   const pass = r.ok;
   const statusTxt = pass ? "PASS ✓" : "FAIL ✗";
   const statusColor = pass ? "#0a7d33" : "#c00";
@@ -39,6 +40,20 @@ export function toProofHtml(r: Receipt): string {
   <ul class="actions">${actionRows || `<li class="muted">none notable</li>`}${mutedLi}</ul>
   <p class="contrast"><strong>git saw: ${s.gitVisible}</strong> &nbsp;⟷&nbsp; <strong>actions recorded: ${s.total}</strong></p>
   <p class="meta">Values are never stored — paths/hosts/classification only. Capture scope = since the last <code>capture reset</code>.</p>
+</section>`
+      : "";
+
+  // Stage 1b: Rekor 앵커가 있으면 *클릭형* 제3자 검증 섹션. 기존 CSS 클래스만 사용(전역 style 불변) → 앵커 없으면 ""(바이트 동일).
+  const anchorSection = anchor
+    ? `
+  <section>
+  <h2>Third-party anchor (Rekor)</h2>
+  <p class="contrast">🔗 <a href="${esc(anchor.verifyUrl)}">Verify in the public transparency log</a> — anyone can confirm this receipt existed at this time <strong>without trusting the issuer</strong>.</p>
+  <table>
+    <tr><td class="k">Rekor logIndex</td><td><code>${esc(String(anchor.logIndex ?? "?"))}</code></td></tr>
+    <tr><td class="k">Entry UUID</td><td><code>${esc(anchor.uuid)}</code></td></tr>
+  </table>
+  <p class="meta">Seals <strong>time &amp; existence</strong> via a third party — not a keyless (identity) proof.</p>
 </section>`
       : "";
 
@@ -76,7 +91,7 @@ export function toProofHtml(r: Receipt): string {
     <tr><td class="k">Integrity (contentHash)</td><td class="hash">${esc(r.contentHash)}</td></tr>
     <tr><td class="k">Generated</td><td>${esc(r.timestamp)}</td></tr>
   </table>
-  ${beyondGit}
+  ${beyondGit}${anchorSection}
   <footer>
     ${esc(LIMIT_NOTE)}<br>
     git-based evidence — <strong>tamper-evident, not non-forgeable</strong>. This is evidence for review, <strong>not a compliance guarantee</strong>. Generated locally; no data left the machine.
@@ -90,9 +105,9 @@ export function toProofHtml(r: Receipt): string {
  * `agent-receipt share-proof [--out <path>] [--redact]` — 현재 상태로 receipt 를 만들어
  * 클라이언트 전달용 self-contained HTML 로 저장. exit = ok ? 0 : 1.
  */
-// 공통 쓰기: Receipt → HTML 파일. fresh build / 저장 receipt 양쪽이 재사용.
-function writeProof(r: Receipt, outArg: string | undefined, redact: boolean): never {
-  let html = toProofHtml(r);
+// 공통 쓰기: Receipt → HTML 파일. fresh build / 저장 receipt 양쪽이 재사용. anchor 는 저장 receipt 경로에서만 조회됨(fresh 는 항상 없음 → 바이트 동일).
+function writeProof(r: Receipt, outArg: string | undefined, redact: boolean, anchor?: RekorAnchor | null): never {
+  let html = toProofHtml(r, anchor);
   if (redact) html = redactText(html).text;
   const stamp = (r.timestamp ?? "receipt").replace(/[:.]/g, "-");
   const rel = outArg ?? join(".agent-guard", `proof-${stamp}.html`);
@@ -151,5 +166,6 @@ export function runShareProofFromSaved(
     console.error(`share-proof: receipt 형식이 아님: ${abs}`);
     process.exit(2);
   }
-  writeProof(r, outArg, redact);
+  // Stage 1b: 이 영수증이 Rekor 에 앵커됐으면(.rekor.json sidecar) 검증 링크를 임베드. 없으면 null → 기존과 바이트 동일.
+  writeProof(r, outArg, redact, loadRekorAnchor(abs));
 }

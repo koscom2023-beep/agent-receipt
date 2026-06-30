@@ -16,7 +16,11 @@ export function listReceipts(cwd: string): ReceiptEntry[] {
   const dir = receiptsDirAbs(cwd);
   if (!existsSync(dir)) return [];
   const files = readdirSync(dir).filter(
-    (f) => (f.endsWith(".json") || f.endsWith(".md")) && !f.endsWith(".sig.json") && !f.endsWith(".approval.json"),
+    (f) =>
+      (f.endsWith(".json") || f.endsWith(".md")) &&
+      !f.endsWith(".sig.json") &&
+      !f.endsWith(".approval.json") &&
+      !f.endsWith(".rekor.json"),
   );
   files.sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
   return files.map((f) => ({ name: f, abs: join(dir, f), rel: join(RECEIPTS_REL, f) }));
@@ -66,4 +70,30 @@ export function hasSignature(receiptAbs: string): boolean {
 // approve 는 receipt 당 sidecar 1개를 덮어쓴다 → count 는 0/1.
 export function approvalsCountFor(receiptAbs: string): number {
   return hasApproval(receiptAbs) ? 1 : 0;
+}
+
+// ── Rekor 앵커 sidecar (Stage 1b) — `anchor --upload` 등록 성공 시 영수증 옆에 기록, share-proof 가 검증 링크로 임베드 ──
+export type RekorAnchor = {
+  uuid: string;
+  logIndex: number | null;
+  verifyUrl: string; // 사람이 누르는 공개 검증 페이지(search.sigstore.dev)
+  apiUrl: string; // 기계 검증용 Rekor 엔트리 API
+};
+export function rekorAnchorPath(receiptAbs: string): string {
+  return receiptAbs + ".rekor.json";
+}
+export function hasRekorAnchor(receiptAbs: string): boolean {
+  return existsSync(rekorAnchorPath(receiptAbs));
+}
+/** sidecar 가 있으면 파싱해서 반환, 없거나 깨졌으면 null(= share-proof 가 앵커 섹션 생략 → 기존과 바이트 동일). */
+export function loadRekorAnchor(receiptAbs: string): RekorAnchor | null {
+  const p = rekorAnchorPath(receiptAbs);
+  if (!existsSync(p)) return null;
+  try {
+    const a = JSON.parse(readFileSync(p, "utf8")) as RekorAnchor;
+    if (a && typeof a.uuid === "string" && typeof a.verifyUrl === "string") return a;
+  } catch {
+    /* 깨진 sidecar → 앵커 없음으로 취급(증거를 위조하지 않음) */
+  }
+  return null;
 }

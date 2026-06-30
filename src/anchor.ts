@@ -3,7 +3,7 @@ import { sign as edSign } from "node:crypto";
 import { isAbsolute, join, basename } from "node:path";
 import type { Receipt } from "./receipt.js";
 import { buildAiWorkStatement } from "./attest.js";
-import { approvalsCountFor, listReceipts } from "./receiptStore.js";
+import { approvalsCountFor, listReceipts, rekorAnchorPath, type RekorAnchor } from "./receiptStore.js";
 import { ensureSigningKey, publicKeyFingerprint, publicKeyRelPath } from "./keys.js";
 
 // ── Stage 1 (6차 council): 제3자 앵커 — in-toto Statement → DSSE 봉투 + ed25519 서명 → Rekor 투명성 로그.
@@ -54,6 +54,16 @@ export function buildRekorDsseEntry(envelope: DsseEnvelope, publicPem: string): 
   };
 }
 
+/** 순수함수: Rekor 등록 결과(uuid, logIndex) → 영수증 옆에 남길 앵커 sidecar. share-proof 가 verifyUrl 을 검증 버튼으로 임베드. */
+export function buildRekorAnchor(uuid: string, logIndex: number | null): RekorAnchor {
+  return {
+    uuid,
+    logIndex,
+    verifyUrl: `https://search.sigstore.dev/?uuid=${uuid}`,
+    apiUrl: `${REKOR_URL}/api/v1/log/entries/${uuid}`,
+  };
+}
+
 /** Rekor 공개 로그에 DSSE 봉투 등록(외부 publish). 201=신규/409=기존. {uuid, logIndex} 반환. */
 async function uploadToRekor(envelope: DsseEnvelope, publicPem: string): Promise<{ uuid: string; logIndex: number | null }> {
   const res = await fetch(`${REKOR_URL}/api/v1/log/entries`, {
@@ -74,6 +84,7 @@ interface Prepared {
   envelope: DsseEnvelope;
   publicPem: string;
   bundleRel: string;
+  receiptPath: string;
 }
 
 function resolveReceiptPath(receiptArg: string | undefined, cwd: string): string {
@@ -119,7 +130,12 @@ function prepareAnchor(receiptArg: string | undefined, cwd: string): Prepared {
   const outPath = join(outDir, basename(rpath).replace(/\.json$/, "") + ".dsse.json");
   writeFileSync(outPath, JSON.stringify(envelope, null, 2) + "\n");
   const bundleRel = outPath.startsWith(cwd + "/") ? outPath.slice(cwd.length + 1) : outPath;
-  return { envelope, publicPem, bundleRel };
+  return { envelope, publicPem, bundleRel, receiptPath: rpath };
+}
+
+/** cwd 기준 상대경로(표시용). cwd 밖이면 절대경로 그대로. */
+function relTo(cwd: string, p: string): string {
+  return p.startsWith(cwd + "/") ? p.slice(cwd.length + 1) : p;
 }
 
 /**
@@ -146,17 +162,27 @@ export function runAnchor(receiptArg: string | undefined, cwd: string = process.
  * 외부 도구 0(node fetch). main() 이 sync 라 async 업로드는 내부에서 처리하고 끝나면 process.exit.
  */
 export function runAnchorUpload(receiptArg: string | undefined, cwd: string = process.cwd()): void {
-  const { envelope, publicPem, bundleRel } = prepareAnchor(receiptArg, cwd);
+  const { envelope, publicPem, bundleRel, receiptPath } = prepareAnchor(receiptArg, cwd);
   console.log(`anchor: DSSE 서명 완료 → ${bundleRel}`);
   console.log("  Rekor 공개 로그에 등록 중…");
   void (async () => {
     try {
       const { uuid, logIndex } = await uploadToRekor(envelope, publicPem);
+      const anchor = buildRekorAnchor(uuid, logIndex);
+      // 등록 성공을 먼저 보고(아래 sidecar 쓰기가 실패해도 등록 사실은 가림 없이).
       console.log("");
       console.log("✅ Rekor 등록 완료 — 이제 제3자(시간·존재)가 봉인했습니다.");
-      console.log(`   logIndex : ${logIndex ?? "?"}`);
-      console.log(`   검증 링크: https://search.sigstore.dev/?uuid=${uuid}`);
-      console.log(`   API      : ${REKOR_URL}/api/v1/log/entries/${uuid}`);
+      console.log(`   logIndex : ${anchor.logIndex ?? "?"}`);
+      console.log(`   검증 링크: ${anchor.verifyUrl}`);
+      console.log(`   API      : ${anchor.apiUrl}`);
+      // Stage 1b: 등록 결과를 영수증 옆 sidecar 로 기록 → share-proof 가 검증 링크를 자동 임베드. 실패해도 등록 자체는 유효.
+      const sidecar = rekorAnchorPath(receiptPath);
+      try {
+        writeFileSync(sidecar, JSON.stringify(anchor, null, 2) + "\n");
+        console.log(`   앵커 기록 → ${relTo(cwd, sidecar)} (share-proof 가 이 검증 링크를 자동으로 영수증에 박습니다)`);
+      } catch (e) {
+        console.error(`   ⚠️ 앵커 sidecar 기록 실패(${relTo(cwd, sidecar)}): ${(e as Error).message} — 등록은 성공, share-proof 자동 임베드만 누락.`);
+      }
       console.log("");
       console.log("   이 링크를 클라이언트에게 보내세요 — 나를 안 믿어도 공개 로그로 직접 확인합니다.");
       console.log("   (정직: 시간·존재 봉인이지 keyless 신원 증명은 아님.)");
