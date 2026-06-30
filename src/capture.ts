@@ -30,7 +30,8 @@ export interface CaptureRecord {
   reason?: string; // op=capture-degraded 일 때만(예: stdin 파싱 실패) — 조용한 누락 대신 정직한 갭 마커.
   // ── 완전성 보증 체인(6차 council iter1) — 변조·중간누락·재정렬 탐지. 레거시(이전 버전) 줄엔 부재. ──
   seq?: number; // 파일 내 단조 증가(누락 위치 = seq 불연속).
-  sessionId?: string; // Claude 훅 envelope의 session_id(없으면 미기재) — 세션 격리.
+  sessionId?: string; // 훅 envelope의 session_id/sessionId/conversation_id(없으면 미기재) — 세션 격리.
+  source?: string; // 행위 주체 에이전트(claude-code/codex/copilot/cursor) — 자기신고 라벨(증거 아님). 7차 council.
   prevHash?: string; // 직전 레코드의 entryHash(체인).
   entryHash?: string; // 이 레코드의 무결성 해시(entryHash 자신 제외, prevHash 포함).
 }
@@ -126,7 +127,33 @@ function clean(s: string | undefined): string | undefined {
   return s ? redactText(s).text : s;
 }
 
-/** Claude Code 훅 payload(또는 {tool,input}) → CaptureRecord[](없으면 []). 값 미저장. 실제 envelope의 여분 필드(session_id 등)는 무시. */
+export interface NormalizedEnvelope {
+  tool_name: string;
+  tool_input: Record<string, unknown>;
+  sessionId?: string;
+  source?: string;
+}
+
+/**
+ * 7차 council: 벤더중립 envelope 정규화 토대 — 여러 코딩 에이전트 훅 stdin 을 classifyEvent 공통 모양으로.
+ * Claude Code / Codex / Copilot(PascalCase)는 키가 동일 → passthrough. alias 하는 건 Copilot camelCase
+ * (toolName/toolArgs)와 세션ID 변형(session_id/sessionId/conversation_id)뿐. **추정 0** — 미검증 특이사항
+ * (Codex apply_patch 입력 shape·Cursor 전용 이벤트)은 매핑하지 않음(정찰 '실측 권장' 준수 → 미커버 tool 은 classifyEvent 가 []).
+ * source(행위 주체)는 명시될 때만(자기신고 라벨·증거 아님).
+ */
+export function normalizeEnvelope(payload: unknown): NormalizedEnvelope {
+  const o = (payload ?? {}) as Record<string, unknown>;
+  const tool_name = String(o.tool_name ?? o.tool ?? o.toolName ?? "");
+  const ti = o.tool_input ?? o.input ?? o.toolArgs;
+  const tool_input = ti && typeof ti === "object" ? (ti as Record<string, unknown>) : {};
+  const sid = o.session_id ?? o.sessionId ?? o.conversation_id;
+  const sessionId = typeof sid === "string" ? sid : undefined;
+  const src = o.source ?? o.agent;
+  const source = typeof src === "string" ? src : undefined;
+  return { tool_name, tool_input, sessionId, source };
+}
+
+/** 정규화된 envelope(또는 {tool,input}) → CaptureRecord[](없으면 []). 값 미저장. */
 export function classifyEvent(payload: unknown, phase: "pre" | "post" = "post", ts = ""): CaptureRecord[] {
   const o = payload as { tool_name?: string; tool?: string; tool_input?: Record<string, unknown>; input?: Record<string, unknown> };
   const tool = String(o?.tool_name ?? o?.tool ?? "");
@@ -228,7 +255,7 @@ function readRecords(): CaptureRecord[] {
 // 원칙: entryHash 는 자신을 제외한 결정론 직렬화(prevHash·seq·sessionId 포함) → 변조·삭제·재정렬·중간누락 탐지.
 //        새 의존성 0(node crypto). 레거시(체인 없는) 줄은 '검증불가'로 분리(차단 아님).
 export function captureEntryHash(r: CaptureRecord): string {
-  const payload = JSON.stringify({
+  const o: Record<string, unknown> = {
     ts: r.ts,
     phase: r.phase,
     tool: r.tool,
@@ -239,12 +266,13 @@ export function captureEntryHash(r: CaptureRecord): string {
     seq: r.seq ?? null,
     sessionId: r.sessionId ?? null,
     prevHash: r.prevHash ?? null,
-  });
-  return "sha256:" + createHash("sha256").update(payload).digest("hex");
+  };
+  if (r.source) o.source = r.source; // 신규 필드는 *있을 때만* 포함 → source 없는 기존 체인 레코드의 해시는 불변.
+  return "sha256:" + createHash("sha256").update(JSON.stringify(o)).digest("hex");
 }
 
-/** 분류된 레코드들에 seq/sessionId/prevHash/entryHash 를 물려 chain append(append-only). 파일 끝 레코드를 prev 로. */
-function appendCapture(recs: CaptureRecord[], sessionId: string | undefined): void {
+/** 분류된 레코드들에 seq/sessionId/source/prevHash/entryHash 를 물려 chain append(append-only). 파일 끝 레코드를 prev 로. */
+function appendCapture(recs: CaptureRecord[], sessionId: string | undefined, source?: string): void {
   if (!recs.length) return;
   const f = capFile();
   mkdirSync(dirname(f), { recursive: true });
@@ -257,6 +285,7 @@ function appendCapture(recs: CaptureRecord[], sessionId: string | undefined): vo
     seq += 1;
     const chained: CaptureRecord = { ...r, seq };
     if (sessionId) chained.sessionId = sessionId;
+    if (source) chained.source = source;
     if (prevHash) chained.prevHash = prevHash;
     chained.entryHash = captureEntryHash(chained);
     prevHash = chained.entryHash;
@@ -298,11 +327,6 @@ export function verifyCaptureChain(records: CaptureRecord[]): CaptureChainResult
   return { problems, verified, legacy };
 }
 
-function sessionIdOf(payload: unknown): string | undefined {
-  const o = payload as { session_id?: unknown };
-  return typeof o?.session_id === "string" ? o.session_id : undefined;
-}
-
 /** 실패를 조용히 삼키지 않고 'capture-degraded' 마커를 체인에 남긴다(비차단 exit 0). 마커 기록조차 실패하면 조용히 통과. */
 function markDegraded(phase: "pre" | "post", ts: string, reason: string): never {
   try {
@@ -330,8 +354,10 @@ export function runCaptureIngest(event: string | undefined): never {
   } catch {
     markDegraded(phase, now, "stdin JSON 파싱 실패");
   }
-  const recs = classifyEvent(payload, phase, now);
-  if (recs.length) appendCapture(recs, sessionIdOf(payload));
+  // 7차 council: 벤더중립 정규화 토대 — 다양한 에이전트 envelope 를 공통 모양으로(추정 0·passthrough+단순 alias).
+  const env = normalizeEnvelope(payload);
+  const recs = classifyEvent(env, phase, now);
+  if (recs.length) appendCapture(recs, env.sessionId, env.source);
   process.exit(0);
 }
 
