@@ -218,6 +218,37 @@ function capFile(): string {
   return join(root, ".agent-guard", "capture.jsonl");
 }
 
+// ── 꼬리 잘림(tail-truncation) 방어 (10차 council) — 봉인사슬이 못 잡는 '맨 끝 N개 삭제'를 high-water-mark 로 탐지 ──
+// 사이드카 {count,lastSeq,lastEntryHash}. append *후* 갱신(실패=swallow→head 가 log 보다 뒤처짐=behind=오탐 없음).
+// 로컬 best-effort: 공격자가 로그+head 둘 다 일관되게 고치면 우회 가능 — *강한* 꼬리방어는 Rekor 앵커. clear 시 head 도 삭제.
+interface CaptureHead {
+  count: number;
+  lastSeq: number;
+  lastEntryHash?: string;
+}
+function headFile(): string {
+  const root = g.repoRoot() ?? process.cwd();
+  return join(root, ".agent-guard", "capture.head.json");
+}
+function readHead(): CaptureHead | null {
+  const f = headFile();
+  if (!existsSync(f)) return null;
+  try {
+    const h = JSON.parse(readFileSync(f, "utf8")) as CaptureHead;
+    if (h && typeof h.count === "number" && typeof h.lastSeq === "number") return h;
+  } catch {
+    /* 깨진 head → 없음으로 취급(truncation check 불가·크래시 금지) */
+  }
+  return null;
+}
+function writeHead(h: CaptureHead): void {
+  try {
+    writeFileSync(headFile(), JSON.stringify(h) + "\n");
+  } catch {
+    /* head 갱신 실패 → behind 허용(다음 verify 가 log>=head 로 OK 처리·오탐 없음) */
+  }
+}
+
 /**
  * 누적 capture.jsonl → ActionsResult. 레코드가 0이면 **null**(영수증 임베드 시 필드 자체를 안 단다 →
  * capture 안 쓰는 기존 사용자 receipt 바이트불변). gitChangedPaths 주입 가능(receipt 의 touched∪staged∪untracked
@@ -292,6 +323,8 @@ function appendCapture(recs: CaptureRecord[], sessionId: string | undefined, sou
     lines.push(JSON.stringify(chained));
   }
   appendFileSync(f, lines.join("\n") + "\n");
+  // 꼬리방어: 로그 append *후* high-water-mark 갱신(실패해도 swallow → head 가 뒤처질 뿐·오탐 없음).
+  writeHead({ count: prior.length + recs.length, lastSeq: seq, lastEntryHash: prevHash });
 }
 
 /** 순수 검증 코어 — 변조(entryHash 불일치)·삭제/재정렬(prevHash 불연속)·중간누락(seq 불연속) 탐지. 출력/exit 없음. */
@@ -325,6 +358,20 @@ export function verifyCaptureChain(records: CaptureRecord[]): CaptureChainResult
     prevSeq = r.seq;
   }
   return { problems, verified, legacy };
+}
+
+export interface TruncationCheck {
+  status: "ok" | "truncation" | "unavailable";
+  detail: string;
+}
+/** 순수: high-water-mark(head) vs 현재 로그 → 꼬리 잘림 탐지. head>log 만 FLAG(behind=정상·오탐 0). head 없음=검사 불가. */
+export function checkTruncation(records: CaptureRecord[], head: CaptureHead | null): TruncationCheck {
+  if (!head) return { status: "unavailable", detail: "high-water-mark 없음 — 꼬리 삭제 검사 불가" };
+  const lastSeq = records.length ? (records[records.length - 1]?.seq ?? 0) : 0;
+  if (head.count > records.length || head.lastSeq > lastSeq) {
+    return { status: "truncation", detail: `기록부 ${head.count}건/seq ${head.lastSeq} > 로그 ${records.length}건/seq ${lastSeq} — 맨 끝 레코드 삭제(꼬리 잘림) 의심` };
+  }
+  return { status: "ok", detail: records.length === head.count ? "head=log 일치" : `log ${records.length} >= head ${head.count}(head 뒤처짐·정상)` };
 }
 
 /** 실패를 조용히 삼키지 않고 'capture-degraded' 마커를 체인에 남긴다(비차단 exit 0). 마커 기록조차 실패하면 조용히 통과. */
@@ -400,20 +447,27 @@ export function runCaptureShow(json: boolean): never {
 export function runCaptureVerify(): never {
   const records = readRecords();
   const { problems, verified, legacy } = verifyCaptureChain(records);
+  const trunc = checkTruncation(records, readHead());
   console.log(`\nagent-receipt capture verify — ${records.length}건 (검증 ${verified} · 레거시 ${legacy} · 문제 ${problems.length})`);
   if (problems.length) for (const p of problems) console.log(`  ✗ ${p}`);
   else console.log(legacy ? "  체인 OK ✅ (레거시 줄은 검증 대상 아님)" : "  체인 OK ✅");
-  console.log("  tamper-evident & gap-evident — 설정된 훅 표면 한정(complete 아님; 꼬리절단·미설치·--dangerously-skip-permissions·subagent/MCP/pipe·OS레벨은 범위 밖).");
-  process.exit(problems.length ? 1 : 0);
+  if (trunc.status === "truncation") console.log(`  ✗ 꼬리 잘림: ${trunc.detail}`);
+  else if (trunc.status === "unavailable") console.log(`  · 꼬리 검사: ${trunc.detail}`);
+  else console.log(`  꼬리 검사 OK ✅ (${trunc.detail})`);
+  console.log("  tamper-evident & gap-evident — 설정된 훅 표면 한정(complete 아님; 미설치·--dangerously-skip-permissions·subagent/MCP/pipe·OS레벨은 범위 밖).");
+  console.log("  꼬리방어 high-water-mark 는 로컬 best-effort(로그+head 둘 다 일관 변조 시 우회 가능) — 강한 꼬리방어는 'anchor'(Rekor 제3자 봉인).");
+  process.exit(problems.length || trunc.status === "truncation" ? 1 : 0);
 }
 
 /** capture 로그를 조용히 비운다(비exit·무출력) — begin(새 baseline)/reset 에서 재사용. council A #1. */
 export function clearCaptureLog(): void {
-  const f = capFile();
-  try {
-    if (existsSync(f)) rmSync(f);
-  } catch {
-    /* noop */
+  for (const f of [capFile(), headFile()]) {
+    // 로그·head 동시 삭제 — 한쪽만 남으면 head>log 오탐(10차 council).
+    try {
+      if (existsSync(f)) rmSync(f);
+    } catch {
+      /* noop */
+    }
   }
 }
 

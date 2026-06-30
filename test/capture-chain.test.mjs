@@ -2,7 +2,7 @@
 // 잠금: 변조/삭제/재정렬/중간누락 탐지 · 레거시 분리 · degraded 는 행위에서 제외(영수증 byte 안전) · 체인필드는 actions 에 누출 안 됨.
 // `node test/capture-chain.test.mjs`.
 import assert from "node:assert/strict";
-import { captureEntryHash, verifyCaptureChain, aggregateActions, classifyEvent, COVERED_TOOLS, splitActionsForDisplay, isNotableAction } from "../dist/capture.js";
+import { captureEntryHash, verifyCaptureChain, aggregateActions, classifyEvent, COVERED_TOOLS, splitActionsForDisplay, isNotableAction, checkTruncation } from "../dist/capture.js";
 
 let pass = 0;
 const fail = [];
@@ -143,6 +143,23 @@ check("노이즈 필터 — 전부 일반이면 notable 0·전수 muted(접힘)"
   const { notable, mutedCount } = splitActionsForDisplay([{ flag: "FILE_READ" }, { flag: "COMMAND_RUN" }, { flag: "FILE_WRITE" }]);
   assert.equal(notable.length, 0);
   assert.equal(mutedCount, 3);
+});
+
+// ── 꼬리 잘림(tail-truncation) 방어(10차 council) — high-water-mark head vs 로그. head>log 만 FLAG(behind=정상). ──
+check("꼬리방어 — head.count > 로그수 → truncation", () => {
+  assert.equal(checkTruncation(chain(base.slice(0, 1), "s"), { count: 3, lastSeq: 3 }).status, "truncation");
+});
+check("꼬리방어 — head.lastSeq > 로그 마지막 seq → truncation", () => {
+  assert.equal(checkTruncation(chain(base.slice(0, 2), "s"), { count: 2, lastSeq: 5 }).status, "truncation");
+});
+check("꼬리방어 — head=log → ok", () => {
+  assert.equal(checkTruncation(chain(base, "s"), { count: 3, lastSeq: 3 }).status, "ok");
+});
+check("꼬리방어 — log>head(behind) → ok(오탐 0)", () => {
+  assert.equal(checkTruncation(chain(base, "s"), { count: 2, lastSeq: 2 }).status, "ok");
+});
+check("꼬리방어 — head 없음 → unavailable(실패 아님)", () => {
+  assert.equal(checkTruncation(chain(base, "s"), null).status, "unavailable");
 });
 
 if (fail.length) {
