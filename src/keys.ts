@@ -48,6 +48,18 @@ export function publicKeyFingerprint(cwd: string = process.cwd()): string | null
 export function publicKeyRelPath(): string {
   return PUB_REL;
 }
+/** anchor --upload 용: 키 없으면 조용히 생성하고 private KeyObject + public PEM 반환(별도 keys init 불필요). */
+export function ensureSigningKey(cwd: string = process.cwd()): { key: KeyObject; publicPem: string } {
+  const privAbs = join(cwd, PRIV_REL);
+  const pubAbs = join(cwd, PUB_REL);
+  if (!existsSync(privAbs) || !existsSync(pubAbs)) {
+    const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+    mkdirSync(join(cwd, KEYS_REL), { recursive: true });
+    writeFileSync(privAbs, privateKey.export({ type: "pkcs8", format: "pem" }) as string, { mode: 0o600 });
+    writeFileSync(pubAbs, publicKey.export({ type: "spki", format: "pem" }) as string);
+  }
+  return { key: createPrivateKey(readFileSync(privAbs)), publicPem: readFileSync(pubAbs, "utf8") };
+}
 
 /** `agent-receipt keys init` — ed25519 키쌍 생성(PEM). 이미 있으면 덮어쓰지 않음(exit 1). */
 export function runKeysInit(cwd: string = process.cwd()): never {

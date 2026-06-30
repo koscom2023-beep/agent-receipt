@@ -35,7 +35,7 @@ import { runFinish } from "./finish.js";
 import { runLedger, runLedgerRebuild, runLedgerVerify } from "./ledger.js";
 import { runReplay } from "./replay.js";
 import { runAttest } from "./attest.js";
-import { runAnchor } from "./anchor.js";
+import { runAnchor, runAnchorUpload } from "./anchor.js";
 import { runIncident } from "./incident.js";
 import { runReport } from "./report.js";
 import { runNote } from "./note.js";
@@ -307,6 +307,10 @@ function main(): void {
     runVerifySignature(getArg("--receipt"));
   }
   if (command === "anchor") {
+    if (hasFlag("--upload")) {
+      runAnchorUpload(getArg("--receipt"));
+      return;
+    }
     runAnchor(getArg("--receipt"));
   }
 

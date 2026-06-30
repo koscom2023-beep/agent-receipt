@@ -3,14 +3,15 @@ import { sign as edSign } from "node:crypto";
 import { isAbsolute, join, basename } from "node:path";
 import type { Receipt } from "./receipt.js";
 import { buildAiWorkStatement } from "./attest.js";
-import { approvalsCountFor } from "./receiptStore.js";
-import { loadPrivateKey, publicKeyFingerprint, publicKeyRelPath } from "./keys.js";
+import { approvalsCountFor, listReceipts } from "./receiptStore.js";
+import { ensureSigningKey, publicKeyFingerprint, publicKeyRelPath } from "./keys.js";
 
-// ── Stage 1 (6차 council): 제3자 앵커 토대 — in-toto Statement → DSSE 봉투 + 기존 ed25519 서명 → Rekor-ready 번들.
-// 원칙: 새 의존성 0(node crypto + 순수 PAE) · 실제 Rekor 등록은 표준도구(cosign/rekor-cli)로 owner 수동(외부 publish)
-//        · 정직 라벨(Rekor=시간·존재 제3자 봉인, keyless 신원은 아님 · 등록 전엔 미봉인) · 값 미노출(Statement만 — 경로/분류).
+// ── Stage 1 (6차 council): 제3자 앵커 — in-toto Statement → DSSE 봉투 + ed25519 서명 → Rekor 투명성 로그.
+// 한 명령(anchor --upload): 최신 영수증 자동 + 키 자동생성 + 서명 + Rekor 등록(node fetch·외부 도구 0).
+// 원칙: npm 의존성 0(node crypto/fetch + 순수 PAE) · 정직 라벨(Rekor=시간·존재 봉인, keyless 신원은 아님) · 값 미노출(Statement만).
 
 const DSSE_PAYLOAD_TYPE = "application/vnd.in-toto+json";
+const REKOR_URL = "https://rekor.sigstore.dev";
 
 /** DSSE PAE(Pre-Authentication Encoding) v1: "DSSEv1 SP len(type) SP type SP len(body) SP body"(바이트). 순수함수. */
 export function dssePae(payloadType: string, payload: Buffer): Buffer {
@@ -40,62 +41,131 @@ export function buildDsseEnvelope(
   };
 }
 
-function readReceipt(p: string): Receipt | null {
-  try {
-    return JSON.parse(readFileSync(p, "utf8")) as Receipt;
-  } catch {
-    return null;
-  }
+/** 순수함수: DSSE 봉투 → Rekor `dsse:0.0.1` 제안 엔트리 바디(실제 Rekor 201 응답으로 검증된 스키마). */
+export function buildRekorDsseEntry(envelope: DsseEnvelope, publicPem: string): {
+  apiVersion: string;
+  kind: string;
+  spec: { proposedContent: { envelope: string; verifiers: string[] } };
+} {
+  return {
+    apiVersion: "0.0.1",
+    kind: "dsse",
+    spec: { proposedContent: { envelope: JSON.stringify(envelope), verifiers: [Buffer.from(publicPem).toString("base64")] } },
+  };
 }
 
-/**
- * `agent-receipt anchor --receipt <path>` — Stage0 in-toto Statement 를 DSSE 로 서명해 Rekor-ready 번들 생성.
- * 기본=오프라인 prepare(번들 저장 + 등록 명령 출력). 실제 Rekor 등록은 표준도구로 owner 수동(외부 publish). exit 0 / 2.
- */
-export function runAnchor(receiptArg: string | undefined, cwd: string = process.cwd()): never {
-  if (!receiptArg) {
-    console.error("anchor: --receipt <path> 가 필요합니다.");
+/** Rekor 공개 로그에 DSSE 봉투 등록(외부 publish). 201=신규/409=기존. {uuid, logIndex} 반환. */
+async function uploadToRekor(envelope: DsseEnvelope, publicPem: string): Promise<{ uuid: string; logIndex: number | null }> {
+  const res = await fetch(`${REKOR_URL}/api/v1/log/entries`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(buildRekorDsseEntry(envelope, publicPem)),
+  });
+  const txt = await res.text();
+  if (res.status !== 201 && res.status !== 409) {
+    throw new Error(`Rekor HTTP ${res.status}: ${txt.slice(0, 300)}`);
+  }
+  const obj = JSON.parse(txt) as Record<string, { logIndex?: number }>;
+  const uuid = Object.keys(obj)[0];
+  return { uuid, logIndex: obj[uuid]?.logIndex ?? null };
+}
+
+interface Prepared {
+  envelope: DsseEnvelope;
+  publicPem: string;
+  bundleRel: string;
+}
+
+function resolveReceiptPath(receiptArg: string | undefined, cwd: string): string {
+  if (receiptArg) {
+    const p = isAbsolute(receiptArg) ? receiptArg : join(cwd, receiptArg);
+    if (!existsSync(p)) {
+      console.error(`anchor: receipt 파일 없음: ${receiptArg}`);
+      process.exit(2);
+    }
+    return p;
+  }
+  const latest = listReceipts(cwd).find((e) => e.name.endsWith(".json"));
+  if (!latest) {
+    console.error("anchor: 저장된 receipt 없음 — 먼저 'agent-receipt done' 을 실행하거나 --receipt <경로> 를 지정하세요.");
     process.exit(2);
   }
-  const rpath = isAbsolute(receiptArg) ? receiptArg : join(cwd, receiptArg);
-  if (!existsSync(rpath)) {
-    console.error(`anchor: receipt 파일 없음: ${receiptArg}`);
-    process.exit(2);
+  return latest.abs;
+}
+
+/** 영수증 로드(없으면 최신) → Stage0 Statement → DSSE 서명(키 자동생성) → 번들 저장. 오류는 process.exit(2). */
+function prepareAnchor(receiptArg: string | undefined, cwd: string): Prepared {
+  const rpath = resolveReceiptPath(receiptArg, cwd);
+  let r: Receipt | null;
+  try {
+    r = JSON.parse(readFileSync(rpath, "utf8")) as Receipt;
+  } catch {
+    r = null;
   }
-  const r = readReceipt(rpath);
   if (!r || typeof r.contentHash !== "string") {
     console.error("anchor: json receipt 가 필요합니다(파싱 실패 또는 contentHash 없음).");
     process.exit(2);
   }
-  const key = loadPrivateKey(cwd);
-  if (!key) {
-    console.error("anchor: private key 없음 — 'agent-receipt keys init' 를 먼저 실행하세요.");
-    process.exit(2);
-  }
+  const { key, publicPem } = ensureSigningKey(cwd);
   const keyid = publicKeyFingerprint(cwd) ?? undefined;
-
   const statement = buildAiWorkStatement(r, approvalsCountFor(rpath));
   const payload = Buffer.from(JSON.stringify(statement));
   const envelope = buildDsseEnvelope(payload, DSSE_PAYLOAD_TYPE, (pae) => ({
     sig: edSign(null, pae, key).toString("base64"),
     keyid,
   }));
-
   const outDir = join(cwd, ".agent-guard", "anchors");
   mkdirSync(outDir, { recursive: true });
   const outPath = join(outDir, basename(rpath).replace(/\.json$/, "") + ".dsse.json");
   writeFileSync(outPath, JSON.stringify(envelope, null, 2) + "\n");
-  const outRel = outPath.startsWith(cwd + "/") ? outPath.slice(cwd.length + 1) : outPath;
+  const bundleRel = outPath.startsWith(cwd + "/") ? outPath.slice(cwd.length + 1) : outPath;
+  return { envelope, publicPem, bundleRel };
+}
 
-  console.log(`anchor: DSSE 번들 준비됨 → ${outRel}`);
-  console.log(`  서명: ed25519(${keyid ?? "local"}) over DSSE PAE · payloadType=${DSSE_PAYLOAD_TYPE}`);
+/**
+ * `agent-receipt anchor [--receipt <path>]` — 오프라인 prepare: DSSE 번들 생성 + 등록 방법 출력.
+ * 실제 등록은 `--upload`(우리 도구) 또는 rekor-cli. exit 0 / 2.
+ */
+export function runAnchor(receiptArg: string | undefined, cwd: string = process.cwd()): never {
+  const { bundleRel } = prepareAnchor(receiptArg, cwd);
+  console.log(`anchor: DSSE 번들 준비됨 → ${bundleRel}`);
   console.log("");
   console.log("  ⚠️ 아직 Rekor 미등록 — 등록해야 제3자(시간·존재) 봉인이 됩니다.");
-  console.log("  Rekor 공개 로그에 등록(수동·외부 publish·해시/서명만 공개):");
-  console.log(`    rekor-cli upload --type dsse --artifact ${outRel} --public-key ${publicKeyRelPath()} --pki-format x509`);
-  console.log("    (rekor-cli 설치 필요 · ed25519 PEM 공개키라 --pki-format x509 필수)");
+  console.log("  가장 쉬운 등록(외부 도구 불필요):");
+  console.log("    agent-receipt anchor --upload");
   console.log("");
-  console.log("  정직: Rekor 는 '시간·존재'를 제3자로 봉인(issuer 백데이트·삭제 불가)하지만,");
-  console.log("        자기관리 ed25519 키이므로 keyless(Fulcio/OIDC) 신원 비가역 증명은 아닙니다.");
+  console.log("  또는 rekor-cli 로:");
+  console.log(`    rekor-cli upload --type dsse --artifact ${bundleRel} --public-key ${publicKeyRelPath()} --pki-format x509`);
+  console.log("");
+  console.log("  정직: Rekor 는 '시간·존재'를 제3자로 봉인하지만, 자기관리 ed25519 키라 keyless(신원) 증명은 아닙니다.");
   process.exit(0);
+}
+
+/**
+ * `agent-receipt anchor --upload [--receipt <path>]` — 한 명령: 최신 영수증 + 키 자동 + 서명 + Rekor 등록.
+ * 외부 도구 0(node fetch). main() 이 sync 라 async 업로드는 내부에서 처리하고 끝나면 process.exit.
+ */
+export function runAnchorUpload(receiptArg: string | undefined, cwd: string = process.cwd()): void {
+  const { envelope, publicPem, bundleRel } = prepareAnchor(receiptArg, cwd);
+  console.log(`anchor: DSSE 서명 완료 → ${bundleRel}`);
+  console.log("  Rekor 공개 로그에 등록 중…");
+  void (async () => {
+    try {
+      const { uuid, logIndex } = await uploadToRekor(envelope, publicPem);
+      console.log("");
+      console.log("✅ Rekor 등록 완료 — 이제 제3자(시간·존재)가 봉인했습니다.");
+      console.log(`   logIndex : ${logIndex ?? "?"}`);
+      console.log(`   검증 링크: https://search.sigstore.dev/?uuid=${uuid}`);
+      console.log(`   API      : ${REKOR_URL}/api/v1/log/entries/${uuid}`);
+      console.log("");
+      console.log("   이 링크를 클라이언트에게 보내세요 — 나를 안 믿어도 공개 로그로 직접 확인합니다.");
+      console.log("   (정직: 시간·존재 봉인이지 keyless 신원 증명은 아님.)");
+      process.exit(0);
+    } catch (e) {
+      console.error("");
+      console.error(`✗ Rekor 등록 실패: ${(e as Error).message}`);
+      console.error(`  번들은 저장돼 있습니다(${bundleRel}). 네트워크 확인 후 재시도하세요.`);
+      process.exit(1);
+    }
+  })();
 }

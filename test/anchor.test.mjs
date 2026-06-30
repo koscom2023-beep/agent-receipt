@@ -2,7 +2,7 @@
 // `node test/anchor.test.mjs`. 네트워크(Rekor 등록)는 owner 수동이라 여기선 미검(순수부분만 잠금).
 import assert from "node:assert/strict";
 import { generateKeyPairSync, sign as edSign, verify as edVerify } from "node:crypto";
-import { dssePae, buildDsseEnvelope } from "../dist/anchor.js";
+import { dssePae, buildDsseEnvelope, buildRekorDsseEntry } from "../dist/anchor.js";
 
 let pass = 0;
 const fail = [];
@@ -53,6 +53,17 @@ check("변조 탐지 — payload 바뀌면 서명 검증 실패", () => {
   const tamperedPae = dssePae("t", Buffer.from("HACKED"));
   const ok = edVerify(null, tamperedPae, publicKey, Buffer.from(env.signatures[0].sig, "base64"));
   assert.ok(!ok, "변조됐는데 검증 통과");
+});
+
+check("Rekor dsse 엔트리 바디 형태(실 Rekor 201로 검증된 스키마)", () => {
+  const env = buildDsseEnvelope(Buffer.from("{}"), PT, () => ({ sig: "QQ==" }));
+  const pem = "-----BEGIN PUBLIC KEY-----\nXYZ\n-----END PUBLIC KEY-----\n";
+  const entry = buildRekorDsseEntry(env, pem);
+  assert.equal(entry.kind, "dsse");
+  assert.equal(entry.apiVersion, "0.0.1");
+  assert.equal(typeof entry.spec.proposedContent.envelope, "string");
+  assert.equal(JSON.parse(entry.spec.proposedContent.envelope).payloadType, PT);
+  assert.equal(Buffer.from(entry.spec.proposedContent.verifiers[0], "base64").toString(), pem);
 });
 
 if (fail.length) {
