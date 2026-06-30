@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, writeFileSync, appendFileSync, mkdirSync, rmSync } from "node:fs";
 import { join, dirname, relative } from "node:path";
 import { homedir } from "node:os";
+import { createHash } from "node:crypto";
 import { redactText, REDACT_NOTE } from "./redact.js";
 import * as g from "./git.js";
 
@@ -23,10 +24,34 @@ export interface CaptureRecord {
   ts: string;
   phase: "pre" | "post";
   tool: string;
-  op: "read" | "write" | "delete" | "network" | "command";
+  op: "read" | "write" | "delete" | "network" | "command" | "capture-degraded";
   path?: string;
   host?: string;
+  reason?: string; // op=capture-degraded 일 때만(예: stdin 파싱 실패) — 조용한 누락 대신 정직한 갭 마커.
+  // ── 완전성 보증 체인(6차 council iter1) — 변조·중간누락·재정렬 탐지. 레거시(이전 버전) 줄엔 부재. ──
+  seq?: number; // 파일 내 단조 증가(누락 위치 = seq 불연속).
+  sessionId?: string; // Claude 훅 envelope의 session_id(없으면 미기재) — 세션 격리.
+  prevHash?: string; // 직전 레코드의 entryHash(체인).
+  entryHash?: string; // 이 레코드의 무결성 해시(entryHash 자신 제외, prevHash 포함).
 }
+
+export interface CaptureChainResult {
+  problems: string[];
+  verified: number;
+  legacy: number;
+}
+
+// 캡처가 다루는 도구의 단일 출처(council iter1 D) — 훅 matcher·분류기 커버리지·caveat 가 공유.
+// 이 목록 밖(WebFetch·WebSearch·mcp__*·Task 등)은 훅이 호출되지 않아 capture 가 볼 수 없다(정직 한계).
+export const COVERED_TOOLS: readonly string[] = [
+  "Bash",
+  "Read",
+  "Write",
+  "Edit",
+  "MultiEdit",
+  "NotebookEdit",
+  "NotebookRead",
+];
 
 export interface CaptureAction {
   tool: string;
@@ -140,7 +165,7 @@ export function aggregateActions(records: CaptureRecord[], gitChangedPaths: Set<
 
   const actions: CaptureAction[] = [];
   for (const r of records) {
-    if (r.op === "delete") continue; // write 와 합치거나(create-then-delete) alpha 에선 단독 미표기
+    if (r.op === "delete" || r.op === "capture-degraded") continue; // delete=write와 합침 / degraded=행위 아닌 갭 마커(영수증 불변)
     let flag: ActionFlag;
     if (r.op === "read") flag = r.path && SECRET_PATH.test(r.path) ? "READ_SECRET_FILE" : "FILE_READ";
     else if (r.op === "network") flag = "EXTERNAL_NETWORK_CALL";
@@ -199,28 +224,114 @@ function readRecords(): CaptureRecord[] {
     .filter((r): r is CaptureRecord => r !== null);
 }
 
-/** `agent-receipt capture [--event pre|post]` — 훅 stdin(JSON) 1건을 분류·마스킹·append. 항상 통과(비차단). */
+// ── 완전성 보증 체인(6차 council iter1) — ledger.ts 의 검증된 해시체인 패턴을 capture 에 이식 ──
+// 원칙: entryHash 는 자신을 제외한 결정론 직렬화(prevHash·seq·sessionId 포함) → 변조·삭제·재정렬·중간누락 탐지.
+//        새 의존성 0(node crypto). 레거시(체인 없는) 줄은 '검증불가'로 분리(차단 아님).
+export function captureEntryHash(r: CaptureRecord): string {
+  const payload = JSON.stringify({
+    ts: r.ts,
+    phase: r.phase,
+    tool: r.tool,
+    op: r.op,
+    path: r.path ?? null,
+    host: r.host ?? null,
+    reason: r.reason ?? null,
+    seq: r.seq ?? null,
+    sessionId: r.sessionId ?? null,
+    prevHash: r.prevHash ?? null,
+  });
+  return "sha256:" + createHash("sha256").update(payload).digest("hex");
+}
+
+/** 분류된 레코드들에 seq/sessionId/prevHash/entryHash 를 물려 chain append(append-only). 파일 끝 레코드를 prev 로. */
+function appendCapture(recs: CaptureRecord[], sessionId: string | undefined): void {
+  if (!recs.length) return;
+  const f = capFile();
+  mkdirSync(dirname(f), { recursive: true });
+  const prior = readRecords();
+  const last = prior[prior.length - 1];
+  let prevHash = last?.entryHash;
+  let seq = last?.seq ?? 0;
+  const lines: string[] = [];
+  for (const r of recs) {
+    seq += 1;
+    const chained: CaptureRecord = { ...r, seq };
+    if (sessionId) chained.sessionId = sessionId;
+    if (prevHash) chained.prevHash = prevHash;
+    chained.entryHash = captureEntryHash(chained);
+    prevHash = chained.entryHash;
+    lines.push(JSON.stringify(chained));
+  }
+  appendFileSync(f, lines.join("\n") + "\n");
+}
+
+/** 순수 검증 코어 — 변조(entryHash 불일치)·삭제/재정렬(prevHash 불연속)·중간누락(seq 불연속) 탐지. 출력/exit 없음. */
+export function verifyCaptureChain(records: CaptureRecord[]): CaptureChainResult {
+  const problems: string[] = [];
+  let verified = 0;
+  let legacy = 0;
+  let prevEntryHash: string | undefined = undefined;
+  let prevSeq: number | undefined = undefined;
+  for (let i = 0; i < records.length; i++) {
+    const r = records[i] as CaptureRecord;
+    const n = i + 1;
+    if (!r.entryHash) {
+      legacy++;
+      prevEntryHash = undefined; // 레거시 줄은 연속성 기준점이 못 됨
+      prevSeq = undefined;
+      continue;
+    }
+    if (captureEntryHash(r) !== r.entryHash) {
+      problems.push(`#${n} ${r.ts}: entryHash 불일치(레코드 변조 가능)`);
+    } else {
+      verified++;
+    }
+    if (prevEntryHash !== undefined && (r.prevHash ?? undefined) !== prevEntryHash) {
+      problems.push(`#${n} ${r.ts}: prevHash 가 직전과 불일치(삭제/재정렬 가능)`);
+    }
+    if (prevSeq !== undefined && r.seq !== undefined && r.seq !== prevSeq + 1) {
+      problems.push(`#${n} ${r.ts}: seq 불연속 ${prevSeq}→${r.seq}(중간 누락 가능)`);
+    }
+    prevEntryHash = r.entryHash;
+    prevSeq = r.seq;
+  }
+  return { problems, verified, legacy };
+}
+
+function sessionIdOf(payload: unknown): string | undefined {
+  const o = payload as { session_id?: unknown };
+  return typeof o?.session_id === "string" ? o.session_id : undefined;
+}
+
+/** 실패를 조용히 삼키지 않고 'capture-degraded' 마커를 체인에 남긴다(비차단 exit 0). 마커 기록조차 실패하면 조용히 통과. */
+function markDegraded(phase: "pre" | "post", ts: string, reason: string): never {
+  try {
+    appendCapture([{ ts, phase, tool: "(capture)", op: "capture-degraded", reason }], undefined);
+  } catch {
+    /* 마커 기록 실패 시에도 비차단(증거지 게이트 아님) */
+  }
+  process.exit(0);
+}
+
+/** `agent-receipt capture [--event pre|post]` — 훅 stdin(JSON) 1건을 분류·마스킹·체인 append. 항상 통과(비차단). */
 export function runCaptureIngest(event: string | undefined): never {
   const phase: "pre" | "post" = event === "pre" ? "pre" : "post";
-  if (process.stdin.isTTY) process.exit(0); // 파이프 입력 없으면 무동작
+  if (process.stdin.isTTY) process.exit(0); // 파이프 입력 없으면 무동작(실패 아님)
+  const now = new Date().toISOString();
   let raw = "";
   try {
     raw = readFileSync(0, "utf8");
   } catch {
-    process.exit(0);
+    markDegraded(phase, now, "stdin 읽기 실패");
   }
   let payload: unknown;
   try {
     payload = JSON.parse(raw);
   } catch {
-    process.exit(0); // 파싱 실패도 통과(증거지 게이트 아님)
+    markDegraded(phase, now, "stdin JSON 파싱 실패");
   }
-  const recs = classifyEvent(payload, phase, new Date().toISOString());
-  if (recs.length) {
-    const f = capFile();
-    mkdirSync(dirname(f), { recursive: true });
-    appendFileSync(f, recs.map((r) => JSON.stringify(r)).join("\n") + "\n");
-  }
+  const recs = classifyEvent(payload, phase, now);
+  if (recs.length) appendCapture(recs, sessionIdOf(payload));
   process.exit(0);
 }
 
@@ -243,8 +354,31 @@ export function runCaptureShow(json: boolean): never {
   for (const a of notable) console.log(`  ⚠️ ${a.flag}  ${a.path ?? a.host ?? ""}`);
   if (mutedCount) console.log(`  · 그 외 일반 read/command ${mutedCount}건 (기록됨·접힘)`);
   console.log(`\n  git 가 보는 것: ${s.gitVisible}  ⟷  주목 행위: ${notable.length}  (전체 기록 ${s.total})`);
+  // 완전성 보증(iter1): git 이 바꿨으나 capture 기록이 없는 경로 = 훅 사각(차집합). 거짓 안심 차단.
+  const capturePaths = new Set(result.actions.map((a) => a.path).filter((p): p is string => !!p));
+  const uncovered = [...gitChanged].filter((p) => !capturePaths.has(p));
+  const degraded = records.filter((r) => r.op === "capture-degraded").length;
+  if (uncovered.length) {
+    console.log(`\n  ⚠️ git 이 바꿨으나 capture 기록 없는 경로 ${uncovered.length}건(훅 사각 가능):`);
+    for (const p of uncovered.slice(0, 10)) console.log(`     ${p}`);
+    if (uncovered.length > 10) console.log(`     … 외 ${uncovered.length - 10}건`);
+  }
+  if (degraded) console.log(`  ⚠️ capture 열화 마커 ${degraded}건 — 일부 행위 기록 실패(조용한 누락 아님).`);
+  console.log(`\n  커버 도구: ${COVERED_TOOLS.join(", ")} (그 외 WebFetch·MCP·Task·OS레벨은 capture 범위 밖).`);
+  console.log(`  tamper-evident & gap-evident — '설정된 훅 표면' 한정(complete/빠짐없음 아님). 'capture verify' 로 체인 검증.`);
   console.log(`  값은 저장하지 않습니다 — 경로/호스트/행위분류만. ${REDACT_NOTE}`);
   process.exit(0);
+}
+
+/** `agent-receipt capture verify` — capture.jsonl 해시체인 검증(read-only). 변조·삭제/재정렬·중간누락 탐지. 레거시 줄은 검증불가(차단 아님). */
+export function runCaptureVerify(): never {
+  const records = readRecords();
+  const { problems, verified, legacy } = verifyCaptureChain(records);
+  console.log(`\nagent-receipt capture verify — ${records.length}건 (검증 ${verified} · 레거시 ${legacy} · 문제 ${problems.length})`);
+  if (problems.length) for (const p of problems) console.log(`  ✗ ${p}`);
+  else console.log(legacy ? "  체인 OK ✅ (레거시 줄은 검증 대상 아님)" : "  체인 OK ✅");
+  console.log("  tamper-evident & gap-evident — 설정된 훅 표면 한정(complete 아님; 꼬리절단·미설치·--dangerously-skip-permissions·subagent/MCP/pipe·OS레벨은 범위 밖).");
+  process.exit(problems.length ? 1 : 0);
 }
 
 /** capture 로그를 조용히 비운다(비exit·무출력) — begin(새 baseline)/reset 에서 재사용. council A #1. */
@@ -267,7 +401,7 @@ export function runCaptureReset(): never {
 // ── Claude Code 훅 자동배선 (capture install) — council A Decision #2/#3 ──
 // .claude/settings.json 의 hooks.PreToolUse/PostToolUse 에 `agent-receipt capture` 추가.
 // 기본 --print(미리보기·무쓰기), 실제 쓰기는 --write opt-in. 머지는 멱등·기존 보존·malformed 거부.
-const HOOK_MATCHER = "Bash|Read|Write|Edit|MultiEdit|NotebookEdit|NotebookRead";
+const HOOK_MATCHER = COVERED_TOOLS.join("|"); // = "Bash|Read|Write|Edit|MultiEdit|NotebookEdit|NotebookRead"(단일 출처 COVERED_TOOLS).
 const captureCommand = (phase: "pre" | "post"): string => `agent-receipt capture --event ${phase}`;
 
 interface HookCmd {

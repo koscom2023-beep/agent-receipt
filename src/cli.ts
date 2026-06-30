@@ -46,7 +46,7 @@ import { runInstallHooks, runUninstallHooks } from "./hooks.js";
 import { runSelftest } from "./selftest.js";
 import { runIndex } from "./receiptindex.js";
 import { runGenClaim } from "./genclaim.js";
-import { runCaptureIngest, runCaptureShow, runCaptureReset, runCaptureInstall, runCaptureUninstall } from "./capture.js";
+import { runCaptureIngest, runCaptureShow, runCaptureReset, runCaptureInstall, runCaptureUninstall, runCaptureVerify } from "./capture.js";
 import { runShareProof, runShareProofFromSaved, latestReceiptExists } from "./shareproof.js";
 
 function getArg(flag: string): string | undefined {
@@ -140,7 +140,7 @@ agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
 ■ 연동(experimental — 미리보기, 전송 없음):
   export --format <slack|json|github-pr|otel|langfuse> --receipt <p>
   gen-claim --transcript <jsonl> [--out <claim.json>]   에이전트 transcript → claim.json(이후 claims 로 대조)
-  capture [--event pre|post] / show [--json] / reset / install [--write] [--global] / uninstall   git 너머 행위 추적(훅 stdin·값 미저장·alpha)
+  capture [--event pre|post] / show [--json] / verify / reset / install [--write] [--global] / uninstall   git 너머 행위 추적(훅 stdin·값 미저장·체인 검증·alpha)
 
 ■ 기타: run
 
@@ -275,6 +275,7 @@ function main(): void {
   if (command === "capture") {
     const sub = process.argv[3];
     if (sub === "show") runCaptureShow(hasFlag("--json"));
+    if (sub === "verify") runCaptureVerify();
     if (sub === "reset") runCaptureReset();
     if (sub === "install") runCaptureInstall(hasFlag("--write"), hasFlag("--global"));
     if (sub === "uninstall") runCaptureUninstall(hasFlag("--write"), hasFlag("--global"));
