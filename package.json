@@ -21,7 +21,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "test": "npm run build && tsx test/run-fixtures.ts && tsx test/close-recon-tool-output.test.ts && node test/unit-newlogic.mjs && node test/capture-actions.test.mjs && node test/shareproof.test.mjs && node test/attest.test.mjs && node test/anchor.test.mjs && node test/rekor-anchor.test.mjs && node test/capture-chain.test.mjs && tsx test/capture-golden.ts --check",
+    "test": "npm run build && tsx test/run-fixtures.ts && tsx test/close-recon-tool-output.test.ts && node test/unit-newlogic.mjs && node test/capture-actions.test.mjs && node test/shareproof.test.mjs && node test/attest.test.mjs && node test/anchor.test.mjs && node test/rekor-anchor.test.mjs && node test/capture-chain.test.mjs && node test/capture-proof.test.mjs && tsx test/capture-golden.ts --check",
     "test:golden": "tsx test/capture-golden.ts --check",
     "test:golden:update": "tsx test/capture-golden.ts",
     "prepack": "npm run build",

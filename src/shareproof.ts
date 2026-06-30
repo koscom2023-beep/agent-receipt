@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync, existsSync, readFileSync } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
 import type { Contract } from "./schema.js";
 import { buildReceipt, type Receipt } from "./receipt.js";
-import { splitActionsForDisplay } from "./capture.js";
+import { splitActionsForDisplay, COVERED_TOOLS } from "./capture.js";
 import { redactText } from "./redact.js";
 import { LIMIT_NOTE } from "./disclosure.js";
 import { listReceipts, loadRekorAnchor, type RekorAnchor } from "./receiptStore.js";
@@ -57,6 +57,23 @@ export function toProofHtml(r: Receipt, anchor?: RekorAnchor | null): string {
 </section>`
       : "";
 
+  // 완전성 보증 iter1b(6차 council #3·#6): git 이 바꿨으나 capture 기록 없는 경로(훅 사각) + 커버리지 caveat.
+  // 기존 CSS 클래스만 사용(전역 style 불변). capture 부재(r.actions undefined)거나 갭 0이면 ""(=기존과 바이트 동일·골든143 유지).
+  const gitChanged = new Set<string>([...r.touched, ...r.staged, ...r.untracked]);
+  const capturedPaths = new Set<string>((r.actions ?? []).map((a) => a.path).filter((p): p is string => !!p));
+  const uncovered = r.actions !== undefined ? [...gitChanged].filter((p) => !capturedPaths.has(p)) : [];
+  const uncoveredRows = uncovered.slice(0, 10).map((p) => `<li><code>${esc(p)}</code></li>`).join("\n");
+  const moreLi = uncovered.length > 10 ? `\n  <li class="muted">+ ${uncovered.length - 10} more</li>` : "";
+  const coverageSection = uncovered.length
+    ? `
+  <section>
+  <h2>Capture coverage</h2>
+  <p class="contrast">⚠ <strong>${uncovered.length}</strong> git-changed path(s) have <strong>no capture record</strong> — outside the captured hook surface, or the hook was inactive.</p>
+  <ul class="actions">${uncoveredRows}${moreLi}</ul>
+  <p class="meta">Captured surface: ${esc(COVERED_TOOLS.join(", "))}. Not captured: WebFetch / MCP / sub-agent / OS-level. This proof is <strong>tamper-evident &amp; gap-evident — not complete</strong>.</p>
+</section>`
+      : "";
+
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -91,7 +108,7 @@ export function toProofHtml(r: Receipt, anchor?: RekorAnchor | null): string {
     <tr><td class="k">Integrity (contentHash)</td><td class="hash">${esc(r.contentHash)}</td></tr>
     <tr><td class="k">Generated</td><td>${esc(r.timestamp)}</td></tr>
   </table>
-  ${beyondGit}${anchorSection}
+  ${beyondGit}${coverageSection}${anchorSection}
   <footer>
     ${esc(LIMIT_NOTE)}<br>
     git-based evidence — <strong>tamper-evident, not non-forgeable</strong>. This is evidence for review, <strong>not a compliance guarantee</strong>. Generated locally; no data left the machine.
