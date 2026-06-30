@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync, existsSync, readFileSync } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
 import type { Contract } from "./schema.js";
 import { buildReceipt, type Receipt } from "./receipt.js";
+import { splitActionsForDisplay } from "./capture.js";
 import { redactText } from "./redact.js";
 import { LIMIT_NOTE } from "./disclosure.js";
 import { listReceipts } from "./receiptStore.js";
@@ -23,17 +24,19 @@ export function toProofHtml(r: Receipt): string {
   const hit = r.criticalPaths.filter((c) => c.touched.length);
   const critTxt = hit.length ? hit.map((c) => esc(c.glob)).join(", ") : "none touched";
 
-  const actionRows =
-    r.actions && r.actions.length
-      ? r.actions.map((a) => `<li><span class="flag">${esc(a.flag)}</span> <code>${esc(a.path ?? a.host ?? "")}</code></li>`).join("\n")
-      : "";
+  // 표시 필터(council 5 #2): 무서운 행위만 개별 노출, 일반 read/command 는 건수로 접음(증거 데이터 total 은 그대로).
+  const split = r.actions && r.actions.length ? splitActionsForDisplay(r.actions) : { notable: [], mutedCount: 0 };
+  const actionRows = split.notable
+    .map((a) => `<li><span class="flag">${esc(a.flag)}</span> <code>${esc(a.path ?? a.host ?? "")}</code></li>`)
+    .join("\n");
+  const mutedLi = split.mutedCount ? `\n  <li class="muted">+ ${split.mutedCount} routine read/command (recorded, hidden)</li>` : "";
   const s = r.actionsSummary;
   const beyondGit =
     r.actions && r.actions.length && s
       ? `<section>
   <h2>Beyond-git actions (capture)</h2>
-  <p class="meta">What the agent actually did that <strong>git does not show</strong>:</p>
-  <ul class="actions">${actionRows}</ul>
+  <p class="meta">Notable actions the agent took that <strong>git does not show</strong>:</p>
+  <ul class="actions">${actionRows || `<li class="muted">none notable</li>`}${mutedLi}</ul>
   <p class="contrast"><strong>git saw: ${s.gitVisible}</strong> &nbsp;⟷&nbsp; <strong>actions recorded: ${s.total}</strong></p>
   <p class="meta">Values are never stored — paths/hosts/classification only. Capture scope = since the last <code>capture reset</code>.</p>
 </section>`
@@ -54,6 +57,7 @@ export function toProofHtml(r: Receipt): string {
   td.k{color:#666;width:38%} code{font-family:ui-monospace,Menlo,monospace;font-size:.82rem;word-break:break-all}
   .hash{font-family:ui-monospace,monospace;font-size:.75rem;color:#555;word-break:break-all}
   ul.actions{margin:.3rem 0;padding-left:1.1rem} ul.actions li{margin:.15rem 0}
+  li.muted{color:#9a9a9a;font-size:.8rem;list-style:none;margin-left:-.6rem}
   .flag{display:inline-block;background:#fff3cd;color:#7a5b00;border-radius:4px;padding:0 .35rem;font-size:.75rem;font-weight:600}
   .contrast{background:#f1f4ff;border-radius:8px;padding:.5rem .7rem;font-size:.95rem}
   footer{margin-top:1.6rem;padding-top:1rem;border-top:1px solid #eee;color:#888;font-size:.78rem}

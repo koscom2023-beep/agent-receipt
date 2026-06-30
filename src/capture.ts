@@ -47,6 +47,23 @@ export interface ActionsResult {
   };
 }
 
+// ── 표시 필터 (council 5 Decision #2) — 데모 임팩트: '무서운 행위'만 개별 노출, 일반 read/command 는 강등.
+// 데이터(actions[]·요약·영수증 임베드 JSON·contentHash)는 미변경 — 증거는 전부 기록하고 *화면에서만* 접는다.
+// 경계는 기존 flag 분류 재사용(작품/시나리오 문자열 박지 않음 — 범용).
+export const NOTABLE_FLAGS: ReadonlySet<ActionFlag> = new Set<ActionFlag>([
+  "READ_SECRET_FILE",
+  "EXTERNAL_NETWORK_CALL",
+  "CREATED_THEN_DELETED",
+]);
+export function isNotableAction(a: { flag: ActionFlag }): boolean {
+  return NOTABLE_FLAGS.has(a.flag);
+}
+/** 표시용 분할: 무서운 행위(개별 노출) ⟷ 일반 행위 건수(접힘). 증거 데이터는 불변. */
+export function splitActionsForDisplay(actions: CaptureAction[]): { notable: CaptureAction[]; mutedCount: number } {
+  const notable = actions.filter(isNotableAction);
+  return { notable, mutedCount: actions.length - notable.length };
+}
+
 // 비밀로 취급하는 경로(읽기 시 READ_SECRET_FILE). 경로 '이름'만 봄(내용 아님).
 const SECRET_PATH = /(^|\/)\.env(\.|$|\b)|\.(key|pem|p12|pfx|keystore)$|(^|\/)(id_rsa|id_ed25519|id_dsa)$|secret|credential/i;
 const NET_CMD = /\b(curl|wget|nc|ncat|telnet|scp|rsync|sftp|ssh|aria2c|lynx|httpie)\b/;
@@ -221,9 +238,11 @@ export function runCaptureShow(json: boolean): never {
     process.exit(0);
   }
   const s = result.actionsSummary;
-  console.log(`\nagent-receipt capture (alpha) — git 너머 행위 ${s.total}건`);
-  for (const a of result.actions) console.log(`  ⚠️ ${a.flag}  ${a.path ?? a.host ?? ""}`);
-  console.log(`\n  git 가 보는 것: ${s.gitVisible}  ⟷  영수증이 본 행위: ${s.total}`);
+  const { notable, mutedCount } = splitActionsForDisplay(result.actions);
+  console.log(`\nagent-receipt capture (alpha) — git 너머 행위 ${s.total}건 (주목 ${notable.length})`);
+  for (const a of notable) console.log(`  ⚠️ ${a.flag}  ${a.path ?? a.host ?? ""}`);
+  if (mutedCount) console.log(`  · 그 외 일반 read/command ${mutedCount}건 (기록됨·접힘)`);
+  console.log(`\n  git 가 보는 것: ${s.gitVisible}  ⟷  주목 행위: ${notable.length}  (전체 기록 ${s.total})`);
   console.log(`  값은 저장하지 않습니다 — 경로/호스트/행위분류만. ${REDACT_NOTE}`);
   process.exit(0);
 }

@@ -11,7 +11,7 @@ import { captureEnvironment, type Environment } from "./environment.js";
 import { loadPolicySafe, policyObservations, policyPath, type PolicyObs } from "./policy.js";
 import { redactText } from "./redact.js";
 import { LIMIT_NOTE } from "./disclosure.js";
-import { loadCapturedActions, type CaptureAction, type ActionsResult } from "./capture.js";
+import { loadCapturedActions, splitActionsForDisplay, type CaptureAction, type ActionsResult } from "./capture.js";
 
 // receipt JSON 스키마 버전(downstream/CI 가 안전하게 의존). additive only. verify --json 14키와 무관.
 export const RECEIPT_SCHEMA_VERSION = "1.0";
@@ -228,9 +228,11 @@ export function toReceiptMd(r: Receipt): string {
   }
   if (r.actions && r.actions.length) {
     const s = r.actionsSummary;
-    L.push(`## Beyond-git actions (capture — git 가 못 보는 행위 ${r.actions.length})`);
-    for (const a of r.actions) L.push(`- ⚠️ ${a.flag}: \`${a.path ?? a.host ?? ""}\``);
-    if (s) L.push(`- git 가 보는 것: ${s.gitVisible}  ⟷  영수증이 본 행위: ${s.total}`);
+    const { notable, mutedCount } = splitActionsForDisplay(r.actions);
+    L.push(`## Beyond-git actions (capture — git 가 못 보는 행위 ${r.actions.length}, 주목 ${notable.length})`);
+    for (const a of notable) L.push(`- ⚠️ ${a.flag}: \`${a.path ?? a.host ?? ""}\``);
+    if (mutedCount) L.push(`- · 그 외 일반 read/command ${mutedCount}건 (기록됨)`);
+    if (s) L.push(`- git 가 보는 것: ${s.gitVisible}  ⟷  주목 행위: ${notable.length} (전체 기록 ${s.total})`);
     L.push("> capture 범위 = 마지막 `capture reset` 이후 누적(수동). 값 미저장 — 경로/호스트/분류만.");
     L.push("");
   }
