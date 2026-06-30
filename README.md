@@ -418,7 +418,7 @@ agent-receipt anchor --upload              # one command: sign + register to Rek
 
 On success it writes a `<receipt>.rekor.json` sidecar next to the receipt (entry UUID, logIndex, verification URL). **`share-proof` then auto-embeds a "Verify in the public transparency log" link** — a receipt with no sidecar renders byte-identically to before. The link is *click-only* (an `href`, never an auto-loaded resource), so opening the proof still leaks nothing.
 
-> Honest scope: **git-based evidence, tamper-evident — not non-forgeable, and not a compliance guarantee.** Capture currently adapts Claude Code hooks (single agent). A receipt may optionally be anchored to the public Rekor log (`anchor`, above) — that seals **time & existence** via a third party, but is **not** a keyless (identity) proof. Cloud / hosted SaaS verification pages remain out of scope.
+> Honest scope: **git-based evidence, tamper-evident — not non-forgeable, and not a compliance guarantee.** Capture ingests Claude Code hooks natively; **Codex / GitHub Copilot / Cursor** hooks are normalized into the same record shape via a vendor-neutral envelope normalizer (**best-effort** — verify your agent's payload with `capture` `--print`/dry-run; agent-specific tools like Codex `apply_patch` and Cursor's dedicated events are not yet mapped). A receipt may optionally be anchored to the public Rekor log (`anchor`, above) — that seals **time & existence** via a third party, but is **not** a keyless (identity) proof. Cloud / hosted SaaS verification pages remain out of scope.
 
 ---
 
