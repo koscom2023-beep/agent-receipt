@@ -142,6 +142,7 @@ If you omit `--contract`, the contract is auto-discovered (see below).
 | `claims --file <claim.json>` | Compare an agent's completion report (JSON) against the actual git state — surfaces hidden/over-claimed changes as **AI said / Git says**. Mismatch → exit `1`. | yes |
 | `explain` | Explain *why* the tree is PASS/FAIL (branch / scope / denied / magnitude / critical paths) with recovery hints. Exit mirrors `verify`. | yes |
 | `audit [--json]` | Local audit summary over `.agent-guard/receipts/`: count, latest, PASS/FAIL, critical-touched, unique `contentHash`. Read-only (no auto-append). | no |
+| `insights [--since <n>] [--format md\|json]` | Read-only **local trend & recurrence** over saved receipts that `audit` doesn't give: prior-vs-recent FAIL-rate / critical-touched, per-contract recurring failures, and a descriptive **watch** list. **Descriptive only — no scores, grades, or predictions**; prints a *small-sample / directional-only* caveat at low counts. Team/org aggregation is out of scope (local, single-repo). | no |
 | `dashboard [--out <path>]` | Render a single self-contained static HTML (no CDN/network) of all receipts. Default `.agent-guard/dashboard.html` (excluded by `verify`). | no |
 | `keys init` | Generate an ed25519 key pair under `.agent-guard/keys/` (Node built-in crypto). Warns to gitignore the key dir (does not edit `.gitignore`). | no |
 | `sign --receipt <path>` | Sign a receipt's bytes (ed25519); writes sidecar `<receipt>.sig.json`. | no |
