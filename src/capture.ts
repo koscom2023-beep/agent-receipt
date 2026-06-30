@@ -3,6 +3,7 @@ import { join, dirname, relative } from "node:path";
 import { homedir } from "node:os";
 import { createHash } from "node:crypto";
 import { redactText, REDACT_NOTE } from "./redact.js";
+import { withFileLock, writeFileAtomic } from "./lock.js";
 import * as g from "./git.js";
 
 // ── capture (alpha) — git 너머 '측정' 행위 추적 ──
@@ -243,7 +244,7 @@ function readHead(): CaptureHead | null {
 }
 function writeHead(h: CaptureHead): void {
   try {
-    writeFileSync(headFile(), JSON.stringify(h) + "\n");
+    writeFileAtomic(headFile(), JSON.stringify(h) + "\n");
   } catch {
     /* head 갱신 실패 → behind 허용(다음 verify 가 log>=head 로 OK 처리·오탐 없음) */
   }
@@ -307,24 +308,27 @@ function appendCapture(recs: CaptureRecord[], sessionId: string | undefined, sou
   if (!recs.length) return;
   const f = capFile();
   mkdirSync(dirname(f), { recursive: true });
-  const prior = readRecords();
-  const last = prior[prior.length - 1];
-  let prevHash = last?.entryHash;
-  let seq = last?.seq ?? 0;
-  const lines: string[] = [];
-  for (const r of recs) {
-    seq += 1;
-    const chained: CaptureRecord = { ...r, seq };
-    if (sessionId) chained.sessionId = sessionId;
-    if (source) chained.source = source;
-    if (prevHash) chained.prevHash = prevHash;
-    chained.entryHash = captureEntryHash(chained);
-    prevHash = chained.entryHash;
-    lines.push(JSON.stringify(chained));
-  }
-  appendFileSync(f, lines.join("\n") + "\n");
-  // 꼬리방어: 로그 append *후* high-water-mark 갱신(실패해도 swallow → head 가 뒤처질 뿐·오탐 없음).
-  writeHead({ count: prior.length + recs.length, lastSeq: seq, lastEntryHash: prevHash });
+  // 14차 council: read→chain→append→writeHead 를 락으로 직렬화(병렬 훅 포크=verify 오탐·head 저평가 방지). 못 잡으면 throw → 호출부가 degraded 마커.
+  withFileLock(join(dirname(f), "capture.lock"), () => {
+    const prior = readRecords();
+    const last = prior[prior.length - 1];
+    let prevHash = last?.entryHash;
+    let seq = last?.seq ?? 0;
+    const lines: string[] = [];
+    for (const r of recs) {
+      seq += 1;
+      const chained: CaptureRecord = { ...r, seq };
+      if (sessionId) chained.sessionId = sessionId;
+      if (source) chained.source = source;
+      if (prevHash) chained.prevHash = prevHash;
+      chained.entryHash = captureEntryHash(chained);
+      prevHash = chained.entryHash;
+      lines.push(JSON.stringify(chained));
+    }
+    appendFileSync(f, lines.join("\n") + "\n");
+    // 꼬리방어: 로그 append *후* high-water-mark 갱신(락 안이라 동시 저평가 없음).
+    writeHead({ count: prior.length + recs.length, lastSeq: seq, lastEntryHash: prevHash });
+  });
 }
 
 /** 순수 검증 코어 — 변조(entryHash 불일치)·삭제/재정렬(prevHash 불연속)·중간누락(seq 불연속) 탐지. 출력/exit 없음. */
@@ -439,7 +443,13 @@ export function runCaptureIngest(event: string | undefined): never {
   // 7차 council: 벤더중립 정규화 토대 — 다양한 에이전트 envelope 를 공통 모양으로(추정 0·passthrough+단순 alias).
   const env = normalizeEnvelope(payload);
   const recs = classifyEvent(env, phase, now);
-  if (recs.length) appendCapture(recs, env.sessionId, env.source);
+  if (recs.length) {
+    try {
+      appendCapture(recs, env.sessionId, env.source);
+    } catch {
+      markDegraded(phase, now, "capture 락 획득 실패(동시 훅 경합 또는 stale)"); // 정직 마커(비차단)·silent 누락 금지
+    }
+  }
   process.exit(0);
 }
 

@@ -69,8 +69,32 @@ export function loadSavedReceipt(receiptArg: string | undefined, cmd: string, cw
     console.error(`${cmd}: receipt 파싱 실패(JSON 아님): ${abs}`);
     process.exit(2);
   }
+  // 14차 council(무결점): consumer(controls/risk/share-proof)가 deref 하는 필드를 *전부* 검증 → 형식 통과 후 deref 크래시 제거.
+  //   buildReceipt 산출 영수증은 전부 통과(회귀 0). verify --json 출력 같은 부분 JSON 만 clean exit 2.
   const o = parsed as Partial<Receipt> | null;
-  if (!o || typeof o !== "object" || typeof o.ok !== "boolean" || !Array.isArray(o.checks) || !Array.isArray(o.criticalPaths) || !Array.isArray(o.touched)) {
+  const arr = (v: unknown): v is unknown[] => Array.isArray(v);
+  const str = (v: unknown): v is string => typeof v === "string";
+  const valid =
+    !!o &&
+    typeof o === "object" &&
+    typeof o.ok === "boolean" &&
+    arr(o.touched) &&
+    arr(o.staged) &&
+    arr(o.untracked) &&
+    arr(o.outOfScope) &&
+    arr(o.deniedHits) &&
+    arr(o.checks) &&
+    arr(o.criticalPaths) &&
+    o.criticalPaths.every((c) => !!c && typeof c === "object" && Array.isArray((c as { touched?: unknown }).touched)) &&
+    !!o.branch &&
+    typeof o.branch === "object" &&
+    str((o.branch as { current?: unknown }).current) &&
+    !!o.magnitude &&
+    typeof o.magnitude === "object" &&
+    str(o.contentHash) &&
+    str(o.headHash) &&
+    str(o.timestamp);
+  if (!valid) {
     console.error(`${cmd}: receipt 형식이 아님 — 저장된 영수증이 필요합니다(verify --json 출력 아님): ${abs}`);
     process.exit(2);
   }

@@ -45,9 +45,13 @@ mkdirSync(recDir, { recursive: true });
 const full = {
   ok: true,
   contractId: "x",
+  branch: { current: "main", expected: null, ok: true },
+  headHash: "abc1234",
   checks: [],
   criticalPaths: [],
   touched: ["a.ts"],
+  staged: [],
+  untracked: [],
   deniedHits: [],
   outOfScope: [],
   magnitude: { filesChanged: 1, added: 1, deleted: 0, newFiles: 0 },

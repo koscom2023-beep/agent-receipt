@@ -1,6 +1,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { createHash } from "node:crypto";
+import { withFileLock, writeFileAtomic } from "./lock.js";
 import type { Receipt } from "./receipt.js";
 import {
   listReceipts,
@@ -78,12 +79,15 @@ export function ledgerEntryHash(e: LedgerEntry): string {
 export function appendLedger(entry: LedgerEntry, cwd: string = process.cwd()): string {
   const p = join(cwd, LEDGER_REL);
   mkdirSync(dirname(p), { recursive: true });
-  const prior = existsSync(p) ? readLedger(cwd) : [];
-  const last = prior[prior.length - 1];
-  const chained: LedgerEntry = { ...entry, prevHash: last?.entryHash };
-  chained.entryHash = ledgerEntryHash(chained);
-  appendFileSync(p, JSON.stringify(chained) + "\n");
-  return LEDGER_REL;
+  // 14차 council: read→chain→append 를 락으로 직렬화(동시 done/audit-pack --ledger 포크 방지). 명령이라 못 잡으면 throw.
+  return withFileLock(join(dirname(p), "ledger.lock"), () => {
+    const prior = existsSync(p) ? readLedger(cwd) : [];
+    const last = prior[prior.length - 1];
+    const chained: LedgerEntry = { ...entry, prevHash: last?.entryHash };
+    chained.entryHash = ledgerEntryHash(chained);
+    appendFileSync(p, JSON.stringify(chained) + "\n");
+    return LEDGER_REL;
+  });
 }
 
 function readLedger(cwd: string): LedgerEntry[] {
@@ -212,7 +216,7 @@ export function runLedgerRebuild(cwd: string = process.cwd()): never {
   }
   const p = join(cwd, LEDGER_REL);
   mkdirSync(dirname(p), { recursive: true });
-  writeFileSync(p, entries.map((e) => JSON.stringify(e)).join("\n") + (entries.length ? "\n" : ""));
+  writeFileAtomic(p, entries.map((e) => JSON.stringify(e)).join("\n") + (entries.length ? "\n" : "")); // 14차 council: 원자 교체(인터럽트 시 부분파일 방지)
   console.log(`ledger 재생성: ${LEDGER_REL} (${entries.length}건, receipts/ 기준)`);
   process.exit(0);
 }

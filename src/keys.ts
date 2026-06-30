@@ -9,6 +9,7 @@ import {
 } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, basename, relative } from "node:path";
+import { withFileLock, writeFileAtomic } from "./lock.js";
 
 // 키 저장 위치(고정). private.pem 은 절대 commit 하면 안 됨 — keys/ 는 verify 의 tool-output 제외 대상.
 const KEYS_REL = join(".agent-guard", "keys");
@@ -52,13 +53,27 @@ export function publicKeyRelPath(): string {
 export function ensureSigningKey(cwd: string = process.cwd()): { key: KeyObject; publicPem: string } {
   const privAbs = join(cwd, PRIV_REL);
   const pubAbs = join(cwd, PUB_REL);
-  if (!existsSync(privAbs) || !existsSync(pubAbs)) {
+  // 14차 council(무결점): 🔴 private.pem 이 있으면 *절대* 재생성/덮어쓰기 금지(pub만 지워도 키 회전=과거 서명·앵커 전부 무효=데이터 손실).
+  //   pub 없으면 priv 에서 createPublicKey 로 유도. 신규 생성=atomic. 전체를 락으로(동시 anchor 시 priv/pub 불일치쌍 방지). 막 만든/로드한 *메모리* 키 반환(디스크 재읽기 의존 제거).
+  mkdirSync(join(cwd, KEYS_REL), { recursive: true });
+  return withFileLock(join(cwd, KEYS_REL, ".keys.lock"), () => {
+    if (existsSync(privAbs)) {
+      const key = createPrivateKey(readFileSync(privAbs)); // 기존 개인키 보존
+      let publicPem: string;
+      if (existsSync(pubAbs)) {
+        publicPem = readFileSync(pubAbs, "utf8");
+      } else {
+        publicPem = createPublicKey(key).export({ type: "spki", format: "pem" }) as string; // 회전 없이 pub 만 재유도
+        writeFileAtomic(pubAbs, publicPem);
+      }
+      return { key, publicPem };
+    }
     const { publicKey, privateKey } = generateKeyPairSync("ed25519");
-    mkdirSync(join(cwd, KEYS_REL), { recursive: true });
-    writeFileSync(privAbs, privateKey.export({ type: "pkcs8", format: "pem" }) as string, { mode: 0o600 });
-    writeFileSync(pubAbs, publicKey.export({ type: "spki", format: "pem" }) as string);
-  }
-  return { key: createPrivateKey(readFileSync(privAbs)), publicPem: readFileSync(pubAbs, "utf8") };
+    const publicPem = publicKey.export({ type: "spki", format: "pem" }) as string;
+    writeFileAtomic(privAbs, privateKey.export({ type: "pkcs8", format: "pem" }) as string, 0o600);
+    writeFileAtomic(pubAbs, publicPem);
+    return { key: privateKey, publicPem }; // 메모리 키쌍 그대로(같은 쌍 보장)
+  });
 }
 
 /** `agent-receipt keys init` — ed25519 키쌍 생성(PEM). 이미 있으면 덮어쓰지 않음(exit 1). */
