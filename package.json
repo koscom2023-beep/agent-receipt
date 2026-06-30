@@ -1,8 +1,17 @@
 {
   "name": "@promptia-labs/agent-receipt",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "AI work audit receipts — verifies and records what an AI coding agent actually changed in your local git tree. Provides git-based evidence for compliance review (not a compliance guarantee).",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/koscom2023-beep/agent-receipt.git"
+  },
+  "homepage": "https://github.com/koscom2023-beep/agent-receipt#readme",
+  "bugs": {
+    "url": "https://github.com/koscom2023-beep/agent-receipt/issues",
+    "email": "support@promptia.kr"
+  },
   "type": "module",
   "bin": {
     "agent-receipt": "dist/cli.js"

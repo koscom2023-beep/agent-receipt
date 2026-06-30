@@ -20,7 +20,7 @@ When an AI agent edits your repo, "it said it only changed the auth module" is a
 It is local-first by design:
 
 - **No code upload.** Everything runs on your machine.
-- **No API key.** There is no account and no network call.
+- **No account, no API key.** The core flow makes **no network call**; the only network is *opt-in* — `anchor --upload` (registers a *hash* to the public Rekor log) and `doctor`'s version check (disable with `AGENT_RECEIPT_NO_NET=1`).
 - **Operates on your local git working tree** via ordinary git commands.
 
 ---
@@ -69,7 +69,7 @@ agent-receipt reset                            # clear the baseline for the next
 
 Re-verify a saved bundle later with `agent-receipt replay --pack <dir>`. Full command list: `agent-receipt help --all`.
 
-> The lower-level commands (`start` / `prompt` / `verify` / `check` / `claims` / `receipt`) still exist — `begin` and `done` simply compose them. See **Commands** below. Feature coverage vs the design docs: [`docs/coverage.md`](docs/coverage.md); recipes (worktree/CI/hooks): [`docs/recipes.md`](docs/recipes.md).
+> The lower-level commands (`start` / `prompt` / `verify` / `check` / `claims` / `receipt`) still exist — `begin` and `done` simply compose them. See **Commands** below. Feature coverage vs the design docs: [coverage](https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/coverage.md); recipes (worktree/CI/hooks): [recipes](https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/recipes.md).
 
 Once installed, the CLI is invoked as `agent-receipt`. (The single-letter `ag` alias was dropped to avoid clashing with other tools.)
 
@@ -209,7 +209,7 @@ When `--contract` / `-c` is not given, the first existing file wins, in this ord
 - `1` — violation (`verify` state violation, `check` command failure, `pre` problem)
 - `2` — loading/usage error (missing/unreadable contract, schema error, not a git repo, unknown command/preset)
 
-> Wiring it into a worktree sandbox, CI, or a pre-push hook? See [`docs/recipes.md`](docs/recipes.md).
+> Wiring it into a worktree sandbox, CI, or a pre-push hook? See [recipes](https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/recipes.md).
 
 ---
 
@@ -429,17 +429,17 @@ On success it writes a `<receipt>.rekor.json` sidecar next to the receipt (entry
 
 ## Local-first / privacy
 
-- Runs entirely locally; no code or diff leaves your machine.
-- No API key, no account, no telemetry, no network requests.
+- Runs entirely locally; no code or diff ever leaves your machine.
+- No API key, no account, no telemetry. The **core** verify/receipt flow makes **no network requests** — the only network is *opt-in*: `anchor --upload` (sends a *hash* to the public Rekor log, never your code) and `doctor`'s npm-version check (disable with `AGENT_RECEIPT_NO_NET=1`).
 - Uses your installed `git` to read the working tree.
 
 ---
 
 ## Package status
 
-Current version **`0.10.0`** (`@promptia-labs/agent-receipt`). The 0.9.x line added convenience/integration (`begin --kind`, `close-recon`, `prepare-commit`/`finish`, `note`, `release-check`, `next`) and git-evidence/advisory separation; **`0.10.0`** added `schemaVersion`, provenance, hash-chain ledger, content hashing, and strict-redact. Cloud/SaaS, real Slack/webhook transport, remote approval, and any "compliance guarantee" remain intentionally out of scope. Feature coverage vs the design docs: [`docs/coverage.md`](docs/coverage.md).
+Current version **`0.11.0`** (`@promptia-labs/agent-receipt`). `0.10.0` added `schemaVersion`, provenance, the hash-chain ledger, content hashing, and strict-redact; **`0.11.0`** tightens the surface and adds **`capture`** (a beyond-git action trace, *alpha*), **`anchor`** (a third-party Rekor seal + in-proof verification link), and the read-only **`insights`** / **`risk`** / **`controls`** projections. Cloud/SaaS, real Slack/webhook transport, remote approval, and any "compliance guarantee" remain intentionally out of scope. Feature coverage vs the design docs: [coverage](https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/coverage.md).
 
-Version ladder: `0.7.0` (work receipts) → `0.8.0` (AI work audit protocol) → `0.9.x` (convenience + dogfood fixes) → **`0.10.0` (integrity: schemaVersion / provenance / hash-chain ledger)** → **`0.11.0` (focused alpha: tightened surface + `capture` — beyond-git action trace + `anchor` — third-party Rekor seal & in-proof verification link; in progress).** A feature-maximal `1.0.0` is **deferred** in favor of a focused product — see [`docs/VERSION-DECISION-2026-06-29.md`](docs/VERSION-DECISION-2026-06-29.md).
+Version ladder: `0.7.0` (work receipts) → `0.8.0` (AI work audit protocol) → `0.9.x` (convenience + dogfood fixes) → `0.10.0` (integrity: schemaVersion / provenance / hash-chain ledger) → **`0.11.0` (focused: tightened surface + `capture` — beyond-git action trace (alpha) + `anchor` — third-party Rekor seal & in-proof verification link).** A feature-maximal `1.0.0` is **deferred** in favor of a focused product — see [the version-decision note](https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/VERSION-DECISION-2026-06-29.md).
 
 For local development:
 
@@ -450,7 +450,7 @@ node dist/cli.js verify --contract .agent-guard/contract.yaml
 npm run guard -- verify --contract .agent-guard/contract.yaml
 ```
 
-> The CLI output now prints the `agent-receipt` name. The control directory `.agent-guard/` and the auto-discovered filenames `agent-guard.yaml` / `agent-guard.json` are **intentionally kept** (renaming them would break existing setups). See [`docs/publish-prep.md`](docs/publish-prep.md).
+> The CLI output now prints the `agent-receipt` name. The control directory `.agent-guard/` and the auto-discovered filenames `agent-guard.yaml` / `agent-guard.json` are **intentionally kept** (renaming them would break existing setups). See [the publish-prep note](https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/publish-prep.md).
 
 ---
 
@@ -462,7 +462,7 @@ The authoritative schema — every field, default, and the YAML/JSON parsing rul
 
 ## Feedback
 
-This package is **actively maintained**, and your input shapes it. With a small but real user base, a few thoughtful notes are worth more than any download count.
+This is **early software, actively maintained**, and your input shapes it. A few thoughtful notes are worth more than any download count.
 
 If you've tried `agent-receipt` — even once, or on a real project — I'd love to hear:
 
@@ -470,4 +470,4 @@ If you've tried `agent-receipt` — even once, or on a real project — I'd love
 - Which feature is missing for your workflow?
 - Would you recommend it to someone else? Why, or why not?
 
-Please **[open an Issue](../../issues)** (bugs, rough edges, ideas) or **start a [Discussion](../../discussions)** (questions, general feedback). Even a one-line reply genuinely helps. Thank you for trying it.
+Please **[open an Issue](https://github.com/koscom2023-beep/agent-receipt/issues)** (bugs, rough edges, ideas), start a **[Discussion](https://github.com/koscom2023-beep/agent-receipt/discussions)** (questions, general feedback), or email **support@promptia.kr**. Even a one-line reply genuinely helps. Thank you for trying it.
