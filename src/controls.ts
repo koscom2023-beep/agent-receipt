@@ -1,0 +1,226 @@
+import { existsSync, readFileSync } from "node:fs";
+import { isAbsolute, join } from "node:path";
+import { listReceipts, loadRekorAnchor } from "./receiptStore.js";
+import { LIMIT_NOTE } from "./disclosure.js";
+import { redactText } from "./redact.js";
+import type { Receipt } from "./receipt.js";
+
+// ── 규제 매핑 (8차 council) — 읽기전용 투영: 저장 receipt 신호 → *관련 통제 증거*(준수 아님) ──
+// 정직 SSOT: LIMIT_NOTE 승계 · 동사 'evidence relevant to/supports'만('compliant with/satisfies/meets' 금지)
+//   · confidence(EU/SOC2=confirmed·ISO 42001=likely·원문확인) · 신호별 doesNotProve · blanket 'consult your assessor'.
+// 통제 ID 출처=2026-06-30 정찰(자유검증분만). receipt 미변경·해시 미입력 → 골든143 구조적 byte-invariant.
+// registry=데이터(코어 if문에 통제ID 박지 않음·범용 원칙). 과대매핑 금지: ISO A.5/A.7/A.2·EU Art13/15·SOC2 CC1~5 미등록.
+
+export const CONTROL_REGISTRY_SOURCE = "recon 2026-06-30 — free-verifiable only (EU AI Act·SOC 2 TSC confirmed; ISO/IEC 42001 paywalled → likely)";
+
+type Confidence = "confirmed" | "likely";
+export interface ControlRef {
+  framework: string;
+  id: string;
+  title: string;
+  confidence: Confidence;
+}
+export interface RegistryEntry {
+  signal: string;
+  label: string;
+  controls: ControlRef[];
+  doesNotProve: string;
+}
+
+const ISO_NOTE = "ISO/IEC 42001 IDs are 'likely' — verify the exact sub-control number/title against the purchased ISO/IEC 42001:2023 text.";
+
+// 활성 신호별 통제 '가족'. 관계는 항상 'evidence relevant to'(준수 아님).
+export const CONTROL_REGISTRY: RegistryEntry[] = [
+  {
+    signal: "secretFilesRead",
+    label: "Agent read secret-shaped file path(s)",
+    controls: [
+      { framework: "SOC 2 TSC", id: "CC6.1", title: "Logical access controls over protected information assets", confidence: "confirmed" },
+      { framework: "SOC 2 TSC", id: "CC7.2", title: "System monitoring for anomalies", confidence: "confirmed" },
+      { framework: "ISO/IEC 42001", id: "A.6.2.8", title: "AI system recording of event logs", confidence: "likely" },
+    ],
+    doesNotProve: "Detected by path *name* only — does not prove the file held secrets, that anything leaked, or that access controls worked (records, does not block).",
+  },
+  {
+    signal: "externalCalls",
+    label: "Agent made external network call(s)",
+    controls: [
+      { framework: "SOC 2 TSC", id: "CC6.6", title: "Protection against threats outside system boundaries", confidence: "confirmed" },
+      { framework: "SOC 2 TSC", id: "CC6.7", title: "Restriction of information transmission/movement", confidence: "confirmed" },
+      { framework: "SOC 2 TSC", id: "CC7.2", title: "System monitoring for anomalies", confidence: "confirmed" },
+      { framework: "ISO/IEC 42001", id: "A.6.2.8", title: "AI system recording of event logs", confidence: "likely" },
+    ],
+    doesNotProve: "Detected from command text only — does not see OS-level traffic and does not prove exfiltration.",
+  },
+  {
+    signal: "createdThenDeleted",
+    label: "Agent created-then-deleted file(s) (anti-forensic anomaly)",
+    controls: [
+      { framework: "SOC 2 TSC", id: "CC7.2", title: "System monitoring for anomalies", confidence: "confirmed" },
+      { framework: "ISO/IEC 42001", id: "A.6.2.8", title: "AI system recording of event logs", confidence: "likely" },
+    ],
+    doesNotProve: "A trace-cleanup signal — does not prove malicious intent.",
+  },
+  {
+    signal: "deniedHits",
+    label: "Change touched a contract-denied path",
+    controls: [
+      { framework: "SOC 2 TSC", id: "CC8.1", title: "Change management — authorize/test/approve changes", confidence: "confirmed" },
+      { framework: "SOC 2 TSC", id: "CC7.2", title: "System monitoring for anomalies", confidence: "confirmed" },
+    ],
+    doesNotProve: "Evidence of deviation from a *self-declared* scope — does not prove the change was authorized (the contract is self-declared, not independently approved).",
+  },
+  {
+    signal: "requiredChecks",
+    label: "Declared required checks ran as a pre-commit gate",
+    controls: [
+      { framework: "SOC 2 TSC", id: "CC8.1", title: "Change management — tested/approved before implementation", confidence: "confirmed" },
+      { framework: "SOC 2 TSC", id: "CC7.1", title: "Detection of config changes that introduce vulnerabilities", confidence: "confirmed" },
+    ],
+    doesNotProve: "Evidence that declared checks ran — does not prove the checks were adequate or sufficient.",
+  },
+  {
+    signal: "criticalPaths",
+    label: "High-risk path(s) identified as touched",
+    controls: [
+      { framework: "SOC 2 TSC", id: "CC8.1", title: "Change management — high-risk change identification", confidence: "confirmed" },
+    ],
+    doesNotProve: "Flags that a high-risk path was *touched* — touching it is not itself a problem or a leak.",
+  },
+  {
+    signal: "auditLogIntegrity",
+    label: "Receipt + hash-chained logs (tamper-evident)",
+    controls: [
+      { framework: "SOC 2 TSC", id: "CC7.2", title: "System monitoring / log integrity", confidence: "confirmed" },
+      { framework: "SOC 2 TSC", id: "CC7.3", title: "Evaluation of security events", confidence: "confirmed" },
+      { framework: "EU AI Act", id: "Article 12", title: "Record-keeping — automatic event logs", confidence: "confirmed" },
+      { framework: "EU AI Act", id: "Article 19", title: "Automatically generated logs — provider retention (>= 6 months)", confidence: "confirmed" },
+      { framework: "EU AI Act", id: "Article 26(6)", title: "Deployer log retention (>= 6 months)", confidence: "confirmed" },
+      { framework: "ISO/IEC 42001", id: "A.6.2.8", title: "AI system recording of event logs", confidence: "likely" },
+    ],
+    doesNotProve: "tamper-evident (detects mid-stream edit/deletion) — NOT non-forgeable (a local file can be regenerated wholesale). Retention period (>= 6 months) is an operational policy, not a tool feature. EU AI Act Articles apply to high-risk AI systems.",
+  },
+];
+
+// Rekor 앵커가 붙은 영수증에서만 추가되는 격상 엔트리.
+export const ANCHOR_ENTRY: RegistryEntry = {
+  signal: "rekorAnchor",
+  label: "Receipt anchored to the public Rekor transparency log",
+  controls: [
+    { framework: "EU AI Act", id: "Article 12/19", title: "Record-keeping / log integrity — third-party time & existence seal", confidence: "confirmed" },
+    { framework: "SOC 2 TSC", id: "CC7.2", title: "Log integrity — independently verifiable", confidence: "confirmed" },
+  ],
+  doesNotProve: "A third party sealed that this receipt existed at this time — NOT a keyless identity proof.",
+};
+
+export interface ControlMapResult {
+  source: string;
+  noVerification: boolean;
+  entries: RegistryEntry[];
+}
+
+/** 순수: receipt 신호(+Rekor 앵커 유무) → 활성 통제 매핑. 활성 신호만 포함. checks 0 = noVerification. */
+export function buildControlMap(r: Receipt, hasAnchor: boolean): ControlMapResult {
+  const sum = r.actionsSummary;
+  const pos = (n: number | undefined) => typeof n === "number" && n > 0;
+  const active: RegistryEntry[] = [];
+  for (const e of CONTROL_REGISTRY) {
+    if (e.signal === "secretFilesRead" && !pos(sum?.secretFilesRead)) continue;
+    if (e.signal === "externalCalls" && !pos(sum?.externalCalls)) continue;
+    if (e.signal === "createdThenDeleted" && !pos(sum?.createdThenDeleted)) continue;
+    if (e.signal === "deniedHits" && r.deniedHits.length === 0) continue;
+    if (e.signal === "requiredChecks" && r.checks.length === 0) continue;
+    if (e.signal === "criticalPaths" && !r.criticalPaths.some((c) => c.touched.length)) continue;
+    // auditLogIntegrity 는 항상 활성(영수증 자체가 무결성 해시를 가짐).
+    active.push(e);
+  }
+  if (hasAnchor) active.push(ANCHOR_ENTRY);
+  return { source: CONTROL_REGISTRY_SOURCE, noVerification: r.checks.length === 0, entries: active };
+}
+
+/** 순수: 통제 매핑 → 사람용 Markdown. 동사는 'evidence relevant to' 만(준수 단정 금지). */
+export function renderControlMd(r: Receipt, hasAnchor: boolean): string {
+  const m = buildControlMap(r, hasAnchor);
+  const L: string[] = [];
+  L.push(`# Control evidence map — ${r.contractId}${r.title ? ` (${r.title})` : ""}`);
+  L.push("");
+  L.push("> **This is evidence *relevant to* the controls below — NOT a compliance assessment.** It does not certify, satisfy, or prove compliance with any framework. Consult your assessor/auditor; the determination is theirs.");
+  L.push(`> ${ISO_NOTE}`);
+  L.push(`> ${LIMIT_NOTE}`);
+  L.push(`> Source: ${m.source}`);
+  L.push("");
+  if (m.noVerification) {
+    L.push("- ⚠️ No required checks were declared — **no verification is claimed** (a checks-empty receipt is a vacuous PASS).");
+    L.push("");
+  }
+  for (const e of m.entries) {
+    L.push(`## ${e.label}`);
+    L.push("Evidence relevant to:");
+    for (const c of e.controls) {
+      const conf = c.confidence === "likely" ? " _(likely — verify against original)_" : "";
+      L.push(`- **${c.framework} ${c.id}** — ${c.title}${conf}`);
+    }
+    L.push(`- _Does not prove:_ ${e.doesNotProve}`);
+    L.push("");
+  }
+  L.push("---");
+  L.push("Wording is deliberately limited to *evidence relevant to / supports*; this map never asserts certification or fulfillment of any control.");
+  return L.join("\n");
+}
+
+/** 순수: 통제 매핑 → 안정 JSON(기계 소비). */
+export function renderControlJson(r: Receipt, hasAnchor: boolean): string {
+  const m = buildControlMap(r, hasAnchor);
+  return JSON.stringify(
+    {
+      contractId: r.contractId,
+      relation: "evidence-relevant-to",
+      disclaimer: "Evidence relevant to controls — not a compliance assessment. Consult your assessor.",
+      isoNote: ISO_NOTE,
+      limitNote: LIMIT_NOTE,
+      source: m.source,
+      noVerification: m.noVerification,
+      entries: m.entries,
+    },
+    null,
+    2,
+  );
+}
+
+/**
+ * `agent-receipt controls [--receipt <p>] [--format md|json] [--redact]` — 저장 receipt 를 읽어 관련 통제 증거맵 출력(읽기전용).
+ * receipt 미변경(투영). 파싱/형식 실패 = exit 2.
+ */
+export function runControls(receiptPath: string | undefined, format: string | undefined, redact: boolean, cwd: string = process.cwd()): never {
+  let abs: string;
+  if (receiptPath) {
+    abs = isAbsolute(receiptPath) ? receiptPath : join(cwd, receiptPath);
+    if (!existsSync(abs)) {
+      console.error(`controls: receipt 파일 없음: ${receiptPath}`);
+      process.exit(2);
+    }
+  } else {
+    const latest = listReceipts(cwd).find((e) => e.name.endsWith(".json"));
+    if (!latest) {
+      console.error("controls: 저장된 receipt 없음 — 먼저 `agent-receipt done`/`receipt` 실행하거나 --receipt <경로> 지정.");
+      process.exit(2);
+    }
+    abs = latest.abs;
+  }
+  let r: Receipt;
+  try {
+    r = JSON.parse(readFileSync(abs, "utf8")) as Receipt;
+  } catch {
+    console.error(`controls: receipt 파싱 실패(JSON 아님): ${abs}`);
+    process.exit(2);
+  }
+  if (!r || typeof r !== "object" || typeof r.ok !== "boolean") {
+    console.error(`controls: receipt 형식이 아님: ${abs}`);
+    process.exit(2);
+  }
+  const hasAnchor = loadRekorAnchor(abs) !== null;
+  let out = format === "json" ? renderControlJson(r, hasAnchor) : renderControlMd(r, hasAnchor);
+  if (redact) out = redactText(out).text;
+  process.stdout.write(out + "\n");
+  process.exit(0);
+}

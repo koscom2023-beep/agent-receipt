@@ -35,6 +35,7 @@ import { runFinish } from "./finish.js";
 import { runLedger, runLedgerRebuild, runLedgerVerify } from "./ledger.js";
 import { runReplay } from "./replay.js";
 import { runAttest } from "./attest.js";
+import { runControls } from "./controls.js";
 import { runAnchor, runAnchorUpload } from "./anchor.js";
 import { runIncident } from "./incident.js";
 import { runReport } from "./report.js";
@@ -126,7 +127,7 @@ agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
 
 ■ 증빙 / 감사 묶음(git 증거):
   report [--type developer|client|audit] / receipt [--format ...] [--content] [--strict-redact] [--agent <n>] [--model <m>] / receipts [--latest|--cat|--dir]
-  audit [--json] / dashboard / index [--json] / ledger [--json] (rebuild|verify) / replay --pack <dir> / attest / incident
+  audit [--json] / dashboard / index [--json] / ledger [--json] (rebuild|verify) / replay --pack <dir> / attest / anchor [--upload] / controls [--format md|json] / incident
 
 ■ 정책(상시 규칙):
   policy init [--profile solo-founder|vibe-coder|agency-client|team-strict|promptia] / policy check / policy show
@@ -228,6 +229,9 @@ function main(): void {
   }
   if (command === "attest") {
     runAttest(getArg("--receipt"), getArg("--pack"));
+  }
+  if (command === "controls") {
+    runControls(getArg("--receipt"), getArg("--format"), hasFlag("--redact"));
   }
   if (command === "incident") {
     runIncident(getArg("--since"));
