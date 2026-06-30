@@ -27,6 +27,28 @@ export interface RegistryEntry {
   doesNotProve: string;
 }
 
+// ── 증거 신뢰도 위계(11차 council·감사 증거 위계 AS 1105/ISA 500 관점) — controls(감사인용) 면에만 노출 ──
+// A 외부·독립 > B git 실측(에이전트 주장과 독립) > C capture 자기보고(에이전트 런타임 훅). self-report(note/source/claim)=advisory·PASS/FAIL 입력 아님.
+export type EvidenceTier = "A" | "B" | "C";
+const SIGNAL_TIER: Record<string, EvidenceTier> = {
+  secretFilesRead: "C",
+  externalCalls: "C",
+  createdThenDeleted: "C",
+  deniedHits: "B",
+  requiredChecks: "B",
+  criticalPaths: "B",
+  auditLogIntegrity: "B",
+  rekorAnchor: "A",
+};
+export function tierOf(signal: string): EvidenceTier {
+  return SIGNAL_TIER[signal] ?? "C";
+}
+const TIER_DESC: Record<EvidenceTier, string> = {
+  A: "A 외부·독립(Rekor 공개 투명성 로그·제3자 봉인)",
+  B: "B git 실측(에이전트 주장과 독립·우리가 직접 관측)",
+  C: "C capture 자기보고(에이전트 런타임 훅 기록·자기검토 한계)",
+};
+
 const ISO_NOTE = "ISO/IEC 42001 IDs are 'likely' — verify the exact sub-control number/title against the purchased ISO/IEC 42001:2023 text.";
 
 // 활성 신호별 통제 '가족'. 관계는 항상 'evidence relevant to'(준수 아님).
@@ -149,12 +171,14 @@ export function renderControlMd(r: Receipt, hasAnchor: boolean): string {
   L.push(`> ${LIMIT_NOTE}`);
   L.push(`> Source: ${m.source}`);
   L.push("");
+  L.push("> **Evidence reliability tier** (audit-evidence hierarchy, PCAOB AS 1105 / ISA 500 lens): **A** external·independent (Rekor) > **B** git-measured (independent of the agent's claims) > **C** capture self-reported (agent runtime hook). Self-report (note/source/claim) is advisory — never a PASS/FAIL input.");
+  L.push("");
   if (m.noVerification) {
     L.push("- ⚠️ No required checks were declared — **no verification is claimed** (a checks-empty receipt is a vacuous PASS).");
     L.push("");
   }
   for (const e of m.entries) {
-    L.push(`## ${e.label}`);
+    L.push(`## ${e.label}  _[tier ${tierOf(e.signal)} — ${TIER_DESC[tierOf(e.signal)]}]_`);
     L.push("Evidence relevant to:");
     for (const c of e.controls) {
       const conf = c.confidence === "likely" ? " _(likely — verify against original)_" : "";
@@ -179,8 +203,9 @@ export function renderControlJson(r: Receipt, hasAnchor: boolean): string {
       isoNote: ISO_NOTE,
       limitNote: LIMIT_NOTE,
       source: m.source,
+      evidenceTierNote: "audit-evidence hierarchy (AS 1105/ISA 500): A external·independent (Rekor) > B git-measured > C capture self-reported. self-report=advisory, not a PASS/FAIL input.",
       noVerification: m.noVerification,
-      entries: m.entries,
+      entries: m.entries.map((e) => ({ ...e, evidenceTier: tierOf(e.signal) })),
     },
     null,
     2,

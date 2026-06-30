@@ -2,7 +2,7 @@
 // 잠금: 변조/삭제/재정렬/중간누락 탐지 · 레거시 분리 · degraded 는 행위에서 제외(영수증 byte 안전) · 체인필드는 actions 에 누출 안 됨.
 // `node test/capture-chain.test.mjs`.
 import assert from "node:assert/strict";
-import { captureEntryHash, verifyCaptureChain, aggregateActions, classifyEvent, COVERED_TOOLS, splitActionsForDisplay, isNotableAction, checkTruncation } from "../dist/capture.js";
+import { captureEntryHash, verifyCaptureChain, aggregateActions, classifyEvent, COVERED_TOOLS, splitActionsForDisplay, isNotableAction, checkTruncation, reconcileCapture } from "../dist/capture.js";
 
 let pass = 0;
 const fail = [];
@@ -160,6 +160,32 @@ check("꼬리방어 — log>head(behind) → ok(오탐 0)", () => {
 });
 check("꼬리방어 — head 없음 → unavailable(실패 아님)", () => {
   assert.equal(checkTruncation(chain(base, "s"), null).status, "unavailable");
+});
+
+// ── 대사(reconciliation·11차 council) — git 변경 ↔ capture write 교차대조 + 잔차 분류(자동 cleared 금지). ──
+check("대사 — 잔차 분류(미설명 vs 읽기/삭제만)·자동 cleared 안 함", () => {
+  const recs = [
+    { ts: "t1", phase: "post", tool: "Write", op: "write", path: "a.ts" },
+    { ts: "t2", phase: "post", tool: "Read", op: "read", path: "b.ts" },
+  ];
+  const r = reconcileCapture(recs, new Set(["a.ts", "b.ts", "c.ts"]));
+  assert.equal(r.matched, 1, "a.ts(write) 일치");
+  assert.equal(r.residuals.length, 2, "b,c 잔차");
+  const byPath = Object.fromEntries(r.residuals.map((x) => [x.path, x.reason]));
+  assert.equal(byPath["b.ts"], "captured-read-or-delete-only");
+  assert.equal(byPath["c.ts"], "unexplained", "capture 가 못 본 건 미설명으로 남김(자동 cleared 금지)");
+  assert.equal(r.unexplained, 1);
+});
+check("대사 — capture write 인데 git 효과 없음(생성후삭제/임시) 카운트", () => {
+  const recs = [{ ts: "t", phase: "post", tool: "Write", op: "write", path: "tmp.ts" }];
+  const r = reconcileCapture(recs, new Set([]));
+  assert.equal(r.capturedNotInGit, 1);
+  assert.equal(r.matched, 0);
+});
+check("대사 — degraded 마커는 경로 분류에서 제외", () => {
+  const recs = [{ ts: "t", phase: "post", tool: "(capture)", op: "capture-degraded", reason: "x" }];
+  const r = reconcileCapture(recs, new Set(["a.ts"]));
+  assert.equal(r.residuals[0].reason, "unexplained");
 });
 
 if (fail.length) {

@@ -2,7 +2,7 @@
 // 잠금: 활성 신호만 · checks0=noVerification · anchor 격상 · 정직 동사('evidence relevant to'만·'compliant with/satisfies' 0) · ISO=likely.
 // `node test/controls.test.mjs`.
 import assert from "node:assert/strict";
-import { buildControlMap, renderControlMd, renderControlJson, CONTROL_REGISTRY, ANCHOR_ENTRY } from "../dist/controls.js";
+import { buildControlMap, renderControlMd, renderControlJson, CONTROL_REGISTRY, ANCHOR_ENTRY, tierOf } from "../dist/controls.js";
 
 let pass = 0;
 const fail = [];
@@ -82,6 +82,29 @@ check("json 출력 — relation=evidence-relevant-to·유효 JSON", () => {
   assert.equal(o.relation, "evidence-relevant-to");
   assert.ok(o.entries.some((e) => e.signal === "deniedHits"));
   assert.ok(o.noVerification === true);
+});
+
+// ── 증거 위계 tier(11차 council·AS 1105) — A 외부앵커 > B git실측 > C capture자기보고 ──
+check("tierOf — capture신호=C·git신호=B·Rekor앵커=A", () => {
+  assert.equal(tierOf("secretFilesRead"), "C");
+  assert.equal(tierOf("externalCalls"), "C");
+  assert.equal(tierOf("deniedHits"), "B");
+  assert.equal(tierOf("requiredChecks"), "B");
+  assert.equal(tierOf("auditLogIntegrity"), "B");
+  assert.equal(tierOf("rekorAnchor"), "A");
+});
+check("controls md — AS 1105 증거위계 헤더 + 신호별 tier 라벨", () => {
+  const md = renderControlMd({ ...base, actionsSummary: { secretFilesRead: 1, externalCalls: 0, createdThenDeleted: 0, total: 1, gitVisible: 0 } }, false);
+  assert.ok(md.includes("AS 1105"), "AS 1105 위계 헤더 누락");
+  assert.ok(/tier C/.test(md), "capture 신호 tier C 라벨 누락");
+});
+check("controls json — entries 에 evidenceTier", () => {
+  const o = JSON.parse(renderControlJson({ ...base, deniedHits: ["x"] }, false));
+  const denied = o.entries.find((e) => e.signal === "deniedHits");
+  assert.equal(denied.evidenceTier, "B");
+});
+check("controls — 모든 registry 신호에 tier 정의(드리프트 가드)", () => {
+  for (const e of [...CONTROL_REGISTRY, ANCHOR_ENTRY]) assert.ok(["A", "B", "C"].includes(tierOf(e.signal)), `${e.signal} tier 미정의`);
 });
 
 if (fail.length) {

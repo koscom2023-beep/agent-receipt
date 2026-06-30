@@ -374,6 +374,41 @@ export function checkTruncation(records: CaptureRecord[], head: CaptureHead | nu
   return { status: "ok", detail: records.length === head.count ? "head=log 일치" : `log ${records.length} >= head ${head.count}(head 뒤처짐·정상)` };
 }
 
+// ── 대사 (reconciliation·11차 council) — 두 독립기록(git 변경 ↔ capture 기록) 교차대조 + 잔차 강제 분류 ──
+// 회계 대사처럼 잔차를 표시만 말고 분류한다. 🔴 자동 cleared 금지: capture 가 *확실히* 본 것만 설명, 나머지는 unexplained 로 남김(거짓 안심 차단).
+//   '서브에이전트라서' 같은 추정 라벨은 붙이지 않는다(우리 데이터로 확정 못 함 — 일반 caveat 로만).
+export type ReconReason = "captured-read-or-delete-only" | "unexplained";
+export interface ReconResidual {
+  path: string;
+  reason: ReconReason;
+}
+export interface ReconResult {
+  matched: number; // git 변경 ↔ capture write 일치
+  residuals: ReconResidual[]; // git 변경인데 capture write 기록 없음
+  unexplained: number; // 그중 capture 가 전혀 못 본 것(진짜 갭)
+  capturedNotInGit: number; // capture write 인데 git 효과 없음(생성후삭제/임시 등)
+}
+export function reconcileCapture(records: CaptureRecord[], gitChanged: Set<string>): ReconResult {
+  const writePaths = new Set<string>();
+  const otherPaths = new Set<string>(); // read/delete 로 본 경로
+  for (const r of records) {
+    if (r.op === "capture-degraded" || !r.path) continue;
+    if (r.op === "write") writePaths.add(r.path);
+    else otherPaths.add(r.path);
+  }
+  const residuals: ReconResidual[] = [];
+  for (const p of gitChanged) {
+    if (writePaths.has(p)) continue; // 일치 — 설명됨
+    residuals.push({ path: p, reason: otherPaths.has(p) ? "captured-read-or-delete-only" : "unexplained" });
+  }
+  return {
+    matched: [...gitChanged].filter((p) => writePaths.has(p)).length,
+    residuals,
+    unexplained: residuals.filter((r) => r.reason === "unexplained").length,
+    capturedNotInGit: [...writePaths].filter((p) => !gitChanged.has(p)).length,
+  };
+}
+
 /** 실패를 조용히 삼키지 않고 'capture-degraded' 마커를 체인에 남긴다(비차단 exit 0). 마커 기록조차 실패하면 조용히 통과. */
 function markDegraded(phase: "pre" | "post", ts: string, reason: string): never {
   try {
@@ -427,15 +462,21 @@ export function runCaptureShow(json: boolean): never {
   for (const a of notable) console.log(`  ⚠️ ${a.flag}  ${a.path ?? a.host ?? ""}`);
   if (mutedCount) console.log(`  · 그 외 일반 read/command ${mutedCount}건 (기록됨·접힘)`);
   console.log(`\n  git 가 보는 것: ${s.gitVisible}  ⟷  주목 행위: ${notable.length}  (전체 기록 ${s.total})`);
-  // 완전성 보증(iter1): git 이 바꿨으나 capture 기록이 없는 경로 = 훅 사각(차집합). 거짓 안심 차단.
-  const capturePaths = new Set(result.actions.map((a) => a.path).filter((p): p is string => !!p));
-  const uncovered = [...gitChanged].filter((p) => !capturePaths.has(p));
+  // 대사(11차 council): git 변경 ↔ capture write 교차대조 + 잔차 분류(자동 cleared 금지·미설명은 남김).
+  const recon = reconcileCapture(records, gitChanged);
   const degraded = records.filter((r) => r.op === "capture-degraded").length;
-  if (uncovered.length) {
-    console.log(`\n  ⚠️ git 이 바꿨으나 capture 기록 없는 경로 ${uncovered.length}건(훅 사각 가능):`);
-    for (const p of uncovered.slice(0, 10)) console.log(`     ${p}`);
-    if (uncovered.length > 10) console.log(`     … 외 ${uncovered.length - 10}건`);
+  if (recon.residuals.length) {
+    console.log(`\n  대사(reconciliation) — git 변경 ↔ capture: 일치 ${recon.matched} · 잔차 ${recon.residuals.length}(미설명 ${recon.unexplained})`);
+    for (const r of recon.residuals.slice(0, 10)) {
+      const tag = r.reason === "unexplained" ? "미설명(capture 기록 0)" : "읽기/삭제만 포착(write 기록 없음)";
+      console.log(`     ✗ ${r.path}  — ${tag}`);
+    }
+    if (recon.residuals.length > 10) console.log(`     … 외 ${recon.residuals.length - 10}건`);
+    console.log(`     ⓘ 미설명 잔차는 자동 해소하지 않습니다 — 훅 미커버(서브에이전트/MCP/OS) 또는 진짜 누락일 수 있음(직접 확인).`);
+  } else {
+    console.log(`\n  대사 OK — git 변경이 전부 capture write 와 일치(잔차 0).`);
   }
+  if (recon.capturedNotInGit) console.log(`  · capture write ${recon.capturedNotInGit}건은 git 효과 없음(생성후삭제/임시 가능).`);
   if (degraded) console.log(`  ⚠️ capture 열화 마커 ${degraded}건 — 일부 행위 기록 실패(조용한 누락 아님).`);
   console.log(`\n  커버 도구: ${COVERED_TOOLS.join(", ")} (그 외 WebFetch·MCP·Task·OS레벨은 capture 범위 밖).`);
   console.log(`  tamper-evident & gap-evident — '설정된 훅 표면' 한정(complete/빠짐없음 아님). 'capture verify' 로 체인 검증.`);
