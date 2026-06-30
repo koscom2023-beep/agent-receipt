@@ -95,6 +95,7 @@ agent-receipt doctor           # shows binary path, current version, npm latest,
 .agent-guard/session.json
 .agent-guard/receipts/
 .agent-guard/audit-packs/
+.agent-guard/anchors/
 .agent-guard/notes/
 .agent-guard/decisions/
 .agent-guard/keys/
@@ -168,6 +169,7 @@ If you omit `--contract`, the contract is auto-discovered (see below).
 | `replay --pack <dir>` (alias `verify-pack`) | Re-verify a saved audit-pack against the current repo: recompute the receipt `contentHash`, confirm the commit exists. Detects tampering. Cannot reproduce external DB/OS effects. | yes |
 | `ledger [--json]` · `ledger rebuild` | Append-only local trail `.agent-guard/ledger.jsonl` — one metadata line per receipt (no diffs/values). `rebuild` regenerates it from `receipts/`. | no |
 | `attest --receipt <p> \| --pack <dir>` | Emit an in-toto **style** Statement (draft) to stdout — provenance over the receipt + commit. Not an SLSA-level claim; tamper-evident, not non-forgeable. | no |
+| `anchor [--receipt <p>]` · `anchor --upload` | Wrap a receipt in a DSSE-signed in-toto Statement (auto-generates an ed25519 key) and either print Rekor-registration instructions (default, offline) or, with **`--upload`**, register it to the public **Rekor** transparency log in one command (Node `fetch` + built-in crypto — no external tools), then write a `<receipt>.rekor.json` sidecar. Seals **time & existence** via a third party; **not** a keyless identity proof. | no |
 | `incident [--since <n>]` | Scan recent receipts/ledger for failures, critical-path changes, missing approvals, last PASS. Read-only; no auto-recovery, no scoring. | no |
 
 ### Convenience & release commands (v0.9)
@@ -404,7 +406,16 @@ agent-receipt share-proof                 # render the latest saved receipt
 agent-receipt share-proof --receipt <p>   # render a specific saved receipt
 ```
 
-> Honest scope: **git-based evidence, tamper-evident — not non-forgeable, and not a compliance guarantee.** Capture currently adapts Claude Code hooks (single agent). Cloud / hosted verification links and third-party anchors are intentionally out of scope.
+**`anchor` — a third-party seal (Rekor transparency log).** A local receipt is *your* statement about *your* work — useful, but self-issued. `anchor --upload` wraps the receipt in a DSSE-signed in-toto Statement and registers its hash to the public **Rekor** transparency log, so a client can confirm **the receipt existed at that time without trusting you**. One command, no external tools (Node `fetch` + built-in crypto); it auto-generates an ed25519 key on first use.
+
+```bash
+agent-receipt anchor                       # offline: build the DSSE bundle + print how to register
+agent-receipt anchor --upload              # one command: sign + register to Rekor + write the sidecar
+```
+
+On success it writes a `<receipt>.rekor.json` sidecar next to the receipt (entry UUID, logIndex, verification URL). **`share-proof` then auto-embeds a "Verify in the public transparency log" link** — a receipt with no sidecar renders byte-identically to before. The link is *click-only* (an `href`, never an auto-loaded resource), so opening the proof still leaks nothing.
+
+> Honest scope: **git-based evidence, tamper-evident — not non-forgeable, and not a compliance guarantee.** Capture currently adapts Claude Code hooks (single agent). A receipt may optionally be anchored to the public Rekor log (`anchor`, above) — that seals **time & existence** via a third party, but is **not** a keyless (identity) proof. Cloud / hosted SaaS verification pages remain out of scope.
 
 ---
 
@@ -420,7 +431,7 @@ agent-receipt share-proof --receipt <p>   # render a specific saved receipt
 
 Current version **`0.10.0`** (`@promptia-labs/agent-receipt`). The 0.9.x line added convenience/integration (`begin --kind`, `close-recon`, `prepare-commit`/`finish`, `note`, `release-check`, `next`) and git-evidence/advisory separation; **`0.10.0`** added `schemaVersion`, provenance, hash-chain ledger, content hashing, and strict-redact. Cloud/SaaS, real Slack/webhook transport, remote approval, and any "compliance guarantee" remain intentionally out of scope. Feature coverage vs the design docs: [`docs/coverage.md`](docs/coverage.md).
 
-Version ladder: `0.7.0` (work receipts) → `0.8.0` (AI work audit protocol) → `0.9.x` (convenience + dogfood fixes) → **`0.10.0` (integrity: schemaVersion / provenance / hash-chain ledger)** → **`0.11.0` (focused alpha: tightened surface + `capture` — beyond-git action trace; in progress).** A feature-maximal `1.0.0` is **deferred** in favor of a focused product — see [`docs/VERSION-DECISION-2026-06-29.md`](docs/VERSION-DECISION-2026-06-29.md).
+Version ladder: `0.7.0` (work receipts) → `0.8.0` (AI work audit protocol) → `0.9.x` (convenience + dogfood fixes) → **`0.10.0` (integrity: schemaVersion / provenance / hash-chain ledger)** → **`0.11.0` (focused alpha: tightened surface + `capture` — beyond-git action trace + `anchor` — third-party Rekor seal & in-proof verification link; in progress).** A feature-maximal `1.0.0` is **deferred** in favor of a focused product — see [`docs/VERSION-DECISION-2026-06-29.md`](docs/VERSION-DECISION-2026-06-29.md).
 
 For local development:
 
