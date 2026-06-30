@@ -33,7 +33,7 @@ function extractPaths(jsonl: string): string[] {
 function toRepoRel(p: string, root: string | null): string {
   if (!root || !isAbsolute(p)) return p;
   const rel = relative(root, p);
-  return rel.startsWith("..") || isAbsolute(rel) ? p : rel; // 레포 밖이면 절대경로 유지
+  return (rel.startsWith("..") || isAbsolute(rel) ? p : rel).replace(/\\/g, "/"); // 레포 밖이면 절대경로 유지·구분자 forward-slash 통일(3R·Windows)
 }
 
 /**

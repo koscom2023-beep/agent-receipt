@@ -14,7 +14,7 @@ const SENSITIVE_KEY =
   "(?:[A-Za-z0-9_.-]*(?:api[_-]?key|secret|token|password|passwd|authorization|access[_-]?key|private[_-]?key|client[_-]?secret|webhook|session|cookie)[A-Za-z0-9_.-]*)";
 
 // 1) .env / shell 형태:  SOME_SECRET=값   (값 끝까지)
-const ENV_ASSIGN = new RegExp(`^(\\s*${SENSITIVE_KEY}\\s*=\\s*)(.+)$`, "gim");
+const ENV_ASSIGN = new RegExp(`^(\\s*(?:export\\s+)?${SENSITIVE_KEY}\\s*=\\s*)(.+)$`, "gim");
 // 2) json/yaml 형태:  "secret": "값"  또는  secret: 값   (콤마/중괄호/줄끝 전까지)
 const KV_COLON = new RegExp(`("?${SENSITIVE_KEY}"?\\s*:\\s*)("?)([^"\\n,}]+)("?)`, "gi");
 // 3) Bearer 토큰

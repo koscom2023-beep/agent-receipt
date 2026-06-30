@@ -1,9 +1,10 @@
 import { existsSync, readFileSync, writeFileSync, appendFileSync, mkdirSync, rmSync } from "node:fs";
-import { join, dirname, relative } from "node:path";
+import { join, dirname, relative, isAbsolute, sep } from "node:path";
 import { homedir } from "node:os";
 import { createHash } from "node:crypto";
 import { redactText, REDACT_NOTE } from "./redact.js";
 import { withFileLock, writeFileAtomic } from "./lock.js";
+import { isToolOutput } from "./session.js";
 import * as g from "./git.js";
 
 // ── capture (alpha) — git 너머 '측정' 행위 추적 ──
@@ -119,9 +120,9 @@ function extractDeletePaths(cmd: string): string[] {
 
 function toRel(p: string): string {
   const root = g.repoRoot();
-  if (!root || !p.startsWith("/")) return p;
+  if (!root || !isAbsolute(p)) return p; // 3R: isAbsolute(win32 인식) — startsWith("/")는 Windows 절대경로 못 잡음
   const r = relative(root, p);
-  return r.startsWith("..") ? p : r; // 레포 밖이면 절대경로 유지
+  return (r.startsWith("..") ? p : r).split(sep).join("/"); // 레포 밖이면 절대경로 유지·구분자 forward-slash 통일(git 측과 교차되게)
 }
 // 경로/호스트 문자열도 방어적으로 redact 경유(값 누수 차단). 내용·명령 바디는 *애초에 저장 안 함*.
 function clean(s: string | undefined): string | undefined {
@@ -175,7 +176,9 @@ export function classifyEvent(payload: unknown, phase: "pre" | "post" = "post", 
     const cmd = String(input.command ?? input.cmd ?? "");
     const url = cmd.match(URL_RE);
     if (url || NET_CMD.test(cmd) || NET_LIB.test(cmd)) {
-      return [{ ...base, op: "network", host: clean(url?.[1]) ?? "(unknown-host)" }];
+      const h = url?.[1];
+      const bare = h && h.includes("@") ? h.slice(h.lastIndexOf("@") + 1) : h; // 3R: user:pass@host 의 자격증명(userinfo) 제거 → 평문 비밀의 디스크 저장 방지
+      return [{ ...base, op: "network", host: clean(bare) ?? "(unknown-host)" }];
     }
     const dels = extractDeletePaths(cmd);
     if (dels.length) {
@@ -283,6 +286,22 @@ function readRecords(): CaptureRecord[] {
     .filter((r): r is CaptureRecord => r !== null);
 }
 
+// 3R 핫패스 최적화: append 시 전체 파싱(O(n)·세션 누적 O(n^2)) 대신 마지막 유효 레코드만 파싱(체인 prev 권위값=로그 SSOT). count=줄 수(파싱 없음).
+function tailRecord(): { lastSeq: number; lastEntryHash?: string; count: number } {
+  const f = capFile();
+  if (!existsSync(f)) return { lastSeq: 0, count: 0 };
+  const lines = readFileSync(f, "utf8").split("\n").filter(Boolean);
+  for (let i = lines.length - 1; i >= 0; i--) {
+    try {
+      const r = JSON.parse(lines[i]) as CaptureRecord;
+      return { lastSeq: r.seq ?? 0, lastEntryHash: r.entryHash, count: lines.length };
+    } catch {
+      /* 손상 줄이면 이전 줄로(권위 prev=마지막 유효 레코드) */
+    }
+  }
+  return { lastSeq: 0, count: lines.length };
+}
+
 // ── 완전성 보증 체인(6차 council iter1) — ledger.ts 의 검증된 해시체인 패턴을 capture 에 이식 ──
 // 원칙: entryHash 는 자신을 제외한 결정론 직렬화(prevHash·seq·sessionId 포함) → 변조·삭제·재정렬·중간누락 탐지.
 //        새 의존성 0(node crypto). 레거시(체인 없는) 줄은 '검증불가'로 분리(차단 아님).
@@ -310,10 +329,9 @@ function appendCapture(recs: CaptureRecord[], sessionId: string | undefined, sou
   mkdirSync(dirname(f), { recursive: true });
   // 14차 council: read→chain→append→writeHead 를 락으로 직렬화(병렬 훅 포크=verify 오탐·head 저평가 방지). 못 잡으면 throw → 호출부가 degraded 마커.
   withFileLock(join(dirname(f), "capture.lock"), () => {
-    const prior = readRecords();
-    const last = prior[prior.length - 1];
-    let prevHash = last?.entryHash;
-    let seq = last?.seq ?? 0;
+    const tail = tailRecord(); // 3R: 전체 파싱 대신 마지막 레코드만(긴 세션 O(n^2) 제거)
+    let prevHash = tail.lastEntryHash;
+    let seq = tail.lastSeq;
     const lines: string[] = [];
     for (const r of recs) {
       seq += 1;
@@ -327,7 +345,7 @@ function appendCapture(recs: CaptureRecord[], sessionId: string | undefined, sou
     }
     appendFileSync(f, lines.join("\n") + "\n");
     // 꼬리방어: 로그 append *후* high-water-mark 갱신(락 안이라 동시 저평가 없음).
-    writeHead({ count: prior.length + recs.length, lastSeq: seq, lastEntryHash: prevHash });
+    writeHead({ count: tail.count + recs.length, lastSeq: seq, lastEntryHash: prevHash });
   });
 }
 
@@ -456,11 +474,11 @@ export function runCaptureIngest(event: string | undefined): never {
 /** `agent-receipt capture show [--json]` — 누적 capture.jsonl 집계 출력(데모 핵심: git:N ⟷ 행위:M). */
 export function runCaptureShow(json: boolean): never {
   const records = readRecords();
-  const gitChanged = new Set<string>([
-    ...safeList(g.unstagedFiles),
-    ...safeList(g.stagedFiles),
-    ...safeList(g.untrackedFiles),
-  ]);
+  const gitChanged = new Set<string>(
+    [...safeList(g.unstagedFiles), ...safeList(g.stagedFiles), ...safeList(g.untrackedFiles)].filter(
+      (p) => !isToolOutput(p), // 3R: 도구 자기 산출물(.agent-guard/capture.jsonl 등)을 'git 변경'으로 오귀속 안 함(거짓 잔차/거짓 경보 방지)
+    ),
+  );
   const result = aggregateActions(records, gitChanged);
   if (json) {
     process.stdout.write(JSON.stringify(result) + "\n");

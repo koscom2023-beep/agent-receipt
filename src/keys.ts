@@ -58,7 +58,12 @@ export function ensureSigningKey(cwd: string = process.cwd()): { key: KeyObject;
   mkdirSync(join(cwd, KEYS_REL), { recursive: true });
   return withFileLock(join(cwd, KEYS_REL, ".keys.lock"), () => {
     if (existsSync(privAbs)) {
-      const key = createPrivateKey(readFileSync(privAbs)); // 기존 개인키 보존
+      let key: KeyObject;
+      try {
+        key = createPrivateKey(readFileSync(privAbs)); // 기존 개인키 보존
+      } catch {
+        throw new Error("private key 파싱 실패 (PEM 형식 확인)"); // 3R: anchor 경로도 sign/verify 처럼 graceful — 호출부(prepareAnchor)가 exit 2
+      }
       let publicPem: string;
       if (existsSync(pubAbs)) {
         publicPem = readFileSync(pubAbs, "utf8");

@@ -30,7 +30,7 @@ function printSelfReportBlock(label: string, obj: unknown): void {
   console.log("  → unverified by git · advisory only · PASS/FAIL 근거 아님");
 }
 
-const cleanPath = (p: string): string => p.replace(/^\.\//, "");
+const cleanPath = (p: string): string => p.replace(/^\.\//, "").replace(/\\/g, "/"); // 3R: 구분자 통일(Windows backslash claim ↔ git forward-slash 거짓 불일치 방지)
 function asSet(arr: unknown): Set<string> {
   return new Set(
     Array.isArray(arr) ? arr.filter((x): x is string => typeof x === "string").map(cleanPath) : [],

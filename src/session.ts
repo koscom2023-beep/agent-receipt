@@ -20,6 +20,10 @@ export function isToolOutput(f: string): boolean {
     f.startsWith(".agent-guard/decisions/") ||
     f === ".agent-guard/ledger.jsonl" ||
     f === ".agent-guard/dashboard.html" ||
+    f === ".agent-guard/capture.jsonl" ||
+    f === ".agent-guard/capture.head.json" ||
+    f.startsWith(".agent-guard/anchors/") ||
+    (f.startsWith(".agent-guard/proof-") && f.endsWith(".html")) ||
     (f.startsWith(".agent-guard/") && (f.endsWith(".sig.json") || f.endsWith(".approval.json")))
   );
 }

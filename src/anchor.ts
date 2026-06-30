@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { sign as edSign } from "node:crypto";
+import { writeFileAtomic } from "./lock.js";
 import { isAbsolute, join, basename } from "node:path";
 import type { Receipt } from "./receipt.js";
 import { buildAiWorkStatement } from "./attest.js";
@@ -75,27 +76,30 @@ async function uploadToRekor(envelope: DsseEnvelope, publicPem: string): Promise
   if (res.status !== 201 && res.status !== 409) {
     throw new Error(`Rekor HTTP ${res.status}: ${txt.slice(0, 300)}`);
   }
-  const got = extractRekorUuid(txt);
+  const got = extractRekorUuid(txt, res.status);
   if (!got) throw new Error(`Rekor ${res.status}: 응답에서 UUID 추출 실패 — ${txt.slice(0, 200)}`);
   return got;
 }
 
 /**
- * 순수: Rekor 응답 바디 → {uuid, logIndex} 또는 null. 13차 council(#6).
- * 201=엔트리맵(키=UUID·logIndex 포함). 409=이미 등록(바디={code,message}) → 키를 UUID 로 오인하면 가짜 sidecar.
- * 키가 UUID-shape(긴 hex)일 때만 신뢰, 아니면 메시지에서 UUID 추출, 둘 다 실패면 null(=가짜 증거 안 만듦).
+ * 순수: Rekor 응답 바디 → {uuid, logIndex} 또는 null. 13차 council(#6) + 3R 하드닝.
+ * 201=엔트리맵(키=UUID·logIndex). 409=이미 등록(바디 메시지에 UUID). 3R: 바디 전체 hex 스캔 폴백은 **409 한정** +
+ * hex 길이 **40+**(실제 Rekor UUID=64) 로 제한 → 201 비표준/HTML 본문의 CSRF·logID·nonce 잡 hex 를 가짜 UUID 로 오인하지 않음.
+ * 어느 경로도 못 맞히면 null(=가짜 증거 안 만듦).
  */
-export function extractRekorUuid(txt: string): { uuid: string; logIndex: number | null } | null {
+export function extractRekorUuid(txt: string, status?: number): { uuid: string; logIndex: number | null } | null {
   let obj: Record<string, { logIndex?: number }> = {};
   try {
     obj = JSON.parse(txt) as Record<string, { logIndex?: number }>;
   } catch {
-    /* 비-JSON 바디 → 아래 메시지 정규식으로 */
+    /* 비-JSON 바디 → 아래 409 메시지 정규식으로 */
   }
   const key = (obj && typeof obj === "object" ? Object.keys(obj)[0] : "") ?? "";
-  if (/^[0-9a-f]{16,}$/i.test(key)) return { uuid: key, logIndex: obj[key]?.logIndex ?? null };
-  const m = txt.match(/[0-9a-f]{16,}/i); // 409 already-exists 메시지의 실제 UUID
-  if (m) return { uuid: m[0], logIndex: null };
+  if (/^[0-9a-f]{40,}$/i.test(key)) return { uuid: key, logIndex: obj[key]?.logIndex ?? null }; // 201 엔트리맵 키=UUID(실제 64hex)
+  if (status === 409) {
+    const m = txt.match(/[0-9a-f]{40,}/i); // 409 already-exists 메시지의 실제 UUID(409 한정·짧은 토큰 오인 방지)
+    if (m) return { uuid: m[0], logIndex: null };
+  }
   return null;
 }
 
@@ -136,7 +140,14 @@ function prepareAnchor(receiptArg: string | undefined, cwd: string): Prepared {
     console.error("anchor: json receipt 가 필요합니다(파싱 실패 또는 contentHash 없음).");
     process.exit(2);
   }
-  const { key, publicPem } = ensureSigningKey(cwd);
+  let signing: { key: ReturnType<typeof ensureSigningKey>["key"]; publicPem: string };
+  try {
+    signing = ensureSigningKey(cwd); // 3R: 손상 private.pem 이면 raw 크래시 대신 깔끔한 exit 2(sign/verify 와 일관)
+  } catch (e) {
+    console.error(`anchor: ${(e as Error).message}`);
+    process.exit(2);
+  }
+  const { key, publicPem } = signing;
   const keyid = publicKeyFingerprint(cwd) ?? undefined;
   const statement = buildAiWorkStatement(r, approvalsCountFor(rpath));
   const payload = Buffer.from(JSON.stringify(statement));
@@ -197,7 +208,7 @@ export function runAnchorUpload(receiptArg: string | undefined, cwd: string = pr
       // Stage 1b: 등록 결과를 영수증 옆 sidecar 로 기록 → share-proof 가 검증 링크를 자동 임베드. 실패해도 등록 자체는 유효.
       const sidecar = rekorAnchorPath(receiptPath);
       try {
-        writeFileSync(sidecar, JSON.stringify(anchor, null, 2) + "\n");
+        writeFileAtomic(sidecar, JSON.stringify(anchor, null, 2) + "\n"); // 3R: 원자쓰기 — 재등록 중 중단돼도 기존 유효 앵커 안 잘림
         console.log(`   앵커 기록 → ${relTo(cwd, sidecar)} (share-proof 가 이 검증 링크를 자동으로 영수증에 박습니다)`);
       } catch (e) {
         console.error(`   ⚠️ 앵커 sidecar 기록 실패(${relTo(cwd, sidecar)}): ${(e as Error).message} — 등록은 성공, share-proof 자동 임베드만 누락.`);

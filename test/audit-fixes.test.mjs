@@ -27,7 +27,7 @@ check("201 엔트리맵 → 키=UUID + logIndex", () => {
   assert.equal(r.logIndex, 42);
 });
 check("409 already-exists 메시지 → 메시지에서 UUID 추출(logIndex null)", () => {
-  const r = extractRekorUuid(JSON.stringify({ code: 409, message: `entry already exists: ${UUID}` }));
+  const r = extractRekorUuid(JSON.stringify({ code: 409, message: `entry already exists: ${UUID}` }), 409);
   assert.equal(r.uuid, UUID);
   assert.equal(r.logIndex, null);
 });
