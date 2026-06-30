@@ -394,10 +394,13 @@ Two newer commands extend receipts **beyond the git working tree**.
 ```bash
 agent-receipt capture install            # preview the hooks snippet (no file change)
 agent-receipt capture install --write    # merge hooks into ./.claude/settings.json (idempotent, preserves existing)
-agent-receipt capture show               # git saw: N  ⟷  actions recorded: M
+agent-receipt capture show               # git saw: N  ⟷  actions recorded: M  (+ git-changed paths with no capture record)
+agent-receipt capture verify             # hash-chain integrity check (tamper / deletion / reorder / gap)
 ```
 
 When a capture log exists, `done` / `receipt` embed an `actions` / `actionsSummary` block in the receipt — **additive**: the 14-key `verify --json` and the existing `contentHash` are unchanged, and receipts produced without capture are byte-identical. `agent-receipt begin` clears the log for a fresh audit boundary.
+
+**Completeness — what it can and can't promise.** The capture log is a hash-chain (each record carries `seq` + `prevHash` + `entryHash`), so `capture verify` detects tampering, deletion, reorder, and internal gaps; a failed ingest writes an explicit `capture-degraded` marker instead of silently dropping. `share-proof` / `capture show` also surface **git-changed paths that have no capture record** (the hook blind spot) and the captured tool surface. It is **honest about its ceiling**: proving *every* action was captured is impossible for a single local observer, so the claim is **tamper-evident & gap-evident within the configured hook surface — not "complete."** Out of scope (known blind spots): tail-truncation, `--dangerously-skip-permissions` (hooks fully off), sub-agent / MCP / pipe / OS-level actions, concurrent-hook races.
 
 **`share-proof` — a one-page evidence file for your client.** Renders a receipt as a self-contained HTML page (no network, no external resources) you can send to a client: scope result, change magnitude, beyond-git actions, and the integrity hash.
 
