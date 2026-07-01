@@ -53,6 +53,7 @@ import { runCaptureIngest, runCaptureShow, runCaptureReset, runCaptureInstall, r
 import { runShareProof, runShareProofFromSaved, latestReceiptExists } from "./shareproof.js";
 import { runResearchVerify } from "./research.js";
 import { runCouncilVerify } from "./council.js";
+import { runSpec } from "./spec.js";
 
 function getArg(flag: string): string | undefined {
   const i = process.argv.indexOf(flag);
@@ -133,7 +134,10 @@ agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
   research verify --file <report.json> [--fetch]   각 주장의 인용·수치·날짜·링크를 출처와 결정론 대조 · 충실성(진위 아님) · --fetch=라이브 URL 재대조(네트워크)
 
 ■ 회의 결정검증(결정↔근거 대조 — 회의 실행 아님·검증만·같은 Evidence Kernel):
-  council verify --file <decision.json> [--log <path>]   결정의 근거(인용·수치·날짜·링크)를 출처와 대조 · append-only DecisionLog(해시체인) · 모순탐지=코어 밖
+  council verify --file <decision.json> [--log <path>]   결정의 근거(인용·수치·날짜·링크·해시)를 출처와 대조 · append-only DecisionLog(해시체인) · 모순탐지=코어 밖
+
+■ Evidence Specification(검증 포맷의 표준 표면):
+  spec [--format json]   claim/check 표준 포맷을 사람요약/기계판독(JSON Schema draft-07)으로 방출 · check kinds·상태·보증범위
 
 ■ 증빙 / 감사 묶음(git 증거):
   report [--type developer|client|audit] / receipt [--format ...] [--content] [--strict-redact] [--committed] [--agent <n>] [--model <m>] / receipts [--latest|--cat|--dir]
@@ -266,6 +270,10 @@ function main(): void {
     if (process.argv[3] === "verify") runCouncilVerify(getArg("--file"), getArg("--log"));
     console.error("council: 사용법 — council verify --file <decision.json> [--log <path>]");
     process.exit(2);
+  }
+  if (command === "spec") {
+    // Evidence Specification 방출 — 검증 포맷의 표준 표면(사람요약/기계판독 JSON Schema).
+    runSpec(getArg("--format"));
   }
   if (command === "incident") {
     runIncident(getArg("--since"));

@@ -34,6 +34,10 @@ interface ResearchClaim {
   operands?: unknown; // 재계산 피연산자(report 가 줌·발명 0)
   eps?: unknown; // 허용오차(기본 1e-9)
   statedDate?: unknown; // 날짜 검증(선택) — 출처의 날짜와 형식무관 대조
+  statedHash?: unknown; // 무결성 검증(선택) — content/contentFile 의 해시가 이것과 일치하나
+  content?: unknown; // 해시 대상 콘텐츠(인라인)
+  contentFile?: unknown; // 또는 로컬 파일(surface 가 읽어 해시)
+  algo?: unknown; // 해시 알고리즘(기본 sha256)
 }
 interface ResearchReport {
   schemaVersion?: unknown;
@@ -59,6 +63,20 @@ export function resolveSource(claim: ResearchClaim): string | null {
 export function checkClaimCitation(claim: ResearchClaim): CitationStatus {
   const quote = typeof claim.quotedText === "string" ? claim.quotedText : "";
   return citationStatus(quote, resolveSource(claim));
+}
+
+// 해시 대상 콘텐츠 해석(파일 IO 는 커널 밖): 인라인 content 우선, 없으면 contentFile 읽기.
+function resolveContent(claim: ResearchClaim): string | undefined {
+  if (typeof claim.content === "string") return claim.content;
+  if (typeof claim.contentFile === "string") {
+    const p = isAbsolute(claim.contentFile) ? claim.contentFile : join(process.cwd(), claim.contentFile);
+    try {
+      return readFileSync(p, "utf8");
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
 }
 
 // HTML → 텍스트(라이브 fetch 대조용). script/style 제거·태그 제거·기본 엔티티 디코드(공백 정규화는 커널이).
@@ -162,9 +180,9 @@ export async function runResearchVerify(
       source = resolveSource(claim);
     }
 
-    // 통합 평가(표준 포맷의 단일 의미론) — 인용·수치·날짜·링크를 한 곳에서.
+    // 통합 평가(표준 포맷의 단일 의미론) — 인용·수치·날짜·링크·해시를 한 곳에서.
     const ev = evaluateClaim(
-      { quotedText: claim.quotedText, statedValue: claim.statedValue, op: claim.op, operands: claim.operands, eps: claim.eps, statedDate: claim.statedDate, link: url || undefined },
+      { quotedText: claim.quotedText, statedValue: claim.statedValue, op: claim.op, operands: claim.operands, eps: claim.eps, statedDate: claim.statedDate, link: url || undefined, statedHash: claim.statedHash, content: resolveContent(claim), algo: claim.algo },
       source,
     );
     if (ev.failed) failed++;
@@ -176,6 +194,7 @@ export async function runResearchVerify(
     if (quote) console.log(`    인용 : ${quote.length > 72 ? quote.slice(0, 69) + "..." : quote}  → ${ev.citation}`);
     if (claim.statedValue !== undefined) console.log(`    수치 : ${String(claim.statedValue)}${claim.op ? ` (재계산 ${String(claim.op)})` : ""}  → ${ev.number}`);
     if (claim.statedDate !== undefined) console.log(`    날짜 : ${String(claim.statedDate)}  → ${ev.date}`);
+    if (claim.statedHash !== undefined) console.log(`    해시 : ${String(claim.statedHash).slice(0, 20)}…  → ${ev.hash}`);
     console.log(
       ev.failed
         ? "    ✗ FAIL — 근거가 출처와 불일치(날조/수치·날짜오류)"

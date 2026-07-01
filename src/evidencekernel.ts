@@ -1,3 +1,8 @@
+import { createHash } from "node:crypto";
+
+// Evidence Specification 버전 — 검증 포맷(claim/check)의 표준 버전. 남이 채택할 수 있는 표면.
+export const SCHEMA_VERSION = "evidence/1";
+
 // ── Evidence Kernel (코어·순수 검증) ──
 // 피드백(2026-07-01): 코어가 하는 일은 단순 verify 가 아니라 capture→normalize→verify→reconcile→
 //   ledger→replay 의 증거처리다. 그 중 "주장이 출처에 실재하나"를 모델 밖 결정론으로 대조하는
@@ -155,6 +160,17 @@ export function linkStatus(url: string): LinkStatus {
   }
 }
 
+// ── 해시(무결성) 검증 커널 (Phase3) ──
+// content 의 해시가 주장 해시와 일치하나 = 무결성. deterministic 계산(IO 아님·커널 순수 유지).
+export type HashStatus = "verified" | "mismatch" | "no-basis";
+const HASH_ALGOS = ["sha256", "sha1", "sha512", "md5"];
+export function hashStatus(statedHash: string | null, content: string | null, algo: string = "sha256"): HashStatus {
+  if (!statedHash || content === null) return "no-basis";
+  const a = HASH_ALGOS.includes(algo) ? algo : "sha256";
+  const h = createHash(a).update(content).digest("hex");
+  return h.toLowerCase() === statedHash.trim().toLowerCase() ? "verified" : "mismatch";
+}
+
 // ── 통합 claim 평가 (표준 포맷의 단일 의미론 — research·council 이 공유) ──
 // 코드가 곧 포맷 스펙: 한 주장이 담은 각 typed 근거(인용/수치/날짜/링크)를 한 곳에서 결정론 판정.
 export interface EvalClaimInput {
@@ -165,12 +181,17 @@ export interface EvalClaimInput {
   eps?: unknown;
   statedDate?: unknown;
   link?: unknown; // 형식 검증할 URL(surface 가 sourceUrl 을 넘길 수 있음)
+  statedHash?: unknown; // 무결성: content 의 해시가 이것과 일치하나
+  content?: unknown; // 해시 대상 콘텐츠(인라인·surface 가 파일에서 채울 수 있음)
+  algo?: unknown; // 해시 알고리즘(기본 sha256)
 }
 export interface ClaimEvaluation {
   citation: CitationStatus | null;
   number: NumberStatus | null;
   date: DateStatus | null;
   link: LinkStatus | null;
+  hash: HashStatus | null;
+  results: Record<string, string | null>; // 레지스트리 전체 결과(확장 검증기 포함)
   failed: boolean; // 어느 근거든 불일치(not-found/mismatch/invalid)
   verified: boolean; // 실증된 근거 1+ 이고 불일치 0
 }
@@ -184,22 +205,71 @@ function parseStated(v: unknown): number | null {
   return null;
 }
 
+// ── check 레지스트리 (Evidence VM 씨앗) ──
+// 새 검증기 = descriptor 한 줄 등록. 엔진(evaluateClaim)은 불변. run 이 null 이면 그 주장엔 미적용.
+// positive=이 검증이 verified 이면 "실증 근거"로 침(link 는 well-formedness 라 positive=false·advisory).
+export interface CheckDescriptor {
+  kind: string;
+  positive: boolean;
+  run: (c: EvalClaimInput, source: string | null) => string | null;
+}
+export const CHECK_REGISTRY: CheckDescriptor[] = [
+  { kind: "citation", positive: true, run: (c, s) => (typeof c.quotedText === "string" && c.quotedText ? citationStatus(c.quotedText, s) : null) },
+  { kind: "number", positive: true, run: (c, s) => (c.statedValue !== undefined ? numberStatus(parseStated(c.statedValue), { source: s, op: c.op, operands: Array.isArray(c.operands) ? (c.operands as number[]) : undefined, eps: typeof c.eps === "number" ? c.eps : undefined }) : null) },
+  { kind: "date", positive: true, run: (c, s) => (c.statedDate !== undefined ? dateStatus(typeof c.statedDate === "string" ? c.statedDate : null, s) : null) },
+  { kind: "hash", positive: true, run: (c) => (c.statedHash !== undefined ? hashStatus(typeof c.statedHash === "string" ? c.statedHash : null, typeof c.content === "string" ? c.content : null, typeof c.algo === "string" ? c.algo : "sha256") : null) },
+  { kind: "link", positive: false, run: (c) => (typeof c.link === "string" ? linkStatus(c.link) : null) },
+];
+export const CHECK_KINDS: string[] = CHECK_REGISTRY.map((d) => d.kind);
+const FAILED_STATUSES = new Set(["not-found", "mismatch", "invalid"]);
+
+// 표준 포맷의 단일 의미론: 레지스트리를 디스패치해 한 주장의 모든 typed 근거를 판정.
 export function evaluateClaim(c: EvalClaimInput, source: string | null): ClaimEvaluation {
-  const quote = typeof c.quotedText === "string" ? c.quotedText : "";
-  const citation = quote ? citationStatus(quote, source) : null;
-  const number =
-    c.statedValue !== undefined
-      ? numberStatus(parseStated(c.statedValue), {
-          source,
-          op: c.op,
-          operands: Array.isArray(c.operands) ? (c.operands as number[]) : undefined,
-          eps: typeof c.eps === "number" ? c.eps : undefined,
-        })
-      : null;
-  const date = c.statedDate !== undefined ? dateStatus(typeof c.statedDate === "string" ? c.statedDate : null, source) : null;
-  const link = typeof c.link === "string" ? linkStatus(c.link) : null;
-  const failed = citation === "not-found" || number === "mismatch" || date === "mismatch" || link === "invalid";
-  // link valid=advisory(증거 아님) → verified 에 기여 안 함.
-  const verified = !failed && (citation === "verified" || number === "verified" || date === "verified");
-  return { citation, number, date, link, failed, verified };
+  const results: Record<string, string | null> = {};
+  let failed = false;
+  let positiveVerified = false;
+  for (const d of CHECK_REGISTRY) {
+    const st = d.run(c, source);
+    results[d.kind] = st;
+    if (st && FAILED_STATUSES.has(st)) failed = true;
+    if (d.positive && st === "verified") positiveVerified = true;
+  }
+  return {
+    citation: (results.citation as CitationStatus) ?? null,
+    number: (results.number as NumberStatus) ?? null,
+    date: (results.date as DateStatus) ?? null,
+    link: (results.link as LinkStatus) ?? null,
+    hash: (results.hash as HashStatus) ?? null,
+    results,
+    failed,
+    verified: !failed && positiveVerified,
+  };
+}
+
+// Evidence Specification: 레지스트리에서 기계판독 JSON Schema 생성(코드가 곧 스펙 — 남이 채택할 표면).
+export function claimSchema(): Record<string, unknown> {
+  return {
+    $schema: "http://json-schema.org/draft-07/schema#",
+    title: "agent-receipt Evidence Claim",
+    schemaVersion: SCHEMA_VERSION,
+    description: "검증 가능한 근거를 담은 주장. 각 typed check 는 결정론·비-LLM. 판단(결론 옳음)은 보증하지 않음.",
+    type: "object",
+    checkKinds: CHECK_KINDS,
+    properties: {
+      statement: { type: "string", description: "주장(표시용·미검증)" },
+      sourceUrl: { type: "string", description: "출처 URL(provenance·--fetch 시 라이브 대조)" },
+      sourceText: { type: "string" },
+      sourceFile: { type: "string" },
+      quotedText: { type: "string", description: "citation: 출처의 리터럴 부분문자열인가" },
+      statedValue: { type: ["number", "string"], description: "number: 출처의 수 또는 재계산과 상등" },
+      op: { type: "string", enum: [...NUMBER_OPS] },
+      operands: { type: "array", items: { type: "number" } },
+      eps: { type: "number" },
+      statedDate: { type: "string", description: "date: 출처의 날짜와 형식무관 상등" },
+      link: { type: "string", description: "link: URL well-formedness(valid=advisory)" },
+      statedHash: { type: "string", description: "hash: content 의 해시와 상등(무결성)" },
+      content: { type: "string" },
+      algo: { type: "string", enum: [...HASH_ALGOS] },
+    },
+  };
 }

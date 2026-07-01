@@ -1,7 +1,9 @@
 // Evidence Kernel(공유 코어) — 인용 대조 순수 커널. research·council 이 재사용하는 그 코어.
 // `node test/evidencekernel.test.mjs`.
 import assert from "node:assert/strict";
-import { normalizeForCitation, verifyCitationInText, citationStatus, parseNumbersFromText, recompute, numberStatus, canonicalizeDate, dateStatus, linkStatus, evaluateClaim } from "../dist/evidencekernel.js";
+import { createHash } from "node:crypto";
+import { normalizeForCitation, verifyCitationInText, citationStatus, parseNumbersFromText, recompute, numberStatus, canonicalizeDate, dateStatus, linkStatus, evaluateClaim, hashStatus, CHECK_KINDS, claimSchema, SCHEMA_VERSION } from "../dist/evidencekernel.js";
+const sha = (s) => createHash("sha256").update(s).digest("hex");
 
 let pass = 0;
 const fail = [];
@@ -71,6 +73,29 @@ check("eval: link valid 는 advisory(verified 아님)", () => {
 check("eval: 복합 — 인용+수치 둘 다 verified", () => {
   const e = evaluateClaim({ quotedText: "42 items", statedValue: 42, sourceText: "we found 42 items" }, "we found 42 items");
   assert.equal(e.citation, "verified"); assert.equal(e.number, "verified"); assert.equal(e.verified, true);
+});
+
+// ── 해시 커널 ──
+check("hash verified: content 해시 일치", () => assert.equal(hashStatus(sha("hello"), "hello"), "verified"));
+check("hash mismatch: 다른 content", () => assert.equal(hashStatus(sha("hello"), "world"), "mismatch"));
+check("hash no-basis: content null", () => assert.equal(hashStatus(sha("x"), null), "no-basis"));
+check("hash 대소문자 무관", () => assert.equal(hashStatus(sha("hello").toUpperCase(), "hello"), "verified"));
+check("eval hash verified(레지스트리 경유)", () => {
+  const e = evaluateClaim({ statedHash: sha("data"), content: "data" }, null);
+  assert.equal(e.hash, "verified"); assert.equal(e.verified, true);
+});
+check("eval hash mismatch → failed", () => {
+  const e = evaluateClaim({ statedHash: sha("data"), content: "other" }, null);
+  assert.equal(e.hash, "mismatch"); assert.equal(e.failed, true);
+});
+
+// ── Evidence Specification ──
+check("CHECK_KINDS: 레지스트리에 hash 확장 반영", () => assert.ok(CHECK_KINDS.includes("hash") && CHECK_KINDS.includes("citation")));
+check("claimSchema: schemaVersion + 구조 + checkKinds", () => {
+  const s = claimSchema();
+  assert.equal(s.schemaVersion, SCHEMA_VERSION);
+  assert.ok(s.properties && s.properties.quotedText && s.properties.statedHash);
+  assert.ok(Array.isArray(s.checkKinds) && s.checkKinds.includes("hash"));
 });
 
 if (fail.length) { console.error(`evidencekernel: ${pass} pass, ${fail.length} FAIL`); for (const f of fail) console.error("  ✗ " + f); process.exit(1); }

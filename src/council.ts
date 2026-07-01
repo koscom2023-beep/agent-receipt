@@ -19,12 +19,15 @@ interface SupportingClaim {
   quotedText?: unknown;
   sourceText?: unknown;
   sourceFile?: unknown;
-  // research 와 같은 표준 포맷 — 근거에 수치·날짜도 가능(Evidence Kernel 공유).
+  // research 와 같은 표준 포맷 — 근거에 수치·날짜·해시도 가능(Evidence Kernel 공유).
   statedValue?: unknown;
   op?: unknown;
   operands?: unknown;
   eps?: unknown;
   statedDate?: unknown;
+  statedHash?: unknown;
+  content?: unknown;
+  algo?: unknown;
 }
 interface Decision {
   id?: unknown;
@@ -76,7 +79,7 @@ export function gradeDecision(dec: Decision): {
     const url = typeof c.sourceUrl === "string" ? c.sourceUrl : undefined;
     // research 와 동일한 통합 평가(표준 포맷 공유): 인용·수치·날짜·링크를 한 곳에서.
     const ev = evaluateClaim(
-      { quotedText: c.quotedText, statedValue: c.statedValue, op: c.op, operands: c.operands, eps: c.eps, statedDate: c.statedDate, link: url },
+      { quotedText: c.quotedText, statedValue: c.statedValue, op: c.op, operands: c.operands, eps: c.eps, statedDate: c.statedDate, link: url, statedHash: c.statedHash, content: typeof c.content === "string" ? c.content : undefined, algo: c.algo },
       resolveSource(c),
     );
     // 카운트 필드는 인용 상태 기준(하위호환) — citation null 은 no-source 취급.
