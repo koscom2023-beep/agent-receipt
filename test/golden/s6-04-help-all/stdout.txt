@@ -18,6 +18,9 @@ agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
 ■ 검증(git 실측):
   verify [--json] / check / claims --file <c.json> / pre / prompt [--cursor|--claude]
 
+■ 리서치 인용검증(출처 대조 — git 아님·검증만):
+  research verify --file <report.json>   인용문이 출처(스냅샷/인라인)에 실재하나 결정론 대조 · 인용 충실성(진위 아님) · 라이브 fetch=v2
+
 ■ 증빙 / 감사 묶음(git 증거):
   report [--type developer|client|audit] / receipt [--format ...] [--content] [--strict-redact] [--committed] [--agent <n>] [--model <m>] / receipts [--latest|--cat|--dir]
   audit [--json] / insights [--since <n>] [--format md|json] / risk [--format md|json] / dashboard / index [--json] / ledger [--json] (rebuild|verify) / replay --pack <dir> / attest / anchor [--upload] / controls [--format md|json] / incident

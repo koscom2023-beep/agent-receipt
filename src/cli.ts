@@ -51,6 +51,7 @@ import { runIndex } from "./receiptindex.js";
 import { runGenClaim } from "./genclaim.js";
 import { runCaptureIngest, runCaptureShow, runCaptureReset, runCaptureInstall, runCaptureUninstall, runCaptureVerify } from "./capture.js";
 import { runShareProof, runShareProofFromSaved, latestReceiptExists } from "./shareproof.js";
+import { runResearchVerify } from "./research.js";
 
 function getArg(flag: string): string | undefined {
   const i = process.argv.indexOf(flag);
@@ -126,6 +127,9 @@ agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
 
 ■ 검증(git 실측):
   verify [--json] / check / claims --file <c.json> / pre / prompt [--cursor|--claude]
+
+■ 리서치 인용검증(출처 대조 — git 아님·검증만):
+  research verify --file <report.json>   인용문이 출처(스냅샷/인라인)에 실재하나 결정론 대조 · 인용 충실성(진위 아님) · 라이브 fetch=v2
 
 ■ 증빙 / 감사 묶음(git 증거):
   report [--type developer|client|audit] / receipt [--format ...] [--content] [--strict-redact] [--committed] [--agent <n>] [--model <m>] / receipts [--latest|--cat|--dir]
@@ -243,6 +247,12 @@ function main(): void {
   }
   if (command === "risk") {
     runRisk(getArg("--receipt"), getArg("--format"));
+  }
+  if (command === "research") {
+    // research 는 git 불필요 — ResearchReport JSON + 출처 스냅샷을 읽어 인용을 결정론 대조.
+    if (process.argv[3] === "verify") runResearchVerify(getArg("--file"));
+    console.error("research: 사용법 — research verify --file <report.json>");
+    process.exit(2);
   }
   if (command === "incident") {
     runIncident(getArg("--since"));
