@@ -91,16 +91,22 @@ log of pointers to immutable, content-addressed records.** agent-receipt already
 has that shape. The work is not to replace it — it is to keep it honest and, where
 thin, enrich it *without breaking the chain*.
 
-## 6. Where the line is thin — a byte-safe enrichment candidate (NOT built here)
+## 6. Enriching the thin line — one byte-safe field added, one still a candidate
 
-Grep-ing the ledger today answers "which commits, how big, approved?" but not
-"which commits had a claim mismatch or an unexplained capture residual" — you must
-open each receipt. A candidate, **only if real usage asks for it**:
+Grep-ing the ledger used to answer "which commits, how big, approved?" but not
+"which commits had an unexplained capture residual" — you had to open each receipt.
 
-- Add **present-only, hash-excluded** summary counts to a line (e.g.
-  `claimHiddenCount`, `reconUnexplainedCount`), mirroring the receipt's `actions`/
-  `reconciliation` pattern. **Must stay out of `ledgerEntryHash`** (ledger.ts:61)
-  or the chain breaks. This is a *proposal for a future ship*, not this one.
+- **Implemented (byte-safe):** `reconUnexplained?` — the count of unexplained
+  reconciliation residuals (§4) surfaced on the ledger line. Present-only (absent
+  when there was no capture, or zero) and **excluded from `ledgerEntryHash`**
+  (ledger.ts:61) so the chain and every existing line stay byte-identical. Now
+  `grep reconUnexplained ledger.jsonl` finds the gap-bearing commits without
+  opening a single receipt.
+- **Still a candidate:** `claimHiddenCount` (how many files a claim hid). Deferred —
+  `claimMatched` already flags *that* a claim mismatched, and the count would need
+  threading from the caller. Add only if real usage asks.
+
+The rule for any future line field is fixed: **present-only, and out of the hash.**
 
 ## 7. Frozen — recorded as vision, not plan (guardrails hold)
 

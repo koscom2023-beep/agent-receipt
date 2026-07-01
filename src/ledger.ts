@@ -31,6 +31,7 @@ export interface LedgerEntry {
   magnitude: number; // magnitude.filesChanged (숫자만 — 점수 아님)
   approvalsCount: number;
   claimMatched: boolean | null; // claims 미실행 시 null
+  reconUnexplained?: number; // D4 대사의 미설명 잔차 수(capture 있을 때만·>0일 때만). 원장 grep 으로 "미설명 갭 있던 커밋" 찾기용. ledgerEntryHash 입력 제외(metadata·additive) → 없으면 키 부재·기존 라인 바이트동일·체인 불변.
   prevHash?: string; // 직전 라인의 entryHash(해시체인). 레거시 flat 라인엔 없음.
   entryHash?: string; // 이 라인의 무결성 해시(entryHash 자신 제외, prevHash 포함) — 변조/삭제/재정렬 탐지.
 }
@@ -53,6 +54,8 @@ export function ledgerEntryFromReceipt(
     magnitude: r.magnitude.filesChanged,
     approvalsCount,
     claimMatched,
+    // D4 대사 미설명 잔차를 원장에도 노출(present-only·해시 제외). capture 없으면/0이면 키 부재 → 기존 라인 바이트동일.
+    ...(r.reconciliation && r.reconciliation.unexplained > 0 ? { reconUnexplained: r.reconciliation.unexplained } : {}),
   };
 }
 
