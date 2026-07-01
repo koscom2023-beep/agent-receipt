@@ -12,9 +12,9 @@ let pass = 0;
 const fail = [];
 const check = (name, fn) => { try { fn(); pass++; } catch (e) { fail.push(`${name}: ${e.message}`); } };
 
-// 결정론 검증 코어 3종 + 영수증. 이들은 판단/오케스트레이션(surface)을 몰라야 한다.
-const CORE = ["claimdiff.ts", "ledger.ts", "replay.ts", "receipt.ts"];
-// surface/오케스트레이션 모듈(현재 research, 향후 council 등).
+// 결정론 검증 코어 + 영수증 + 공유 Evidence Kernel. 이들은 판단/오케스트레이션(surface)을 몰라야 한다.
+const CORE = ["claimdiff.ts", "ledger.ts", "replay.ts", "receipt.ts", "evidencekernel.ts"];
+// surface/오케스트레이션 모듈(research·council 등 — 코어를 재사용하되 코어가 이들을 알면 안 됨).
 const SURFACE = ["research", "council"];
 
 for (const c of CORE) {

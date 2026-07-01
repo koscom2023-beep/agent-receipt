@@ -52,6 +52,7 @@ import { runGenClaim } from "./genclaim.js";
 import { runCaptureIngest, runCaptureShow, runCaptureReset, runCaptureInstall, runCaptureUninstall, runCaptureVerify } from "./capture.js";
 import { runShareProof, runShareProofFromSaved, latestReceiptExists } from "./shareproof.js";
 import { runResearchVerify } from "./research.js";
+import { runCouncilVerify } from "./council.js";
 
 function getArg(flag: string): string | undefined {
   const i = process.argv.indexOf(flag);
@@ -130,6 +131,9 @@ agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
 
 ■ 리서치 인용검증(출처 대조 — git 아님·검증만):
   research verify --file <report.json>   인용문이 출처(스냅샷/인라인)에 실재하나 결정론 대조 · 인용 충실성(진위 아님) · 라이브 fetch=v2
+
+■ 회의 결정검증(결정↔근거 대조 — 회의 실행 아님·검증만):
+  council verify --file <decision.json> [--log <path>]   결정의 근거 주장이 출처에 실재하나 대조 · append-only DecisionLog(해시체인) · 모순탐지=코어 밖
 
 ■ 증빙 / 감사 묶음(git 증거):
   report [--type developer|client|audit] / receipt [--format ...] [--content] [--strict-redact] [--committed] [--agent <n>] [--model <m>] / receipts [--latest|--cat|--dir]
@@ -252,6 +256,12 @@ function main(): void {
     // research 는 git 불필요 — ResearchReport JSON + 출처 스냅샷을 읽어 인용을 결정론 대조.
     if (process.argv[3] === "verify") runResearchVerify(getArg("--file"));
     console.error("research: 사용법 — research verify --file <report.json>");
+    process.exit(2);
+  }
+  if (command === "council") {
+    // council 은 회의를 실행하지 않는다(=소비자 컴파일러의 일). DecisionRecord 의 결정↔근거를 검증만.
+    if (process.argv[3] === "verify") runCouncilVerify(getArg("--file"), getArg("--log"));
+    console.error("council: 사용법 — council verify --file <decision.json> [--log <path>]");
     process.exit(2);
   }
   if (command === "incident") {

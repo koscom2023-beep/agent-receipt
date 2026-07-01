@@ -11,13 +11,17 @@ agent-receipt is **one CLI** with a shared verification core. New surfaces (`res
 - **Narrative**: one closed loop — "verifiable AI work, end to end."
 - Single-responsibility lives at the **module** level, not the package level. Boundaries are drawn by `import`, not `publish`.
 
-## The differentiator is the verification substrate — never the orchestration
+## The Evidence Engine — the differentiator, never the orchestration
+
+The core is not just a verifier. It is an **Evidence Engine**: `capture → normalize → verify → reconcile → ledger → replay`. Verification is one stage. Every surface — `research verify`, `council verify`, and future `eval verify` — reuses the same shared **Evidence Kernel** (`evidencekernel.ts`), a set of pure, non-LLM checks. That shared kernel is the asset; the surfaces are thin skins over it.
 
 Cross-verification found: the 14-expert council form and the auto-research form are **replicable by a prompt**. The only thing a prompt cannot replicate is a **deterministic, non-LLM check of a claim against an external source of truth**, plus append-only tamper-evident persistence and replay. So:
 
 - **agent-receipt** applies it to execution — Claim ≠ Observation vs **git**.
 - **research** applies it to inputs — a quote vs its **source** (webpage/snapshot = research's working tree).
-- **council** applies it to decisions — each claim vs its **source / ledger**.
+- **council** applies it to decisions — each decision's supporting claim vs its **source**, appended to a hash-chained **DecisionLog**.
+
+**Council is a Compiler, not a verifier.** The compiling — running experts, extracting claims, deduping, contradiction detection, producing a **DecisionRecord** — is judgment/orchestration and lives in the **consumer** (the meeting runner). The core only **verifies** the resulting DecisionRecord and seals it. `Research → DecisionRecord (compiled by a consumer) → Evidence Kernel verify → DecisionLog`.
 
 **Ship nothing that is only a prompt.** The product boundary is the out-of-band verification code.
 
@@ -34,7 +38,9 @@ This keeps agent-receipt **neutral**: it observes and verifies; it never decides
 
 Execution/orchestration, Cost **selection** (model picking), Scheduler, Governance enforcement, Capability/Resource registries, Simulation/Digital-Twin, and most KPIs are **consumer concerns or judgments** — they belong to the agent/engine that runs work (Promptia, Claude Code, Cursor, …), not to the neutral core. Execution is a **role**, not one app: agent-receipt observes whichever engine executes.
 
-Analytics/KPI = ledger projections (`insights` category): frozen behind real data + `SMALL_N`. Even then, only *computable* ones (Execution success, evidence rate) open cheaply; "Research accuracy / Council quality / Knowledge reuse" need a **ground-truth labeling loop nobody has designed** — they do not open on volume alone.
+**Intelligence is always-on; Analytics is later.** They are different. *Intelligence* = neutral pattern observation available from the first receipt (e.g. `insights` already flags a command that fails repeatedly — recurrence, no prediction, no judgment). That is a check and stays in the core, gated only by `SMALL_N`. *Analytics* = dashboards / charts / rich statistics — a later, heavier consumer surface. The rule/lesson **generated** from a pattern ("so add a check next time") is judgment → consumer. So: observe patterns always (neutral); build dashboards later; never let the core generate the rule.
+
+KPI = ledger projections (`insights` category), frozen behind real data + `SMALL_N`. Only *computable* ones (Execution success, evidence rate) open cheaply; "Research accuracy / Council quality / Knowledge reuse" need a **ground-truth labeling loop nobody has designed** — they do not open on volume alone.
 
 Cost **accounting** (record per-task cost) can be core-shaped but is **tier-C** (git can't verify cost) — must be labeled attested, never laundered into the hash-chain as a verified fact.
 
@@ -50,4 +56,9 @@ Promptia stays a **separate** product (a consumer), not merged.
 
 ## First increment (this commit)
 
-`research verify --file <report.json>` — the deterministic citation-verification kernel: is a claim's `quotedText` a literal substring of its source? Non-LLM. Offline v1 (source = inline `sourceText` or local snapshot `sourceFile`); live re-fetch is v2. Guarantee is deliberately narrow: **citation fidelity** (the quote is really in the source), not **truth** (the claim is correct). Enforced by a `core-boundary` test: the verification core must not import the new surface.
+`research verify --file <report.json>` — the deterministic citation-verification kernel: is a claim's `quotedText` a literal substring of its source? Non-LLM. Offline v1 (source = inline `sourceText` or local snapshot `sourceFile`); live re-fetch is v2. Guarantee is deliberately narrow: **citation fidelity** (the quote is really in the source), not **truth** (the claim is correct). Enforced by a `core-boundary` test: the verification core must not import the new surface. `council verify` follows the same shape for decisions, adding a hash-chained `DecisionLog`.
+
+## Honest limits
+
+- **Determinism is necessary, not sufficient.** A substring/hash/diff/recompute check is implementable by anyone in time. The durable value is not any single check — it is the **loop** (Evidence → Decision → Execution → Receipt → learning) plus two things a vertically-integrated model vendor structurally cannot offer: **audit independence** (they verify their own model's output — self-audit) and **model-agnostic** coverage (we verify any vendor's agent). Lead with those, not with "deterministic" or "local" alone.
+- **The real test is the market, not the code.** Do teams pay to solve this? Do regulated / multi-vendor orgs adopt an independent verification layer? Does a first user beyond Promptia choose it freely? Until a real customer says yes, the architecture is sound but unproven.

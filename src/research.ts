@@ -1,18 +1,21 @@
 import { readFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
+import { normalizeForCitation, verifyCitationInText, citationStatus, type CitationStatus } from "./evidencekernel.js";
+
+// 인용 검증 커널은 공유 Evidence Kernel(evidencekernel.ts)로 이동했다(피드백: research·council 이 같은 코어 재사용).
+// 여기선 그 커널을 파일 IO(출처 스냅샷 읽기)와 CLI 출력에 엮는 surface 만 담당한다.
+// 하위호환: 커널 함수를 재export(기존 test/외부 소비 불변).
+export { normalizeForCitation, verifyCitationInText, citationStatus };
+export type { CitationStatus };
 
 const line = "─".repeat(56);
 
 // ── Research 인용 검증 (v1, offline) ──
 // 회의 결론(2차): research 의 유일한 비복제 차별점은 오케스트레이션(검색=커모디티·프롬프트로 복제됨)이
-//   아니라 "인용이 출처에 실제로 있는가"를 모델 밖 결정론 코드로 대조하는 것 = Claim≠Observation 을
-//   인용에 적용한 것(웹페이지/스냅샷 = 리서치의 working tree, git 이 코드의 진실이듯).
-//   여기선 그 결정론 커널만 구현한다. 검색·종합·추천은 넣지 않는다(중립·검증만).
-// v1 = offline: 각 주장의 quotedText 가 제공된 출처(인라인 sourceText 또는 로컬 스냅샷 sourceFile)의
-//   리터럴 부분문자열인지 pass/fail. 라이브 URL 재-fetch(링크로트/무단수정 diff)는 v2(anchor 처럼 명시 게이트).
+//   아니라 "인용이 출처에 실제로 있는가"를 모델 밖 결정론 코드로 대조하는 것 = Claim≠Observation.
+// v1 = offline: quotedText 가 제공된 출처(인라인 sourceText 또는 로컬 스냅샷 sourceFile)의 리터럴
+//   부분문자열인지 pass/fail. 라이브 URL 재-fetch 는 v2(anchor 처럼 명시 게이트).
 // 보증 범위(정직·좁게): "인용 충실성"(인용문이 그 출처에 실재하나)이지 "진위"(주장이 옳나)가 아니다.
-
-export type CitationStatus = "verified" | "not-found" | "no-source";
 
 // ResearchReport 계약(v1) — 필드는 방어적으로 unknown 으로 받고 타입 확인 후 사용.
 interface ResearchClaim {
@@ -29,18 +32,8 @@ interface ResearchReport {
   claims?: unknown;
 }
 
-// 결정론 커널: 공백 정규화 후 리터럴 부분문자열 검사. LLM 의견이 아니라 문자열 연산.
-export function normalizeForCitation(s: string): string {
-  return s.replace(/\s+/g, " ").trim();
-}
-export function verifyCitationInText(quote: string, source: string): boolean {
-  const q = normalizeForCitation(quote);
-  if (q === "") return false;
-  return normalizeForCitation(source).includes(q);
-}
-
-// 출처 해석: 인라인 sourceText 우선, 없으면 로컬 sourceFile 읽기. 둘 다 없거나 못 읽으면 null.
-function resolveSource(claim: ResearchClaim): string | null {
+// 출처 해석: 인라인 sourceText 우선, 없으면 로컬 sourceFile 읽기(파일 IO 는 커널 밖). 둘 다 없거나 못 읽으면 null.
+export function resolveSource(claim: ResearchClaim): string | null {
   if (typeof claim.sourceText === "string") return claim.sourceText;
   if (typeof claim.sourceFile === "string") {
     const p = isAbsolute(claim.sourceFile) ? claim.sourceFile : join(process.cwd(), claim.sourceFile);
@@ -53,12 +46,10 @@ function resolveSource(claim: ResearchClaim): string | null {
   return null;
 }
 
-// 한 주장의 인용 상태 판정(순수). no-source = 검증할 출처/인용 없음(advisory).
+// 한 주장의 인용 상태 판정. 출처를 IO 로 해석한 뒤 순수 커널(citationStatus)에 위임.
 export function checkClaimCitation(claim: ResearchClaim): CitationStatus {
   const quote = typeof claim.quotedText === "string" ? claim.quotedText : "";
-  const source = resolveSource(claim);
-  if (source === null || normalizeForCitation(quote) === "") return "no-source";
-  return verifyCitationInText(quote, source) ? "verified" : "not-found";
+  return citationStatus(quote, resolveSource(claim));
 }
 
 /**
