@@ -43,12 +43,14 @@ exit 0
 const POST_COMMIT = `#!/usr/bin/env bash
 # ${MARKER} — post-commit evidence(증거). --no-verify 로도 안 건너뜀 → 게이트 우회에도 영수증 생존.
 # 방금 만든 커밋을 측정(receipt --committed). 증거지 게이트 아님 — 항상 통과(exit 0).
+# 저장 영수증은 raw JSON(유효)로 둔다 — 마스킹은 반출 시점(share-proof/audit-pack --redact)에.
+# (receipt --redact --format json 은 session/secret* 키를 매칭해 JSON 을 깨므로 저장엔 안 쓴다.)
 set -uo pipefail
 root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
 cd "$root" 2>/dev/null || exit 0
 [ -f .agent-guard/contract.yaml ] || exit 0
 command -v agent-receipt >/dev/null 2>&1 || exit 0
-agent-receipt receipt --committed --redact >/dev/null 2>&1 || true
+agent-receipt receipt --committed >/dev/null 2>&1 || true
 exit 0
 `;
 

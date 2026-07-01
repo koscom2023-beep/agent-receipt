@@ -93,6 +93,12 @@ scope:
   const body = existsSync(pc) ? readFileSync(pc, "utf8") : "";
   check("post-commit 이 receipt --committed 를 호출(증거)", () => assert.match(body, /receipt --committed/));
   check("post-commit 은 항상 exit 0(비차단)", () => assert.match(body, /exit 0\s*$/));
+  // 저장 증거는 유효 JSON 이어야 함 — receipt --redact --format json 은 session/secret* 키를 깨므로 훅 명령엔 금지.
+  // (주석엔 --redact 언급 가능 → 명령 라인만 검사.)
+  check("post-commit 명령은 --redact 미사용(저장 JSON 유효 보장·마스킹은 반출 시점)", () => {
+    const cmd = body.split("\n").find((l) => l.trim().startsWith("agent-receipt receipt")) || "";
+    assert.ok(cmd.includes("--committed") && !cmd.includes("--redact"));
+  });
   const prec = readFileSync(join(repo, ".git", "hooks", "pre-commit"), "utf8");
   check("pre-commit 은 게이트만(commit-check·증거 아님)", () =>
     assert.ok(prec.includes("commit-check") && !prec.includes("receipt --committed")));
