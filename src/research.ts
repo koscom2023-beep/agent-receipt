@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import {
   normalizeForCitation, verifyCitationInText, citationStatus, type CitationStatus,
-  numberStatus, type NumberStatus,
+  evaluateClaim,
 } from "./evidencekernel.js";
 
 // 인용/수치 검증 커널은 공유 Evidence Kernel(evidencekernel.ts)에 있다(research·council 이 같은 코어 재사용).
@@ -28,11 +28,12 @@ interface ResearchClaim {
   quotedText?: unknown; // 주장이 기대는 원문 인용(검증 대상)
   sourceText?: unknown; // 인라인 출처 스냅샷
   sourceFile?: unknown; // 또는 로컬 출처 스냅샷 파일 경로
-  // 수치 검증(선택) — Claude Science 벤치마크 차용. statedValue 있으면 수치 커널로 대조.
+  // 수치 검증(선택) — statedValue 있으면 수치 커널로 대조.
   statedValue?: unknown; // 주장이 명시한 수(모드A: 출처에 실재 / 모드B: op+operands 재계산과 상등)
   op?: unknown; // 재계산 연산(sum|mean|product|diff|ratio|percent|min|max)
   operands?: unknown; // 재계산 피연산자(report 가 줌·발명 0)
   eps?: unknown; // 허용오차(기본 1e-9)
+  statedDate?: unknown; // 날짜 검증(선택) — 출처의 날짜와 형식무관 대조
 }
 interface ResearchReport {
   schemaVersion?: unknown;
@@ -92,16 +93,6 @@ async function fetchSource(url: string, timeoutMs = 12000): Promise<string | nul
   } catch {
     return null;
   }
-}
-
-// claim 의 stated 수치 파싱(number 또는 숫자 문자열). 아니면 null.
-function statedNumber(claim: ResearchClaim): number | null {
-  if (typeof claim.statedValue === "number" && Number.isFinite(claim.statedValue)) return claim.statedValue;
-  if (typeof claim.statedValue === "string") {
-    const n = Number(claim.statedValue.replace(/,/g, ""));
-    return Number.isFinite(n) ? n : null;
-  }
-  return null;
 }
 
 /**
@@ -171,27 +162,24 @@ export async function runResearchVerify(
       source = resolveSource(claim);
     }
 
-    const cite: CitationStatus | null = quote ? citationStatus(quote, source) : null;
-    const stated = statedNumber(claim);
-    const num: NumberStatus | null =
-      stated !== null
-        ? numberStatus(stated, { source, op: claim.op, operands: Array.isArray(claim.operands) ? (claim.operands as number[]) : undefined, eps: typeof claim.eps === "number" ? claim.eps : undefined })
-        : null;
-
-    const claimFailed = cite === "not-found" || num === "mismatch";
-    const claimVerified = (cite === "verified" || num === "verified") && !claimFailed;
-    if (claimFailed) failed++;
-    else if (claimVerified) ok++;
+    // 통합 평가(표준 포맷의 단일 의미론) — 인용·수치·날짜·링크를 한 곳에서.
+    const ev = evaluateClaim(
+      { quotedText: claim.quotedText, statedValue: claim.statedValue, op: claim.op, operands: claim.operands, eps: claim.eps, statedDate: claim.statedDate, link: url || undefined },
+      source,
+    );
+    if (ev.failed) failed++;
+    else if (ev.verified) ok++;
     else advisory++;
 
     console.log(`[${i + 1}] ${stmt}`);
-    if (url) console.log(`    출처 : ${url}${fetchNote}`);
-    if (quote) console.log(`    인용 : ${quote.length > 72 ? quote.slice(0, 69) + "..." : quote}  → ${cite}`);
-    if (stated !== null) console.log(`    수치 : ${stated}${claim.op ? ` (재계산 ${String(claim.op)})` : ""}  → ${num}`);
+    if (url) console.log(`    출처 : ${url}${fetchNote}${ev.link ? ` [link ${ev.link}]` : ""}`);
+    if (quote) console.log(`    인용 : ${quote.length > 72 ? quote.slice(0, 69) + "..." : quote}  → ${ev.citation}`);
+    if (claim.statedValue !== undefined) console.log(`    수치 : ${String(claim.statedValue)}${claim.op ? ` (재계산 ${String(claim.op)})` : ""}  → ${ev.number}`);
+    if (claim.statedDate !== undefined) console.log(`    날짜 : ${String(claim.statedDate)}  → ${ev.date}`);
     console.log(
-      claimFailed
-        ? "    ✗ FAIL — 근거가 출처와 불일치(날조/수치오류)"
-        : claimVerified
+      ev.failed
+        ? "    ✗ FAIL — 근거가 출처와 불일치(날조/수치·날짜오류)"
+        : ev.verified
           ? "    ✓ verified — 근거가 출처와 정합"
           : "    · advisory — 검증할 근거 없음(미검증)",
     );

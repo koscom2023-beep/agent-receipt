@@ -31,6 +31,14 @@ check("unsupported: 근거 없음", () => {
   const g = gradeDecision({ statement: "D4" });
   assert.equal(g.grounding, "unsupported");
 });
+check("ungrounded: 근거 수치가 재계산과 불일치(수치 커널 재사용)", () => {
+  const g = gradeDecision({ statement: "Dn", supportingClaims: [{ statement: "합계 주장", statedValue: 7, op: "sum", operands: [1, 2, 3] }] });
+  assert.equal(g.grounding, "ungrounded");
+});
+check("grounded: 근거 수치가 재계산과 정합", () => {
+  const g = gradeDecision({ statement: "Dn2", supportingClaims: [{ statedValue: 6, op: "sum", operands: [1, 2, 3] }] });
+  assert.equal(g.grounding, "grounded");
+});
 check("unsupported: 근거 있으나 출처 없음(전부 no-source)", () => {
   const g = gradeDecision({ statement: "D5", supportingClaims: [{ quotedText: "orphan" }] });
   assert.equal(g.grounding, "unsupported"); assert.equal(g.noSource, 1);

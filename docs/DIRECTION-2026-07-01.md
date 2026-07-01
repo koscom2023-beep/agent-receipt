@@ -10,6 +10,16 @@ Five phases (current work in **bold**): **P1 Receipt/Replay/Ledger/Research-veri
 
 **Honest "why us" (investment-scrutiny, not a yes-council).** The independence argument — a vendor auditing its own model's output is self-audit, invalid in accounting — answers *why not OpenAI/Anthropic*, **not** *why us*: an independent audit firm, another startup, or an open standard could also be independent. Our defensible "why us" is narrower and must be earned: (a) the **breadth + depth of the deterministic kernel** (citation, number, calculation, date, link, document — git-native, model-agnostic, no-cloud — a library that takes time and range to match), (b) first-mover on the artifact, (c) **a first real user**. The moat is also *contingent* on regulation or strong multi-vendor distrust, neither proven to pay today. So the work is: widen the kernel (P3) and get the first user — the code does not prove this; the market does.
 
+## The moat (three parts; only two are code)
+
+No single verifier is a moat — a citation or number checker is a week of work for anyone. The moat is three things together, as Git's **ecosystem and standardization** outgrew Git itself:
+
+1. **Widest deterministic kernel** — citation ✓ · number ✓ · date ✓ · link ✓ → then **file · hash · formula · version · dependency · signature · artifact · replay**. Breadth is a real barrier: matching a broad, git-native, model-agnostic, no-cloud kernel takes range and time.
+2. **A de facto standard format** — one shared, versioned semantics for a verified claim. `evaluateClaim` is that single semantics: research and council both call it, so **the code is the format spec**, not a doc. A standard is *adopted*, not *declared* — but a clean, stable, documented shared format is the necessary condition for adoption.
+3. **Ecosystem adoption** — not code. This is the market's to grant.
+
+Honest: parts 1–2 are buildable now; part 3 is not, and a vendor with distribution (e.g. bundling a checker into their product) could try to define the format first. So the code job is: **widen the kernel and keep one clean shared format** — necessary, not sufficient. (Long-term hypothesis, not a plan: "AI Financial Statements" — firms submitting auditable Evidence of AI decisions/code/work to independent auditors. Whether that market forms is a bet.)
+
 ## The one product (not a kit of packages)
 
 agent-receipt is **one CLI** with a shared verification core. New surfaces (`research`, `council`) are **subcommands of the same tool**, not separate npm packages — they reuse the existing deterministic substrate (`claimdiff` / `ledger` / `replay`). Measured continuation of the current architecture (one `bin`, no workspaces).

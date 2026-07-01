@@ -1,7 +1,7 @@
 // Evidence Kernel(공유 코어) — 인용 대조 순수 커널. research·council 이 재사용하는 그 코어.
 // `node test/evidencekernel.test.mjs`.
 import assert from "node:assert/strict";
-import { normalizeForCitation, verifyCitationInText, citationStatus, parseNumbersFromText, recompute, numberStatus } from "../dist/evidencekernel.js";
+import { normalizeForCitation, verifyCitationInText, citationStatus, parseNumbersFromText, recompute, numberStatus, canonicalizeDate, dateStatus, linkStatus, evaluateClaim } from "../dist/evidencekernel.js";
 
 let pass = 0;
 const fail = [];
@@ -31,6 +31,47 @@ check("number 모드B mismatch: 재계산 불일치", () => assert.equal(numberS
 check("number no-basis: stated null", () => assert.equal(numberStatus(null, { source: "42" }), "no-basis"));
 check("number no-basis: 근거 없음", () => assert.equal(numberStatus(5, {}), "no-basis"));
 check("number eps 허용오차", () => assert.equal(numberStatus(3.14, { op: "sum", operands: [3.14], eps: 0.001 }), "verified"));
+
+// ── 날짜 커널 ──
+check("canonicalizeDate: ISO", () => assert.equal(canonicalizeDate("2026-1-5"), "2026-01-05"));
+check("canonicalizeDate: Mon DD, YYYY", () => assert.equal(canonicalizeDate("Jan 5, 2026"), "2026-01-05"));
+check("canonicalizeDate: DD Mon YYYY", () => assert.equal(canonicalizeDate("5 January 2026"), "2026-01-05"));
+check("canonicalizeDate: 파싱불가 → null", () => assert.equal(canonicalizeDate("last tuesday"), null));
+check("date verified: 다른 형식 같은 날 일치", () => assert.equal(dateStatus("2026-01-05", "published on Jan 5, 2026 here"), "verified"));
+check("date mismatch: 다른 날", () => assert.equal(dateStatus("2026-01-05", "published on 2026-02-01"), "mismatch"));
+check("date no-basis: 파싱불가 stated", () => assert.equal(dateStatus("someday", "2026-01-05"), "no-basis"));
+
+// ── 링크 커널 ──
+check("link valid: https", () => assert.equal(linkStatus("https://example.com/x"), "valid"));
+check("link valid: http", () => assert.equal(linkStatus("http://a.b"), "valid"));
+check("link invalid: 스킴 아님", () => assert.equal(linkStatus("ftp://x"), "invalid"));
+check("link invalid: 형식 깨짐", () => assert.equal(linkStatus("not a url"), "invalid"));
+
+// ── evaluateClaim (표준 포맷 단일 의미론) ──
+check("eval: 인용 verified → verified", () => {
+  const e = evaluateClaim({ quotedText: "sky is blue" }, "the sky is blue");
+  assert.equal(e.verified, true); assert.equal(e.failed, false); assert.equal(e.citation, "verified");
+});
+check("eval: 수치 mismatch → failed", () => {
+  const e = evaluateClaim({ statedValue: 99, sourceText: undefined, op: "sum", operands: [1, 2] }, null);
+  assert.equal(e.failed, true); assert.equal(e.number, "mismatch");
+});
+check("eval: 날짜 verified", () => {
+  const e = evaluateClaim({ statedDate: "2026-01-05" }, "on Jan 5, 2026");
+  assert.equal(e.date, "verified"); assert.equal(e.verified, true);
+});
+check("eval: link invalid → failed", () => {
+  const e = evaluateClaim({ link: "not a url" }, null);
+  assert.equal(e.link, "invalid"); assert.equal(e.failed, true);
+});
+check("eval: link valid 는 advisory(verified 아님)", () => {
+  const e = evaluateClaim({ link: "https://x.y" }, null);
+  assert.equal(e.link, "valid"); assert.equal(e.verified, false); assert.equal(e.failed, false);
+});
+check("eval: 복합 — 인용+수치 둘 다 verified", () => {
+  const e = evaluateClaim({ quotedText: "42 items", statedValue: 42, sourceText: "we found 42 items" }, "we found 42 items");
+  assert.equal(e.citation, "verified"); assert.equal(e.number, "verified"); assert.equal(e.verified, true);
+});
 
 if (fail.length) { console.error(`evidencekernel: ${pass} pass, ${fail.length} FAIL`); for (const f of fail) console.error("  ✗ " + f); process.exit(1); }
 console.log(`evidencekernel: ${pass} pass ✅`);

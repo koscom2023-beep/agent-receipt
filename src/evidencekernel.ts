@@ -94,3 +94,112 @@ export function numberStatus(
   }
   return "no-basis";
 }
+
+// ── 날짜 검증 커널 (Phase3) ──
+// 형식 무관 정규화(YYYY-MM-DD): 서로 다른 표기의 같은 날을 결정론으로 일치시킨다(TZ 비의존·문자열만).
+export type DateStatus = "verified" | "mismatch" | "no-basis";
+const MONTHS: Record<string, string> = {
+  jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06",
+  jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12",
+};
+const pad2 = (s: string): string => (s.length === 1 ? "0" + s : s);
+
+// 지원 형식만 결정론 정규화 → "YYYY-MM-DD". 그 외 → null(파싱 불가·검증 안 함).
+export function canonicalizeDate(s: string): string | null {
+  const t = s.trim();
+  let m = t.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+  if (m) return `${m[1]}-${pad2(m[2] as string)}-${pad2(m[3] as string)}`;
+  m = t.match(/^([A-Za-z]{3,9})\.?\s+(\d{1,2}),?\s+(\d{4})$/); // Jan 5, 2026 / January 5 2026
+  if (m) { const mo = MONTHS[(m[1] as string).slice(0, 3).toLowerCase()]; if (mo) return `${m[3]}-${mo}-${pad2(m[2] as string)}`; }
+  m = t.match(/^(\d{1,2})\s+([A-Za-z]{3,9})\.?\s+(\d{4})$/); // 5 Jan 2026
+  if (m) { const mo = MONTHS[(m[2] as string).slice(0, 3).toLowerCase()]; if (mo) return `${m[3]}-${mo}-${pad2(m[1] as string)}`; }
+  return null;
+}
+
+// 텍스트에서 날짜형 토큰을 뽑아 정규화한 집합.
+export function datesInText(text: string): string[] {
+  const out = new Set<string>();
+  const pats = [
+    /\b\d{4}[-/.]\d{1,2}[-/.]\d{1,2}\b/g,
+    /\b[A-Za-z]{3,9}\.?\s+\d{1,2},?\s+\d{4}\b/g,
+    /\b\d{1,2}\s+[A-Za-z]{3,9}\.?\s+\d{4}\b/g,
+  ];
+  for (const re of pats) {
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) {
+      const c = canonicalizeDate(m[0]);
+      if (c) out.add(c);
+    }
+  }
+  return [...out];
+}
+
+export function dateStatus(statedDate: string | null, source: string | null): DateStatus {
+  if (!statedDate) return "no-basis";
+  const c = canonicalizeDate(statedDate);
+  if (!c || typeof source !== "string") return "no-basis";
+  const found = datesInText(source);
+  if (!found.length) return "no-basis";
+  return found.includes(c) ? "verified" : "mismatch";
+}
+
+// ── 링크 well-formedness (Phase3·순수) ──
+// 도달성(라이브 resolve)은 --fetch 의 몫. 여기선 형식만: http(s) URL 인가(valid=advisory·증거 아님).
+export type LinkStatus = "valid" | "invalid";
+export function linkStatus(url: string): LinkStatus {
+  try {
+    const u = new URL(url);
+    return u.protocol === "http:" || u.protocol === "https:" ? "valid" : "invalid";
+  } catch {
+    return "invalid";
+  }
+}
+
+// ── 통합 claim 평가 (표준 포맷의 단일 의미론 — research·council 이 공유) ──
+// 코드가 곧 포맷 스펙: 한 주장이 담은 각 typed 근거(인용/수치/날짜/링크)를 한 곳에서 결정론 판정.
+export interface EvalClaimInput {
+  quotedText?: unknown;
+  statedValue?: unknown;
+  op?: unknown;
+  operands?: unknown;
+  eps?: unknown;
+  statedDate?: unknown;
+  link?: unknown; // 형식 검증할 URL(surface 가 sourceUrl 을 넘길 수 있음)
+}
+export interface ClaimEvaluation {
+  citation: CitationStatus | null;
+  number: NumberStatus | null;
+  date: DateStatus | null;
+  link: LinkStatus | null;
+  failed: boolean; // 어느 근거든 불일치(not-found/mismatch/invalid)
+  verified: boolean; // 실증된 근거 1+ 이고 불일치 0
+}
+
+function parseStated(v: unknown): number | null {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string") {
+    const n = Number(v.replace(/,/g, ""));
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+export function evaluateClaim(c: EvalClaimInput, source: string | null): ClaimEvaluation {
+  const quote = typeof c.quotedText === "string" ? c.quotedText : "";
+  const citation = quote ? citationStatus(quote, source) : null;
+  const number =
+    c.statedValue !== undefined
+      ? numberStatus(parseStated(c.statedValue), {
+          source,
+          op: c.op,
+          operands: Array.isArray(c.operands) ? (c.operands as number[]) : undefined,
+          eps: typeof c.eps === "number" ? c.eps : undefined,
+        })
+      : null;
+  const date = c.statedDate !== undefined ? dateStatus(typeof c.statedDate === "string" ? c.statedDate : null, source) : null;
+  const link = typeof c.link === "string" ? linkStatus(c.link) : null;
+  const failed = citation === "not-found" || number === "mismatch" || date === "mismatch" || link === "invalid";
+  // link valid=advisory(증거 아님) → verified 에 기여 안 함.
+  const verified = !failed && (citation === "verified" || number === "verified" || date === "verified");
+  return { citation, number, date, link, failed, verified };
+}

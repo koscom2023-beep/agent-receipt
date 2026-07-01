@@ -1,7 +1,7 @@
 import { readFileSync, appendFileSync, existsSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { createHash } from "node:crypto";
-import { citationStatus, normalizeForCitation, type CitationStatus } from "./evidencekernel.js";
+import { evaluateClaim } from "./evidencekernel.js";
 
 const line = "─".repeat(56);
 
@@ -19,6 +19,12 @@ interface SupportingClaim {
   quotedText?: unknown;
   sourceText?: unknown;
   sourceFile?: unknown;
+  // research 와 같은 표준 포맷 — 근거에 수치·날짜도 가능(Evidence Kernel 공유).
+  statedValue?: unknown;
+  op?: unknown;
+  operands?: unknown;
+  eps?: unknown;
+  statedDate?: unknown;
 }
 interface Decision {
   id?: unknown;
@@ -64,14 +70,23 @@ export function gradeDecision(dec: Decision): {
   let verified = 0;
   let notFound = 0;
   let noSource = 0;
+  let anyFailed = false;
+  let anyVerified = false;
   for (const c of claims) {
-    const quote = typeof c.quotedText === "string" ? c.quotedText : "";
-    const st: CitationStatus = citationStatus(quote, resolveSource(c));
-    if (st === "verified") verified++;
-    else if (st === "not-found") notFound++;
+    const url = typeof c.sourceUrl === "string" ? c.sourceUrl : undefined;
+    // research 와 동일한 통합 평가(표준 포맷 공유): 인용·수치·날짜·링크를 한 곳에서.
+    const ev = evaluateClaim(
+      { quotedText: c.quotedText, statedValue: c.statedValue, op: c.op, operands: c.operands, eps: c.eps, statedDate: c.statedDate, link: url },
+      resolveSource(c),
+    );
+    // 카운트 필드는 인용 상태 기준(하위호환) — citation null 은 no-source 취급.
+    if (ev.citation === "verified") verified++;
+    else if (ev.citation === "not-found") notFound++;
     else noSource++;
+    if (ev.failed) anyFailed = true;
+    if (ev.verified) anyVerified = true;
   }
-  const grounding: DecisionGrounding = notFound > 0 ? "ungrounded" : verified > 0 ? "grounded" : "unsupported";
+  const grounding: DecisionGrounding = anyFailed ? "ungrounded" : anyVerified ? "grounded" : "unsupported";
   return { grounding, verified, notFound, noSource };
 }
 
