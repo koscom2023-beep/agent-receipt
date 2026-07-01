@@ -55,7 +55,7 @@ import { runResearchVerify } from "./research.js";
 import { runCouncilVerify } from "./council.js";
 import { runSpec } from "./spec.js";
 import { runReplayReceipt } from "./vreceipt.js";
-import { runGraphQuery } from "./graph.js";
+import { runGraphQuery, runGraphView } from "./graph.js";
 
 function getArg(flag: string): string | undefined {
   const i = process.argv.indexOf(flag);
@@ -141,8 +141,9 @@ agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
 ■ Evidence Specification(검증 포맷의 표준 표면):
   spec [--format json]   claim/check 표준 포맷을 사람요약/기계판독(JSON Schema draft-07)으로 방출 · check kinds·상태·보증범위
 
-■ Evidence Graph 조회(쌓인 Verification Receipt 질의 — 읽기전용·중립):
-  graph query --dir <d> [--commit <h>] [--input <sha>] [--model <m>] [--receipt-id <id>]   receipt 를 commit/input/model 로 필터 + pass/fail 중립 카운트(조회레이어·edge-DAG는 후속)
+■ Evidence Graph(쌓인 Verification Receipt 활용 — 읽기전용·중립):
+  graph query --dir <d> [--commit|--input|--model|--receipt-id] [--format json]   receipt 필터 + pass/fail 중립 카운트(--format json=UI/기계용)
+  graph view --dir <d> [--out <html>]   자체완결 정적 HTML 뷰어(서버 0·share-proof 패턴): 필터 + 무결성·per-claim per-check drill-down(왜 통과/실패)
 
 ■ 증빙 / 감사 묶음(git 증거):
   report [--type developer|client|audit] / receipt [--format ...] [--content] [--strict-redact] [--committed] [--agent <n>] [--model <m>] / receipts [--latest|--cat|--dir]
@@ -283,11 +284,11 @@ function main(): void {
     runSpec(getArg("--format"));
   }
   if (command === "graph") {
-    // Evidence Graph 조회레이어 — 쌓인 Verification Receipt 를 commit/input/model 로 질의(읽기전용).
-    if (process.argv[3] === "query") {
-      runGraphQuery(getArg("--dir"), { commit: getArg("--commit"), input: getArg("--input"), model: getArg("--model"), receiptId: getArg("--receipt-id") });
-    }
-    console.error("graph: 사용법 — graph query --dir <d> [--commit <h>] [--input <sha>] [--model <m>] [--receipt-id <id>]");
+    // Evidence Graph — 쌓인 Verification Receipt 조회(query·읽기전용) / 정적 HTML 뷰어(view·서버 0).
+    const filt = { commit: getArg("--commit"), input: getArg("--input"), model: getArg("--model"), receiptId: getArg("--receipt-id") };
+    if (process.argv[3] === "query") runGraphQuery(getArg("--dir"), filt, getArg("--format"));
+    if (process.argv[3] === "view") runGraphView(getArg("--dir"), getArg("--out"));
+    console.error("graph: 사용법 — graph query [--format json] · graph view --out <html>  (--dir <d> [--commit|--input|--model|--receipt-id])");
     process.exit(2);
   }
   if (command === "incident") {
