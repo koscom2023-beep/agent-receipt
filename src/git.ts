@@ -153,6 +153,49 @@ export function numstatVsHead(): LineStat {
   return { filesChanged, added, deleted };
 }
 
+// git 의 canonical empty tree 해시 — 루트 커밋(부모 없음)을 diff 할 때 base 로 쓴다(전부 신규로 측정).
+export const EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+
+// HEAD 의 부모 커밋 해시(커밋-모드 receipt 의 base). 머지 커밋은 first-parent(HEAD^1) 관례.
+// 루트 커밋(부모 없음)이면 null → 호출부가 EMPTY_TREE 로 폴백.
+export function parentOfHead(): string | null {
+  try {
+    return git(["rev-parse", "HEAD^1"]);
+  } catch {
+    return null; // 루트 커밋 등 부모 없음
+  }
+}
+
+// 변경 규모(라인 수) — base..HEAD 커밋 범위. numstatVsHead 의 범위 버전(post-commit 커밋-모드).
+export function numstatRange(base: string): LineStat {
+  let filesChanged = 0;
+  let added = 0;
+  let deleted = 0;
+  try {
+    const out = git(["diff", `${base}..HEAD`, "--numstat"]);
+    for (const ln of out.split("\n")) {
+      if (!ln) continue;
+      filesChanged++;
+      const [a, d] = ln.split("\t");
+      if (a && a !== "-") added += Number(a) || 0;
+      if (d && d !== "-") deleted += Number(d) || 0;
+    }
+  } catch {
+    /* base 무효/커밋 없음 → 0 */
+  }
+  return { filesChanged, added, deleted };
+}
+
+// base..HEAD 에서 새로 추가된(A 상태) 파일 수(커밋-모드 magnitude.newFiles).
+export function addedInRange(base: string): number {
+  try {
+    const out = git(["diff", "--name-status", `${base}..HEAD`]);
+    return out.split("\n").filter((l) => /^A\t/.test(l)).length;
+  } catch {
+    return 0;
+  }
+}
+
 // release-check: base..HEAD 커밋 목록(hash + 제목). 제목은 탭 구분(제목에 탭은 사실상 없음).
 export function commitsBetween(base: string): Array<{ hash: string; subject: string }> {
   try {

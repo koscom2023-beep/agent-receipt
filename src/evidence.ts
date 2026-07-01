@@ -15,7 +15,13 @@ export interface Magnitude {
   newFiles: number; // untracked 신규 파일 수(tool 산출 제외)
 }
 
-export function collectMagnitude(): Magnitude {
+// opts.committedBase: 커밋-모드(post-commit). committedBase..HEAD 커밋 diff 로 규모 측정.
+// 미지정=기존 동작(full working tree vs HEAD·바이트 동일).
+export function collectMagnitude(opts: { committedBase?: string } = {}): Magnitude {
+  if (opts.committedBase !== undefined) {
+    const ns = g.numstatRange(opts.committedBase);
+    return { filesChanged: ns.filesChanged, added: ns.added, deleted: ns.deleted, newFiles: g.addedInRange(opts.committedBase) };
+  }
   const ns = g.numstatVsHead();
   const newFiles = g.untrackedFiles().filter((f) => !isToolFile(f)).length;
   return { filesChanged: ns.filesChanged, added: ns.added, deleted: ns.deleted, newFiles };
@@ -40,7 +46,10 @@ export interface CriticalPath {
 
 // 전체 working tree 변경 집합(unstaged ∪ staged ∪ untracked, tool 산출 제외).
 // denied 와 동일하게 baseline 으로 숨기지 않는 full-tree 기준이다.
-export function touchedFull(): string[] {
+export function touchedFull(opts: { committedBase?: string } = {}): string[] {
+  if (opts.committedBase !== undefined) {
+    return [...new Set(g.committedSince(opts.committedBase))].filter((f) => !isToolFile(f));
+  }
   const all = [...g.unstagedFiles(), ...g.stagedFiles(), ...g.untrackedFiles()];
   return [...new Set(all)].filter((f) => !isToolFile(f));
 }

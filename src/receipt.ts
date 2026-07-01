@@ -38,6 +38,7 @@ export interface Receipt {
   policy: PolicyObs | null; // N8 트립와이어: policy.yaml 상시규칙 관찰(없으면 null)
   environment: Environment; // 환경/출처 캡처(git/node/os + 계약·정책 해시). contentHash 입력엔 미포함.
   disclosure: string; // 한계 고지(이 도구가 못 보는 것)
+  measuredFrom?: string; // 커밋-모드일 때만: `committed:<base>` (측정 대상=base..HEAD 커밋). 미지정=작업트리. receiptHash 입력엔 미포함(메타·additive → 기존 영수증 바이트동일).
   contentHashes?: Array<{ path: string; sha256: string | null; bytes: number }>; // --content 일 때만: touched 파일 sha256(내용 저장 안 함). 있을 때만 contentHash 입력에 포함.
   actions?: CaptureAction[]; // capture(git 너머 행위) — capture.jsonl 있을 때만. contentHash 입력엔 미포함(metadata·additive). 없으면 키 부재 → 기존 출력 바이트동일.
   actionsSummary?: ActionsResult["actionsSummary"]; // 행위 요약(gitVisible 대비). 〃(해시 제외)
@@ -109,14 +110,16 @@ export interface BuildOpts {
   content?: boolean; // --content: touched 파일 sha256 기록
   agent?: string; // --agent: provenance(명시값)
   model?: string; // --model: provenance(명시값)
+  committedBase?: string; // 커밋-모드(post-commit 증거): committedBase..HEAD 커밋 측정. 미지정=작업트리(기존).
 }
 
 export function buildReceipt(contract: Contract, contractPath?: string, opts: BuildOpts = {}): Receipt {
-  const v = runVerify(contract);
+  const mopts = opts.committedBase !== undefined ? { committedBase: opts.committedBase } : {};
+  const v = runVerify(contract, mopts);
   const chk = runCheck(contract);
   const sess = resolveSession();
   const { policy } = loadPolicySafe();
-  const polObs = policy ? policyObservations(policy, touchedFull()) : null;
+  const polObs = policy ? policyObservations(policy, touchedFull(mopts)) : null;
   const ppath = policy ? policyPath() : undefined;
   const r: Receipt = {
     schemaVersion: RECEIPT_SCHEMA_VERSION,
@@ -141,11 +144,13 @@ export function buildReceipt(contract: Contract, contractPath?: string, opts: Bu
         }
       : null,
     checks: chk.commands.map((c) => ({ name: c.name, exitCode: c.exitCode, requiredExit: c.requiredExit, ok: c.ok })),
-    magnitude: collectMagnitude(),
-    criticalPaths: criticalPathHits(touchedFull()),
+    magnitude: collectMagnitude(mopts),
+    criticalPaths: criticalPathHits(touchedFull(mopts)),
     policy: polObs,
     environment: captureEnvironment({ contractPath, policyPath: ppath, agent: opts.agent, model: opts.model }),
     disclosure: LIMIT_NOTE,
+    // 커밋-모드일 때만 measuredFrom 표기(메타). receiptHash 입력엔 미포함 → 기본모드 영수증 바이트동일.
+    ...(opts.committedBase !== undefined ? { measuredFrom: `committed:${opts.committedBase}` } : {}),
     ...(opts.content ? { contentHashes: computeContentHashes(v.touched) } : {}),
     // capture(git 너머 행위) — capture.jsonl 레코드 있을 때만. gitVisible = receipt 의 touched∪staged∪untracked 재사용.
     // receiptHash 입력엔 미포함(metadata) → capture 안 쓰면 키 부재·contentHash 불변(기존 사용자 바이트동일).
@@ -211,7 +216,8 @@ export function toReceiptMd(r: Receipt): string {
   if (r.checks.length) for (const c of r.checks) L.push(`- ${c.name}: ${c.ok ? "OK" : "✗"} (exit ${c.exitCode}, expected ${c.requiredExit})`);
   else L.push("- (none)");
   L.push("");
-  L.push("## Magnitude (full working tree vs HEAD — git numstat)");
+  const magScope = r.measuredFrom ? `commit ${r.measuredFrom.replace(/^committed:/, "")}..HEAD` : "full working tree vs HEAD";
+  L.push(`## Magnitude (${magScope} — git numstat)`);
   L.push(`- files changed: ${r.magnitude.filesChanged}, +${r.magnitude.added} / -${r.magnitude.deleted} lines, new files: ${r.magnitude.newFiles}`);
   L.push("");
   L.push("## Critical paths");
@@ -309,6 +315,7 @@ export interface ReceiptOpts {
   strictRedact?: boolean; // --strict-redact: 강한 비밀 감지 시 파일 쓰기 거부
   agent?: string; // --agent: provenance(명시값)
   model?: string; // --model: provenance(명시값)
+  committed?: boolean; // --committed: 커밋-모드(parent..HEAD 측정). post-commit 증거 훅용 — --no-verify 우회에도 생존.
 }
 
 export function runReceipt(
@@ -320,7 +327,9 @@ export function runReceipt(
   opts: ReceiptOpts = {},
 ): never {
   const fmt: ReceiptFormat = format === "md" ? "md" : format === "client-md" ? "client-md" : "json";
-  const r = buildReceipt(contract, contractPath, { content: opts.content, agent: opts.agent, model: opts.model });
+  // 커밋-모드(--committed): base = HEAD 부모(머지=first-parent), 루트 커밋이면 빈 트리. 방금 만든 커밋 측정.
+  const committedBase = opts.committed ? (g.parentOfHead() ?? g.EMPTY_TREE) : undefined;
+  const r = buildReceipt(contract, contractPath, { content: opts.content, agent: opts.agent, model: opts.model, committedBase });
   // strict-redact: 강한 shape 비밀(sk-/ghp_/AKIA/xox/Bearer) 감지 시 파일을 쓰지 않고 거부(exit 2 — council 합의).
   if (opts.strictRedact) {
     const probe = redactText(renderReceipt(r, fmt));

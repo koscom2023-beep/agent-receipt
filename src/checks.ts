@@ -52,7 +52,9 @@ function runCommand(name: string, command: string, requiredExit: number): Comman
   return { name, command, exitCode, requiredExit, ok: exitCode === requiredExit, env: exitCode === 127 };
 }
 
-export function runVerify(contract: Contract): VerifyResult {
+// opts.committedBase: 커밋-모드(post-commit 증거). 지정 시 작업트리 대신 committedBase..HEAD
+// 커밋 변경만 측정한다(scope/denied/critical 모두 그 커밋 파일 집합 기준). 미지정=기존 동작(바이트 동일).
+export function runVerify(contract: Contract, opts: { committedBase?: string } = {}): VerifyResult {
   const violations: string[] = [];
 
   // 1) 브랜치 확인
@@ -81,7 +83,13 @@ export function runVerify(contract: Contract): VerifyResult {
   let staged: string[];
   let untracked: string[];
   let committed: string[] = [];
-  if (sess.applied) {
+  if (opts.committedBase !== undefined) {
+    // 커밋-모드: 작업트리 무시, committedBase..HEAD 커밋 변경만 측정(post-commit 증거).
+    unstaged = [];
+    staged = [];
+    untracked = [];
+    committed = ex(g.committedSince(opts.committedBase));
+  } else if (sess.applied) {
     const s = sess.session;
     unstaged = curUnstaged.filter(notInSnap(s.unstagedAtStart));
     staged = curStaged.filter(notInSnap(s.stagedAtStart));
@@ -93,9 +101,10 @@ export function runVerify(contract: Contract): VerifyResult {
     untracked = curUntracked;
   }
 
-  // scope 검사 기준(baseline-relative) / denied 검사 기준(full)
+  // scope 검사 기준(baseline-relative) / denied 검사 기준(full).
+  // 커밋-모드에선 denied/critical 도 커밋 파일 집합 기준(작업트리로 안 묻음).
   const touched = unique([...unstaged, ...staged, ...untracked, ...committed]);
-  const touchedFull = unique([...curUnstaged, ...curStaged, ...curUntracked]);
+  const touchedFull = opts.committedBase !== undefined ? touched : unique([...curUnstaged, ...curStaged, ...curUntracked]);
 
   const allowed = contract.scope.allowed_paths;
   const denied = contract.scope.denied_paths;

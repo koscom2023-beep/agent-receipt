@@ -136,7 +136,7 @@ If you omit `--contract`, the contract is auto-discovered (see below).
 | `check` | Run `required_checks.commands`; all must match their `required_exit`. | no |
 | `prompt [--cursor\|--claude]` | Print a paste-in instruction block for the agent. Variants differ only in header/tone; the completion-claim JSON is identical (so `claims` works either way). | no |
 | `report [--type developer\|client\|audit] [--out <file>]` | Run `verify` and write a Markdown report — `developer` (default, detailed), `client` (trimmed), or `audit` (contract/policy/receipt/environment-centric). | yes |
-| `receipt [--format json\|md\|client-md] [--redact] [--out <file>]` | Run `verify` + `check` and save an **AI Work Receipt** to `.agent-guard/receipts/` (change magnitude, critical-path attestation, environment/provenance, integrity `contentHash`). `client-md` is a trimmed client-facing render; `--redact` best-effort masks secret-looking values. Saving outside the default dir warns (verify won't exclude it). | yes |
+| `receipt [--format json\|md\|client-md] [--redact] [--committed] [--out <file>]` | Run `verify` + `check` and save an **AI Work Receipt** to `.agent-guard/receipts/` (change magnitude, critical-path attestation, environment/provenance, integrity `contentHash`). `client-md` is a trimmed client-facing render; `--redact` best-effort masks secret-looking values. **`--committed`** measures the **just-made commit** (`parent..HEAD`, first-parent for merges; empty-tree base for the root commit) instead of the working tree — a `measuredFrom: committed:<base>` marker is added (metadata, excluded from `contentHash` → default receipts stay byte-identical). This is the mode the **post-commit evidence hook** uses, so a receipt is produced even for a commit made with `git commit --no-verify`. Saving outside the default dir warns (verify won't exclude it). | yes |
 | `receipts [--latest\|--cat\|--dir]` | Find saved receipts under `.agent-guard/receipts/`: list newest-first (default), `--latest` summary (ok/contractId/timestamp/contentHash/magnitude), `--cat` latest content, `--dir` directory path. No receipts → guidance, exit `0`. | no |
 | `mode` | Read-only explanation of whether you're in **task** or **daily** flow (contract/session/baseline state + recommended next command). No file written. | no |
 | `claims --file <claim.json>` | Compare an agent's completion report (JSON) against the actual git state — surfaces hidden/over-claimed changes as **AI said / Git says**. Mismatch → exit `1`. | yes |
@@ -208,6 +208,15 @@ When `--contract` / `-c` is not given, the first existing file wins, in this ord
 - `0` — pass
 - `1` — violation (`verify` state violation, `check` command failure, `pre` problem)
 - `2` — loading/usage error (missing/unreadable contract, schema error, not a git repo, unknown command/preset)
+
+### Git hooks (`install-hooks`) — gate and evidence are **decoupled**
+
+`agent-receipt install-hooks` writes three hooks into `.git/hooks/` (it never touches `core.hooksPath`, and refuses when husky is present):
+
+- **Gate** — `pre-commit` / `pre-push` run `commit-check` and **block** on a violation. A gate is *meant* to be bypassable: `git commit --no-verify` / `git push --no-verify`.
+- **Evidence** — `post-commit` runs `receipt --committed` and **never blocks** (always exits `0`). Because git does **not** skip `post-commit` on `--no-verify`, an evidence receipt for the just-made commit is recorded *even when the gate was bypassed*. Evidence and gate live in separate hooks on purpose — bypassing the gate no longer discards the receipt.
+
+`uninstall-hooks` removes only the hooks agent-receipt installed (it preserves any pre-existing hook). Hooks aren't tracked by git, so a fresh clone needs `install-hooks` once.
 
 > Wiring it into a worktree sandbox, CI, or a pre-push hook? See [recipes](https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/recipes.md).
 

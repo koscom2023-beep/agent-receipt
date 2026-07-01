@@ -121,14 +121,14 @@ agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
   presets / init --preset <name> / draft-contract / review / lint / doctor
 
 ■ 설치 / 자가검증:
-  install-hooks [--force] / uninstall-hooks   git pre-commit·pre-push 게이트 설치/제거(기존 hook 보존, 우회 --no-verify)
+  install-hooks [--force] / uninstall-hooks   pre-commit·pre-push 게이트 + post-commit 증거(receipt --committed·--no-verify 우회에도 남음) 설치/제거(기존 hook 보존)
   selftest                                     임시 repo 로 PASS/FAIL·차단·우회 자가검증(설치/PATH 신뢰 확인)
 
 ■ 검증(git 실측):
   verify [--json] / check / claims --file <c.json> / pre / prompt [--cursor|--claude]
 
 ■ 증빙 / 감사 묶음(git 증거):
-  report [--type developer|client|audit] / receipt [--format ...] [--content] [--strict-redact] [--agent <n>] [--model <m>] / receipts [--latest|--cat|--dir]
+  report [--type developer|client|audit] / receipt [--format ...] [--content] [--strict-redact] [--committed] [--agent <n>] [--model <m>] / receipts [--latest|--cat|--dir]
   audit [--json] / insights [--since <n>] [--format md|json] / risk [--format md|json] / dashboard / index [--json] / ledger [--json] (rebuild|verify) / replay --pack <dir> / attest / anchor [--upload] / controls [--format md|json] / incident
 
 ■ 서명 / 승인(로컬·ed25519):
@@ -447,6 +447,7 @@ function main(): void {
         strictRedact: hasFlag("--strict-redact"),
         agent: getArg("--agent"),
         model: getArg("--model"),
+        committed: hasFlag("--committed"),
       });
       break;
     }

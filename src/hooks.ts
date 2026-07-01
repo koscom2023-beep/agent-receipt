@@ -37,7 +37,24 @@ fi
 exit 0
 `;
 
-const HOOKS: Record<string, string> = { "pre-commit": PRE_COMMIT, "pre-push": PRE_PUSH };
+// post-commit — 증거(영수증) 훅. 게이트(pre-commit)와 분리된 자리.
+// 핵심: git 의 post-commit 은 --no-verify 로 우회되지 않는다 → 게이트를 --no-verify 로 넘겨도
+// 이 훅은 실행돼 "방금 만든 커밋(parent..HEAD)"의 영수증을 남긴다(receipt --committed). 비차단(항상 exit 0).
+const POST_COMMIT = `#!/usr/bin/env bash
+# ${MARKER} — post-commit evidence(증거). --no-verify 로도 안 건너뜀 → 게이트 우회에도 영수증 생존.
+# 방금 만든 커밋을 측정(receipt --committed). 증거지 게이트 아님 — 항상 통과(exit 0).
+set -uo pipefail
+root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+cd "$root" 2>/dev/null || exit 0
+[ -f .agent-guard/contract.yaml ] || exit 0
+command -v agent-receipt >/dev/null 2>&1 || exit 0
+agent-receipt receipt --committed --redact >/dev/null 2>&1 || true
+exit 0
+`;
+
+// 게이트(pre-commit/pre-push)와 증거(post-commit)를 분리 설치한다.
+// 게이트는 --no-verify 로 우회 가능(정상)·증거는 우회에도 남는다.
+const HOOKS: Record<string, string> = { "pre-commit": PRE_COMMIT, "pre-push": PRE_PUSH, "post-commit": POST_COMMIT };
 
 function gitConfigGet(key: string): string | null {
   try {
@@ -91,6 +108,8 @@ export function runInstallHooks(force: boolean): never {
   for (const n of written) console.log(`설치됨(+x): .git/hooks/${n}`);
   for (const n of skipped) console.error(`건너뜀(기존 hook 보존 — 덮으려면 --force): .git/hooks/${n}`);
   console.log("");
+  console.log("게이트(pre-commit·pre-push)=commit-check — 위반 시 차단·검토 후 --no-verify 로 우회 가능.");
+  console.log("증거(post-commit)=receipt --committed — 방금 만든 커밋의 영수증. --no-verify 우회에도 남습니다(게이트와 분리).");
   console.log("Stop hook(세션 종료시 자동 receipt)은 git hook 이 아니라 에이전트 설정에 등록하세요(README 참고).");
   console.log("우회: git commit --no-verify / git push --no-verify     제거: agent-receipt uninstall-hooks");
   process.exit(skipped.length ? 1 : 0);
