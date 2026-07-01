@@ -11,7 +11,7 @@ import {
   signaturePath,
   approvalsCountFor,
 } from "./receiptStore.js";
-import { redactText } from "./redact.js";
+import { redactText, redactJsonText } from "./redact.js";
 import { appendLedger, ledgerEntryFromReceipt, LEDGER_REL } from "./ledger.js";
 import { LIMIT_NOTE } from "./disclosure.js";
 
@@ -69,14 +69,15 @@ export function buildAuditPack(
   mkdirSync(dir, { recursive: true });
 
   const files: string[] = [];
-  const maybeRedact = (s: string): string => (redact ? redactText(s).text : s);
+  // json=true 면 구조 인식 redactor(유효 JSON 유지). yaml/md 등은 text.
+  const maybeRedact = (s: string, json = false): string => (redact ? (json ? redactJsonText(s) : redactText(s)).text : s);
   const writePack = (name: string, body: string): void => {
     writeFileSync(join(dir, name), body);
     files.push(name);
   };
 
   // 1) receipt.json + summary.md (fresh — 재계산 아님: 같은 git 상태면 같은 contentHash)
-  writePack("receipt.json", maybeRedact(renderReceipt(r, "json")));
+  writePack("receipt.json", maybeRedact(renderReceipt(r, "json"), true));
   writePack("summary.md", maybeRedact(renderReceipt(r, "md")));
 
   // 2) contract 사본
@@ -97,7 +98,7 @@ export function buildAuditPack(
     const cpath = isAbsolute(claimArg) ? claimArg : join(cwd, claimArg);
     if (existsSync(cpath)) {
       const raw = readFileSync(cpath, "utf8");
-      writePack("claim.json", maybeRedact(raw));
+      writePack("claim.json", maybeRedact(raw, true));
       let parsed: unknown = null;
       try {
         parsed = JSON.parse(raw);

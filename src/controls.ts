@@ -1,6 +1,6 @@
 import { loadRekorAnchor, loadSavedReceipt } from "./receiptStore.js";
 import { LIMIT_NOTE } from "./disclosure.js";
-import { redactText } from "./redact.js";
+import { redactText, redactJsonText } from "./redact.js";
 import type { Receipt } from "./receipt.js";
 
 // ── 규제 매핑 (8차 council) — 읽기전용 투영: 저장 receipt 신호 → *관련 통제 증거*(준수 아님) ──
@@ -217,8 +217,9 @@ export function renderControlJson(r: Receipt, hasAnchor: boolean): string {
 export function runControls(receiptPath: string | undefined, format: string | undefined, redact: boolean, cwd: string = process.cwd()): never {
   const { abs, receipt: r } = loadSavedReceipt(receiptPath, "controls", cwd); // 13차 council: 공용 로더(경로해석+검증→exit2)
   const hasAnchor = loadRekorAnchor(abs) !== null;
-  let out = format === "json" ? renderControlJson(r, hasAnchor) : renderControlMd(r, hasAnchor);
-  if (redact) out = redactText(out).text;
+  const isJson = format === "json";
+  let out = isJson ? renderControlJson(r, hasAnchor) : renderControlMd(r, hasAnchor);
+  if (redact) out = (isJson ? redactJsonText(out) : redactText(out)).text;
   process.stdout.write(out + "\n");
   process.exit(0);
 }

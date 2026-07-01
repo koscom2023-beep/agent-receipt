@@ -9,7 +9,7 @@ import type { SessionKind } from "./start.js";
 import { collectMagnitude, criticalPathHits, touchedFull, type Magnitude, type CriticalPath } from "./evidence.js";
 import { captureEnvironment, type Environment } from "./environment.js";
 import { loadPolicySafe, policyObservations, policyPath, type PolicyObs } from "./policy.js";
-import { redactText } from "./redact.js";
+import { redactText, redactJsonText } from "./redact.js";
 import { LIMIT_NOTE } from "./disclosure.js";
 import { loadCapturedActions, splitActionsForDisplay, type CaptureAction, type ActionsResult } from "./capture.js";
 
@@ -293,7 +293,8 @@ export function writeReceiptFile(
   let body = renderReceipt(r, fmt);
   let redactCount = 0;
   if (redact) {
-    const red = redactText(body);
+    // json 은 구조 인식 redactor(유효 JSON 유지·키 오탐 방지), md/client-md 는 text.
+    const red = fmt === "json" ? redactJsonText(body) : redactText(body);
     body = red.text;
     redactCount = red.count;
   }
@@ -332,7 +333,7 @@ export function runReceipt(
   const r = buildReceipt(contract, contractPath, { content: opts.content, agent: opts.agent, model: opts.model, committedBase });
   // strict-redact: 강한 shape 비밀(sk-/ghp_/AKIA/xox/Bearer) 감지 시 파일을 쓰지 않고 거부(exit 2 — council 합의).
   if (opts.strictRedact) {
-    const probe = redactText(renderReceipt(r, fmt));
+    const probe = fmt === "json" ? redactJsonText(renderReceipt(r, fmt)) : redactText(renderReceipt(r, fmt));
     if (probe.strong > 0) {
       console.error(`✗ strict-redact: 강한 비밀 패턴 ${probe.strong}건 감지 — receipt 를 쓰지 않습니다. 비밀을 제거 후 다시 실행하세요.`);
       process.exit(2);

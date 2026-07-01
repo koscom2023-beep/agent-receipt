@@ -57,3 +57,60 @@ export function redactText(input: string): RedactResult {
   });
   return { text: out, count, strong };
 }
+
+// ── JSON 구조 인식 redactor ──
+// text 정규식(redactText)은 JSON 값 자리에 따옴표 없는 [REDACTED] 를 넣어 JSON 을 깨고,
+// session/secretFilesRead 같은 "구조 키"를 비밀로 오인한다. 이 함수는 파싱→값 단위로 마스킹→재직렬화해
+// 유효 JSON 을 보장하고 키 오탐을 없앤다. 규칙:
+//   (1) 키가 SENSITIVE_KEY 매칭 + 값이 "문자열" → 값 전체 [REDACTED](예: "api_key":"abc").
+//       객체/배열/숫자/null 값은 보존 → session(객체)·secretFilesRead(배열) 오탐 제거.
+//   (2) 모든 문자열 값 "내부"의 강한 토큰(sk-/ghp_/AKIA/xox/Bearer)은 부분 마스킹(strong).
+//   (3) 키는 절대 건드리지 않는다.
+// 파싱 실패(비-JSON/이미 깨진 입력) → text redactText 로 폴백(never throw).
+const FULL_SENSITIVE_KEY = new RegExp(`^${SENSITIVE_KEY}$`, "i");
+
+// 문자열 값 내부의 강한 토큰만 부분 마스킹(shape 식별). key 신호와 무관하게 항상 적용.
+function redactShapesInString(s: string, ctr: { count: number; strong: number }): string {
+  let out = s.replace(BEARER, (_m, pre) => {
+    ctr.count++;
+    ctr.strong++;
+    return `${pre}${REDACTED}`;
+  });
+  out = out.replace(TOKEN_SHAPES, () => {
+    ctr.count++;
+    ctr.strong++;
+    return REDACTED;
+  });
+  return out;
+}
+
+function redactWalk(v: unknown, keySensitive: boolean, ctr: { count: number; strong: number }): unknown {
+  if (typeof v === "string") {
+    if (keySensitive) {
+      ctr.count++;
+      return REDACTED; // 민감 키의 문자열 값 전체 마스킹
+    }
+    return redactShapesInString(v, ctr);
+  }
+  if (Array.isArray(v)) return v.map((x) => redactWalk(x, false, ctr));
+  if (v && typeof v === "object") {
+    const o: Record<string, unknown> = {};
+    for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+      o[k] = redactWalk(val, FULL_SENSITIVE_KEY.test(k), ctr);
+    }
+    return o;
+  }
+  return v; // number/boolean/null 보존
+}
+
+export function redactJsonText(input: string): RedactResult {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(input);
+  } catch {
+    return redactText(input); // 폴백: 비-JSON/깨진 입력은 text 경로(never throw)
+  }
+  const ctr = { count: 0, strong: 0 };
+  const red = redactWalk(parsed, false, ctr);
+  return { text: JSON.stringify(red, null, 2) + "\n", count: ctr.count, strong: ctr.strong };
+}
