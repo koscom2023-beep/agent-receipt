@@ -2,7 +2,7 @@
 // `node test/vreceipt.test.mjs`.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { buildVerificationReceipt, tierProvenance } from "../dist/vreceipt.js";
+import { buildVerificationReceipt, tierProvenance, replayVerificationReceipt } from "../dist/vreceipt.js";
 
 let pass = 0;
 const fail = [];
@@ -52,6 +52,22 @@ check("tier: model 은 reported(verified 아님·세탁 금지)", () => {
 check("tier: inputFiles 못 읽으면 sha256 null(우리가 실제 해시 시도)", () => {
   const t = tierProvenance({ inputFiles: ["/no/such/file-xyz-987.md"] });
   assert.equal(t.verified.inputFiles[0].sha256, null);
+});
+
+// ── replayVerificationReceipt: 시간축 재검증·변조 탐지 ──
+check("replay: 정상 영수증 contentHash·receiptId OK", () => {
+  const rr = replayVerificationReceipt(r);
+  assert.equal(rr.contentHashOk, true); assert.equal(rr.receiptIdOk, true);
+});
+check("replay: 변조 탐지(verdict 바꾸면 둘 다 불일치)", () => {
+  const rr = replayVerificationReceipt({ ...r, verdict: "fail" });
+  assert.equal(rr.contentHashOk, false); assert.equal(rr.receiptIdOk, false);
+});
+check("replay: 입력 재해시 일치", () => {
+  assert.equal(replayVerificationReceipt(r, { inputContent: '{"a":1}' }).inputMatch, true);
+});
+check("replay: 입력 변경 시 inputMatch false(드리프트)", () => {
+  assert.equal(replayVerificationReceipt(r, { inputContent: '{"a":999}' }).inputMatch, false);
 });
 
 if (fail.length) { console.error(`vreceipt: ${pass} pass, ${fail.length} FAIL`); for (const f of fail) console.error("  ✗ " + f); process.exit(1); }

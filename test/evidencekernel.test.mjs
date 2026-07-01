@@ -1,9 +1,12 @@
 // Evidence Kernel(공유 코어) — 인용 대조 순수 커널. research·council 이 재사용하는 그 코어.
 // `node test/evidencekernel.test.mjs`.
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
-import { normalizeForCitation, verifyCitationInText, citationStatus, parseNumbersFromText, recompute, numberStatus, canonicalizeDate, dateStatus, linkStatus, evaluateClaim, hashStatus, CHECK_KINDS, claimSchema, SCHEMA_VERSION } from "../dist/evidencekernel.js";
+import { createHash, generateKeyPairSync, sign as edSign } from "node:crypto";
+import { normalizeForCitation, verifyCitationInText, citationStatus, parseNumbersFromText, recompute, numberStatus, canonicalizeDate, dateStatus, linkStatus, evaluateClaim, hashStatus, signatureStatus, CHECK_KINDS, claimSchema, SCHEMA_VERSION } from "../dist/evidencekernel.js";
 const sha = (s) => createHash("sha256").update(s).digest("hex");
+const kp = generateKeyPairSync("ed25519");
+const pubPem = kp.publicKey.export({ format: "pem", type: "spki" }).toString();
+const sigOf = (m) => edSign(null, Buffer.from(m, "utf8"), kp.privateKey).toString("base64");
 
 let pass = 0;
 const fail = [];
@@ -89,8 +92,22 @@ check("eval hash mismatch → failed", () => {
   assert.equal(e.hash, "mismatch"); assert.equal(e.failed, true);
 });
 
+// ── 서명 커널(ed25519) ──
+check("signature verified: 유효 서명", () => assert.equal(signatureStatus("hello", sigOf("hello"), pubPem), "verified"));
+check("signature invalid: content 변조", () => assert.equal(signatureStatus("tampered", sigOf("hello"), pubPem), "invalid"));
+check("signature no-basis: 키 없음", () => assert.equal(signatureStatus("hello", sigOf("hello"), null), "no-basis"));
+check("signature no-basis: 서명 없음", () => assert.equal(signatureStatus("hello", null, pubPem), "no-basis"));
+check("eval signature verified(레지스트리 경유)", () => {
+  const e = evaluateClaim({ content: "hi", signature: sigOf("hi"), publicKey: pubPem }, null);
+  assert.equal(e.signature, "verified"); assert.equal(e.verified, true);
+});
+check("eval signature invalid → failed", () => {
+  const e = evaluateClaim({ content: "hi", signature: sigOf("bye"), publicKey: pubPem }, null);
+  assert.equal(e.signature, "invalid"); assert.equal(e.failed, true);
+});
+
 // ── Evidence Specification ──
-check("CHECK_KINDS: 레지스트리에 hash 확장 반영", () => assert.ok(CHECK_KINDS.includes("hash") && CHECK_KINDS.includes("citation")));
+check("CHECK_KINDS: 레지스트리에 hash·signature 확장 반영", () => assert.ok(CHECK_KINDS.includes("hash") && CHECK_KINDS.includes("signature") && CHECK_KINDS.includes("citation")));
 check("claimSchema: schemaVersion + 구조 + checkKinds", () => {
   const s = claimSchema();
   assert.equal(s.schemaVersion, SCHEMA_VERSION);

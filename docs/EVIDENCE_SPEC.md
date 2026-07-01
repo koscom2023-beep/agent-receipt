@@ -32,7 +32,10 @@ claim:
 | `number` | statedValue == a number in the source, or == recompute(op, operands) | verified / mismatch / no-basis |
 | `date` | statedDate == a date in the source (format-agnostic) | verified / mismatch / no-basis |
 | `hash` | sha256/… of content == statedHash (integrity) | verified / mismatch / no-basis |
+| `signature` | content is ed25519-signed by the given public key (non-repudiation) | verified / invalid / no-basis |
 | `link` | URL is well-formed http(s) — **advisory, not evidence** | valid / invalid |
+
+`signature` is the one check that promotes self-report toward proof: it confirms *this content was signed by this key* — it does not vouch for the key's trust (that is out of scope).
 
 A claim **fails** if any check is `not-found` / `mismatch` / `invalid`. A claim is **verified** if a positive check (citation/number/date/hash) is `verified` and nothing failed. `link: valid` is advisory (well-formedness ≠ evidence).
 
@@ -64,6 +67,8 @@ results [ per-claim/decision ], summary, verdict,
 means,                         # "a record that this verifier version produced this result on this input"
 contentHash                    # sha256 of all the above incl. verifiedAt (full tamper-evidence)
 ```
+
+`replay --receipt <path>` re-verifies a saved receipt over time: recompute `contentHash` and `receiptId` (tamper detection), re-hash the input file if still present (`input.sha256` drift), and re-check `commitExistsInRepo` (link-rot). This is L5 reproducibility — the receipt is checkable long after it was written.
 
 **A receipt is a record (증적), not a proof (증명).** It attests: *this verifier version produced this result on this exact input, under this recorded provenance.* It does **not** attest that the model truly used that prompt, that the commit connects to that run, or that the reported provenance is true — nor that the AI's judgment is right. `receiptId` (stable) is the reconciliation key; `contentHash` (with timestamp) is the full tamper seal.
 

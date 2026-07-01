@@ -36,9 +36,11 @@ interface ResearchClaim {
   eps?: unknown; // 허용오차(기본 1e-9)
   statedDate?: unknown; // 날짜 검증(선택) — 출처의 날짜와 형식무관 대조
   statedHash?: unknown; // 무결성 검증(선택) — content/contentFile 의 해시가 이것과 일치하나
-  content?: unknown; // 해시 대상 콘텐츠(인라인)
-  contentFile?: unknown; // 또는 로컬 파일(surface 가 읽어 해시)
+  content?: unknown; // 해시/서명 대상 콘텐츠(인라인)
+  contentFile?: unknown; // 또는 로컬 파일(surface 가 읽어 해시/서명)
   algo?: unknown; // 해시 알고리즘(기본 sha256)
+  signature?: unknown; // 서명 검증(선택) — content 에 대한 base64 ed25519 서명
+  publicKey?: unknown; // PEM 공개키
 }
 interface ResearchReport {
   schemaVersion?: unknown;
@@ -185,7 +187,7 @@ export async function runResearchVerify(
 
     // 통합 평가(표준 포맷의 단일 의미론) — 인용·수치·날짜·링크·해시를 한 곳에서.
     const ev = evaluateClaim(
-      { quotedText: claim.quotedText, statedValue: claim.statedValue, op: claim.op, operands: claim.operands, eps: claim.eps, statedDate: claim.statedDate, link: url || undefined, statedHash: claim.statedHash, content: resolveContent(claim), algo: claim.algo },
+      { quotedText: claim.quotedText, statedValue: claim.statedValue, op: claim.op, operands: claim.operands, eps: claim.eps, statedDate: claim.statedDate, link: url || undefined, statedHash: claim.statedHash, content: resolveContent(claim), algo: claim.algo, signature: claim.signature, publicKey: claim.publicKey },
       source,
     );
     if (ev.failed) failed++;
@@ -199,6 +201,7 @@ export async function runResearchVerify(
     if (claim.statedValue !== undefined) console.log(`    수치 : ${String(claim.statedValue)}${claim.op ? ` (재계산 ${String(claim.op)})` : ""}  → ${ev.number}`);
     if (claim.statedDate !== undefined) console.log(`    날짜 : ${String(claim.statedDate)}  → ${ev.date}`);
     if (claim.statedHash !== undefined) console.log(`    해시 : ${String(claim.statedHash).slice(0, 20)}…  → ${ev.hash}`);
+    if (claim.signature !== undefined || claim.publicKey !== undefined) console.log(`    서명 : ed25519  → ${ev.signature}`);
     console.log(
       ev.failed
         ? "    ✗ FAIL — 근거가 출처와 불일치(날조/수치·날짜오류)"

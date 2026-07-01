@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, verify as cryptoVerify, createPublicKey } from "node:crypto";
 
 // Evidence Specification 버전 — 검증 포맷(claim/check)의 표준 버전. 남이 채택할 수 있는 표면.
 export const SCHEMA_VERSION = "evidence/1";
@@ -171,6 +171,25 @@ export function hashStatus(statedHash: string | null, content: string | null, al
   return h.toLowerCase() === statedHash.trim().toLowerCase() ? "verified" : "mismatch";
 }
 
+// ── 서명(ed25519) 검증 커널 (Phase3) ──
+// content 가 이 공개키로 서명됐나 = 부인방지. 자가보고(unsigned)보다 강한 유일한 층.
+// 보증 정직: "이 content 가 이 키로 서명됨"의 결정론 확인이지, 사실 보증도 키 신뢰 보증도 아니다(키 신뢰는 밖).
+export type SignatureStatus = "verified" | "invalid" | "no-basis";
+export function signatureStatus(content: string | null, signature: string | null, publicKey: string | null): SignatureStatus {
+  if (content === null || typeof signature !== "string" || !signature || typeof publicKey !== "string" || !publicKey) return "no-basis";
+  let key;
+  try {
+    key = createPublicKey(publicKey); // PEM(SPKI) 공개키
+  } catch {
+    return "no-basis"; // 키 형식 불가 → 검증 불가
+  }
+  try {
+    return cryptoVerify(null, Buffer.from(content, "utf8"), key, Buffer.from(signature, "base64")) ? "verified" : "invalid";
+  } catch {
+    return "invalid"; // 서명 형식 깨짐 = 유효하지 않은 서명
+  }
+}
+
 // ── 통합 claim 평가 (표준 포맷의 단일 의미론 — research·council 이 공유) ──
 // 코드가 곧 포맷 스펙: 한 주장이 담은 각 typed 근거(인용/수치/날짜/링크)를 한 곳에서 결정론 판정.
 export interface EvalClaimInput {
@@ -182,8 +201,10 @@ export interface EvalClaimInput {
   statedDate?: unknown;
   link?: unknown; // 형식 검증할 URL(surface 가 sourceUrl 을 넘길 수 있음)
   statedHash?: unknown; // 무결성: content 의 해시가 이것과 일치하나
-  content?: unknown; // 해시 대상 콘텐츠(인라인·surface 가 파일에서 채울 수 있음)
+  content?: unknown; // 해시/서명 대상 콘텐츠(인라인·surface 가 파일에서 채울 수 있음)
   algo?: unknown; // 해시 알고리즘(기본 sha256)
+  signature?: unknown; // base64 ed25519 서명(content 에 대한)
+  publicKey?: unknown; // PEM(SPKI) 공개키 — 서명 검증용
 }
 export interface ClaimEvaluation {
   citation: CitationStatus | null;
@@ -191,6 +212,7 @@ export interface ClaimEvaluation {
   date: DateStatus | null;
   link: LinkStatus | null;
   hash: HashStatus | null;
+  signature: SignatureStatus | null;
   results: Record<string, string | null>; // 레지스트리 전체 결과(확장 검증기 포함)
   failed: boolean; // 어느 근거든 불일치(not-found/mismatch/invalid)
   verified: boolean; // 실증된 근거 1+ 이고 불일치 0
@@ -219,6 +241,7 @@ export const CHECK_REGISTRY: CheckDescriptor[] = [
   { kind: "number", positive: true, run: (c, s) => (c.statedValue !== undefined ? numberStatus(parseStated(c.statedValue), { source: s, op: c.op, operands: Array.isArray(c.operands) ? (c.operands as number[]) : undefined, eps: typeof c.eps === "number" ? c.eps : undefined }) : null) },
   { kind: "date", positive: true, run: (c, s) => (c.statedDate !== undefined ? dateStatus(typeof c.statedDate === "string" ? c.statedDate : null, s) : null) },
   { kind: "hash", positive: true, run: (c) => (c.statedHash !== undefined ? hashStatus(typeof c.statedHash === "string" ? c.statedHash : null, typeof c.content === "string" ? c.content : null, typeof c.algo === "string" ? c.algo : "sha256") : null) },
+  { kind: "signature", positive: true, run: (c) => (c.signature !== undefined || c.publicKey !== undefined ? signatureStatus(typeof c.content === "string" ? c.content : null, typeof c.signature === "string" ? c.signature : null, typeof c.publicKey === "string" ? c.publicKey : null) : null) },
   { kind: "link", positive: false, run: (c) => (typeof c.link === "string" ? linkStatus(c.link) : null) },
 ];
 export const CHECK_KINDS: string[] = CHECK_REGISTRY.map((d) => d.kind);
@@ -241,6 +264,7 @@ export function evaluateClaim(c: EvalClaimInput, source: string | null): ClaimEv
     date: (results.date as DateStatus) ?? null,
     link: (results.link as LinkStatus) ?? null,
     hash: (results.hash as HashStatus) ?? null,
+    signature: (results.signature as SignatureStatus) ?? null,
     results,
     failed,
     verified: !failed && positiveVerified,
@@ -271,6 +295,8 @@ export function claimSchema(): Record<string, unknown> {
       statedHash: { type: "string", description: "hash: content 의 해시와 상등(무결성)" },
       content: { type: "string" },
       algo: { type: "string", enum: [...HASH_ALGOS] },
+      signature: { type: "string", description: "signature: content 에 대한 base64 ed25519 서명" },
+      publicKey: { type: "string", description: "signature 검증용 PEM(SPKI) 공개키" },
     },
   };
 }

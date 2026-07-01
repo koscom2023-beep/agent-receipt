@@ -54,6 +54,7 @@ import { runShareProof, runShareProofFromSaved, latestReceiptExists } from "./sh
 import { runResearchVerify } from "./research.js";
 import { runCouncilVerify } from "./council.js";
 import { runSpec } from "./spec.js";
+import { runReplayReceipt } from "./vreceipt.js";
 
 function getArg(flag: string): string | undefined {
   const i = process.argv.indexOf(flag);
@@ -131,17 +132,17 @@ agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
   verify [--json] / check / claims --file <c.json> / pre / prompt [--cursor|--claude]
 
 ■ 리서치 근거검증(출처 대조 — git 아님·검증만·공유 Evidence Kernel):
-  research verify --file <report.json> [--fetch] [--out <p>]   각 주장의 인용·수치·날짜·링크·해시를 출처와 결정론 대조 · --fetch=라이브 재대조 · --out=Verification Receipt(입력해시+provenance 봉인)
+  research verify --file <report.json> [--fetch] [--out <p>]   각 주장의 인용·수치·날짜·링크·해시·서명을 결정론 대조 · --fetch=라이브 재대조 · --out=Verification Receipt(입력해시+provenance 봉인)
 
 ■ 회의 결정검증(결정↔근거 대조 — 회의 실행 아님·검증만·같은 Evidence Kernel):
-  council verify --file <decision.json> [--log <path>] [--out <p>]   결정의 근거(인용·수치·날짜·링크·해시)를 출처와 대조 · --log=append-only DecisionLog · --out=Verification Receipt
+  council verify --file <decision.json> [--log <path>] [--out <p>]   결정의 근거(인용·수치·날짜·링크·해시·서명)를 대조 · --log=append-only DecisionLog · --out=Verification Receipt
 
 ■ Evidence Specification(검증 포맷의 표준 표면):
   spec [--format json]   claim/check 표준 포맷을 사람요약/기계판독(JSON Schema draft-07)으로 방출 · check kinds·상태·보증범위
 
 ■ 증빙 / 감사 묶음(git 증거):
   report [--type developer|client|audit] / receipt [--format ...] [--content] [--strict-redact] [--committed] [--agent <n>] [--model <m>] / receipts [--latest|--cat|--dir]
-  audit [--json] / insights [--since <n>] [--format md|json] / risk [--format md|json] / dashboard / index [--json] / ledger [--json] (rebuild|verify) / replay --pack <dir> / attest / anchor [--upload] / controls [--format md|json] / incident
+  audit [--json] / insights [--since <n>] [--format md|json] / risk [--format md|json] / dashboard / index [--json] / ledger [--json] (rebuild|verify) / replay [--pack <dir>] [--receipt <p>] / attest / anchor [--upload] / controls [--format md|json] / incident
 
 ■ 서명 / 승인(로컬·ed25519):
   keys init / sign --receipt <p> / verify-signature --receipt <p> / approve --receipt <p> [--note <t>] / approvals
@@ -242,6 +243,8 @@ function main(): void {
     runLedger(hasFlag("--json"));
   }
   if (command === "replay" || command === "verify-pack") {
+    // --receipt=Verification Receipt 재검증(무결성·재현성) / --pack=audit-pack 재검증.
+    if (getArg("--receipt")) runReplayReceipt(getArg("--receipt"));
     runReplay(getArg("--pack"));
   }
   if (command === "attest") {
