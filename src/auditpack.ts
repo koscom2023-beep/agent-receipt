@@ -12,6 +12,7 @@ import {
   approvalsCountFor,
 } from "./receiptStore.js";
 import { redactText, redactJsonText } from "./redact.js";
+import { diffClaimField } from "./claimdiff.js";
 import { appendLedger, ledgerEntryFromReceipt, LEDGER_REL } from "./ledger.js";
 import { LIMIT_NOTE } from "./disclosure.js";
 
@@ -22,16 +23,8 @@ export function claimVerify(claimRaw: unknown, touched: string[], untracked: str
   ok: boolean;
   fields: Array<{ field: string; hidden: string[]; extra: string[]; ok: boolean }>;
 } {
-  const clean = (p: string): string => p.replace(/^\.\//, "");
-  const set = (a: unknown): Set<string> =>
-    new Set(Array.isArray(a) ? a.filter((x): x is string => typeof x === "string").map(clean) : []);
-  const cmp = (field: string, ai: unknown, git: string[]) => {
-    const a = set(ai);
-    const g = new Set(git.map(clean));
-    const hidden = [...g].filter((x) => !a.has(x)).sort();
-    const extra = [...a].filter((x) => !g.has(x)).sort();
-    return { field, hidden, extra, ok: hidden.length === 0 && extra.length === 0 };
-  };
+  // 대조는 claimdiff.ts SSOT(백슬래시 정규화 포함). 이전엔 여기 clean 이 백슬래시를 안 고쳐 Windows claim 거짓 불일치가 있었음(D3 통합으로 해소).
+  const cmp = (field: string, ai: unknown, git: string[]) => ({ field, ...diffClaimField(ai, git) });
   const c = (claimRaw && typeof claimRaw === "object" ? claimRaw : {}) as Record<string, unknown>;
   const fields: Array<{ field: string; hidden: string[]; extra: string[]; ok: boolean }> = [];
   if (c["changedFiles"] !== undefined) fields.push(cmp("changedFiles", c["changedFiles"], touched));

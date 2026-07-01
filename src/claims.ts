@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import type { Contract } from "./schema.js";
 import { runVerify, runCheck } from "./checks.js";
+import { claimPathSet, diffClaimField } from "./claimdiff.js";
 
 const line = "─".repeat(56);
 
@@ -30,15 +31,7 @@ function printSelfReportBlock(label: string, obj: unknown): void {
   console.log("  → unverified by git · advisory only · PASS/FAIL 근거 아님");
 }
 
-const cleanPath = (p: string): string => p.replace(/^\.\//, "").replace(/\\/g, "/"); // 3R: 구분자 통일(Windows backslash claim ↔ git forward-slash 거짓 불일치 방지)
-function asSet(arr: unknown): Set<string> {
-  return new Set(
-    Array.isArray(arr) ? arr.filter((x): x is string => typeof x === "string").map(cleanPath) : [],
-  );
-}
-function only(a: Set<string>, b: Set<string>): string[] {
-  return [...a].filter((x) => !b.has(x)).sort();
-}
+// 경로 정규화·집합·대조는 claimdiff.ts SSOT(백슬래시 통일 포함)를 쓴다. 여기선 표시 포맷만.
 function fmt(s: Set<string>): string {
   return s.size ? [...s].sort().join(", ") : "(none)";
 }
@@ -92,11 +85,9 @@ export function runClaims(contract: Contract, fileArg: string | undefined): neve
     hiddenMsg: string,
     extraMsg: string,
   ): void => {
-    const ai = asSet(aiRaw);
-    const git = asSet(gitArr);
-    const hidden = only(git, ai); // git 에 있는데 AI 가 주장 안 함
-    const extra = only(ai, git); // AI 주장했는데 git 에 없음
-    const ok = hidden.length === 0 && extra.length === 0;
+    const ai = claimPathSet(aiRaw);
+    const git = claimPathSet(gitArr);
+    const { hidden, extra, ok } = diffClaimField(aiRaw, gitArr); // SSOT 대조(claimdiff.ts)
     if (!ok) mismatches++;
     console.log(`${label}:`);
     console.log(`  AI said : ${fmt(ai)}`);

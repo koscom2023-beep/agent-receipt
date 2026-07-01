@@ -25,6 +25,29 @@ It is local-first by design:
 
 ---
 
+## The model — six objects, not fifty commands
+
+Under the ~50 commands there is **one pipeline over six objects.** The commands are just verbs that produce or transform them:
+
+```
+AI Session ─▶ Evidence ─▶ Verification ─▶ Verified Receipt ─▶ Ledger ─▶ Audit ─▶ Publication
+  begin        capture       verify           receipt           ledger    risk      share-proof
+  start        claims        check            done                        controls  anchor
+               git diff      reconcile                                     insights  export
+```
+
+- **Session** — one unit of AI work (`begin` / `start`).
+- **Evidence** — what happened: the agent's *claim*, the *git diff*, and beyond-git actions (`capture`).
+- **Verification** — is it true? `verify` + `check`, and reconcile the claim against git.
+- **Verified Receipt** — the sealed fact + integrity hash (`receipt` / `done`). Closer to a verified **voucher** than a paper receipt.
+- **Ledger** — append-only, hash-chained trail (`ledger`).
+- **Audit** — read-only judgment: `risk` · `controls` · `insights`.
+- **Publication** — how a fact leaves your machine: `share-proof` · `anchor`.
+
+Full mapping to the actual code: [`docs/EVIDENCE_MODEL.md`](docs/EVIDENCE_MODEL.md).
+
+---
+
 ## AI work audit protocol
 
 Beyond a single receipt, agent-receipt closes the evidence loop with a short, git-native audit flow:

@@ -263,6 +263,12 @@ export function loadCapturedActions(gitChangedPaths: Set<string> = new Set()): A
   if (records.length === 0) return null;
   return aggregateActions(records, gitChangedPaths);
 }
+// D4: git 변경 ↔ capture 기록 대사(reconcileCapture)를 Receipt 동결용으로 로드. 기록 없으면 null(=capture 미사용).
+export function loadReconciliation(gitChanged: Set<string> = new Set()): ReconResult | null {
+  const records = readRecords();
+  if (records.length === 0) return null;
+  return reconcileCapture(records, gitChanged);
+}
 function safeList(fn: () => string[]): string[] {
   try {
     return fn();

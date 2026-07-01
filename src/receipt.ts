@@ -11,7 +11,7 @@ import { captureEnvironment, type Environment } from "./environment.js";
 import { loadPolicySafe, policyObservations, policyPath, type PolicyObs } from "./policy.js";
 import { redactText, redactJsonText } from "./redact.js";
 import { LIMIT_NOTE } from "./disclosure.js";
-import { loadCapturedActions, splitActionsForDisplay, type CaptureAction, type ActionsResult } from "./capture.js";
+import { loadCapturedActions, loadReconciliation, splitActionsForDisplay, type CaptureAction, type ActionsResult, type ReconResult } from "./capture.js";
 
 // receipt JSON 스키마 버전(downstream/CI 가 안전하게 의존). additive only. verify --json 14키와 무관.
 export const RECEIPT_SCHEMA_VERSION = "1.0";
@@ -42,6 +42,7 @@ export interface Receipt {
   contentHashes?: Array<{ path: string; sha256: string | null; bytes: number }>; // --content 일 때만: touched 파일 sha256(내용 저장 안 함). 있을 때만 contentHash 입력에 포함.
   actions?: CaptureAction[]; // capture(git 너머 행위) — capture.jsonl 있을 때만. contentHash 입력엔 미포함(metadata·additive). 없으면 키 부재 → 기존 출력 바이트동일.
   actionsSummary?: ActionsResult["actionsSummary"]; // 행위 요약(gitVisible 대비). 〃(해시 제외)
+  reconciliation?: ReconResult; // D4: git 변경 ↔ capture 대사(matched/미설명 residuals). capture 있을 때만. receiptHash 입력 제외(metadata·additive) → 없으면 키 부재·기존 바이트동일.
   contentHash: string; // sha256 무결성 해시(timestamp/environment/schemaVersion/actions 제외 — 아래 receiptHash 입력 참고)
 }
 
@@ -155,8 +156,12 @@ export function buildReceipt(contract: Contract, contractPath?: string, opts: Bu
     // capture(git 너머 행위) — capture.jsonl 레코드 있을 때만. gitVisible = receipt 의 touched∪staged∪untracked 재사용.
     // receiptHash 입력엔 미포함(metadata) → capture 안 쓰면 키 부재·contentHash 불변(기존 사용자 바이트동일).
     ...(() => {
-      const ca = loadCapturedActions(new Set([...v.touched, ...v.staged, ...v.untracked]));
-      return ca ? { actions: ca.actions, actionsSummary: ca.actionsSummary } : {};
+      const git = new Set([...v.touched, ...v.staged, ...v.untracked]);
+      const ca = loadCapturedActions(git);
+      if (!ca) return {};
+      // D4: capture 있으면 대사도 동결(actions 와 동일 패턴·receiptHash 입력 제외).
+      const recon = loadReconciliation(git);
+      return { actions: ca.actions, actionsSummary: ca.actionsSummary, ...(recon ? { reconciliation: recon } : {}) };
     })(),
     contentHash: "",
   };
@@ -240,6 +245,14 @@ export function toReceiptMd(r: Receipt): string {
     if (mutedCount) L.push(`- · 그 외 일반 read/command ${mutedCount}건 (기록됨)`);
     if (s) L.push(`- git 가 보는 것: ${s.gitVisible}  ⟷  주목 행위: ${notable.length} (전체 기록 ${s.total})`);
     L.push("> capture 범위 = 마지막 `capture reset` 이후 누적(수동). 값 미저장 — 경로/호스트/분류만.");
+    L.push("");
+  }
+  if (r.reconciliation && r.reconciliation.residuals.length) {
+    const rc = r.reconciliation;
+    L.push(`## Reconciliation (git 변경 ↔ capture 대사 — 일치 ${rc.matched}, 잔차 ${rc.residuals.length})`);
+    for (const res of rc.residuals) L.push(`- ${res.reason === "unexplained" ? "⚠️ 미설명(capture 못 봄)" : "· 읽기/삭제만 관측"}: \`${res.path}\``);
+    if (rc.capturedNotInGit) L.push(`- capture write 인데 git 효과 없음: ${rc.capturedNotInGit}건(생성후삭제/임시 등)`);
+    L.push("> 대사는 자동 cleared 하지 않음 — 미설명 잔차는 갭으로 남깁니다(거짓 안심 차단).");
     L.push("");
   }
   L.push("## Integrity");
