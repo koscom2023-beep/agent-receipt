@@ -119,11 +119,53 @@ export function runGraphQuery(dirArg: string | undefined, f: GraphFilters, forma
 
 // ── 정적 HTML 뷰어 (share-proof 패턴·서버 0) ──
 // 각 receipt 를 replay 로 무결성 계산해 임베드 → 브라우저에서 필터·drill-down("왜 통과/실패").
+
+// Suggested Fix = 어떤 결정론 check 가 실패했는지의 *고정 매핑*(린터식 mechanical hint·LLM 추천 아님·표시만).
+const FIX_MAP: Record<string, string> = {
+  citation: "인용문을 출처에 추가하거나 출처 텍스트를 확인",
+  number: "수치를 출처/재계산과 맞추거나 피연산자를 확인",
+  date: "날짜를 출처와 맞추거나 표기를 확인",
+  hash: "content 를 다시 해시하거나 statedHash 를 갱신",
+  signature: "서명을 재생성하거나 공개키를 확인",
+  link: "URL 형식을 확인",
+};
+const FAILED = new Set(["not-found", "mismatch", "invalid"]);
+
+interface EnrichedClaim {
+  statement: string;
+  verdict: string;
+  checks: Record<string, string | null>;
+  failedChecks: string[];
+  suggestedFixes: string[];
+}
+function enrichClaims(results: unknown): EnrichedClaim[] {
+  if (!Array.isArray(results)) return [];
+  return results.map((c) => {
+    const o = (c && typeof c === "object" ? c : {}) as Record<string, unknown>;
+    const checks = (o.checks && typeof o.checks === "object" ? o.checks : {}) as Record<string, string | null>;
+    const failedChecks: string[] = [];
+    const suggestedFixes: string[] = [];
+    for (const [kind, st] of Object.entries(checks)) {
+      if (typeof st === "string" && FAILED.has(st)) {
+        failedChecks.push(kind);
+        if (FIX_MAP[kind]) suggestedFixes.push(FIX_MAP[kind]);
+      }
+    }
+    return {
+      statement: typeof o.statement === "string" ? o.statement : "",
+      verdict: typeof o.verdict === "string" ? o.verdict : "",
+      checks,
+      failedChecks,
+      suggestedFixes,
+    };
+  });
+}
+
 interface ViewRow {
   receiptId: string; subject: string; verdict: string; surface: string;
   model: string | null; commit: string | null; inputSha: string | null;
   integrity: { contentHashOk: boolean; receiptIdOk: boolean; inputMatch: boolean | null; commitRecheck: boolean | null };
-  claims: unknown;
+  claims: EnrichedClaim[];
 }
 
 export function buildViewData(dir: string): ViewRow[] {
@@ -160,7 +202,7 @@ export function buildViewData(dir: string): ViewRow[] {
         commit: typeof prov.commit === "string" ? prov.commit : null,
         inputSha: typeof inp?.sha256 === "string" ? inp.sha256 : null,
         integrity,
-        claims: r.results ?? [],
+        claims: enrichClaims(r.results),
       });
     } catch {
       /* skip */
@@ -212,17 +254,34 @@ h+='<div class="mut">receiptId <code>'+(d.receiptId||'')+'</code></div></div>';
 (d.claims||[]).forEach((c,i)=>{const ch=c.checks||{};const v=c.verdict;
 h+='<div class="card"><div><b>Claim #'+(i+1)+'</b> — '+((c.statement||'')).slice(0,60)+'</div><div class="chk">';
 ['citation','number','date','hash','signature','link'].forEach(k=>{if(ch[k]!=null){h+='<span class="k">'+k+'</span>'+status(ch[k])}});
-h+='</div><div>→ <b class="'+(v==='failed'?'fail':v==='verified'?'pass':'mut')+'">'+(v||'').toUpperCase()+'</b></div></div>'});
+h+='</div><div>→ <b class="'+(v==='failed'?'fail':v==='verified'?'pass':'mut')+'">'+(v||'').toUpperCase()+'</b></div>';
+if((c.failedChecks||[]).length){h+='<div style="margin-top:6px">Reason: <span class="fail">'+c.failedChecks.join(', ')+'</span></div>';
+h+='<div class="mut">Suggested Fix (mechanical hint · 표시만):<ul style="margin:4px 0 0 0">'+(c.suggestedFixes||[]).map(x=>'<li>'+x+'</li>').join('')+'</ul></div>'}
+h+='</div>'});
 el('detail').innerHTML=h}
 function apply(){const c=el('fc').value.trim(),i=el('fi').value.trim(),m=el('fm').value.trim();
 render(DATA.filter(d=>(!c||(d.commit||'').startsWith(c))&&(!i||(d.inputSha||'').startsWith(i))&&(!m||(d.model||'')===m)))}
 ['fc','fi','fm'].forEach(id=>el(id).addEventListener('input',apply));render(DATA);</script></body></html>`;
 }
 
-/** `agent-receipt graph view --dir <d> [--out <html>]` — 자체완결 정적 HTML 뷰어(서버 0). */
-export function runGraphView(dirArg: string | undefined, outArg: string | undefined): never {
+/**
+ * `agent-receipt graph view --dir <d> [--out <html>] [--format json]`
+ *  기본: 자체완결 정적 HTML 뷰어(서버 0). --format json: rich JSON(무결성+per-claim+failedChecks+suggestedFixes) = 소비자 API.
+ */
+export function runGraphView(dirArg: string | undefined, outArg: string | undefined, format?: string): never {
   const dir = resolveDir(dirArg);
   const data = buildViewData(dir);
+  if (format === "json") {
+    const out = JSON.stringify({ dir, count: data.length, receipts: data }, null, 2);
+    if (outArg) {
+      const outP = isAbsolute(outArg) ? outArg : join(process.cwd(), outArg);
+      writeFileSync(outP, out + "\n");
+      console.log(`Evidence Graph JSON: ${outArg}  (${data.length}건 · 소비자 API · 무결성+per-claim+suggestedFixes)`);
+    } else {
+      console.log(out);
+    }
+    process.exit(0);
+  }
   const html = buildGraphHtml(data);
   if (outArg) {
     const outP = isAbsolute(outArg) ? outArg : join(process.cwd(), outArg);

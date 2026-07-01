@@ -46,6 +46,15 @@ check("buildGraphHtml: 외부 리소스/서버 없음(자체완결)", () => {
   const html = buildGraphHtml([]);
   assert.ok(!html.includes("<script src") && !html.includes("<link "));
 });
+check("Evidence Browser: 실패 check → failedChecks + suggestedFixes(고정 매핑)", () => {
+  const d2 = mkdtempSync(join(tmpdir(), "argraph2-"));
+  writeFileSync(join(d2, "r.json"), JSON.stringify({ kind: "verification-receipt", receiptId: "idE", subject: "E", verdict: "fail", surface: "research", input: { sha256: "s" }, results: [{ statement: "S", verdict: "failed", checks: { citation: "not-found", number: "verified", hash: "mismatch" } }] }));
+  const v = buildViewData(d2);
+  const cl = v[0].claims[0];
+  assert.deepEqual([...cl.failedChecks].sort(), ["citation", "hash"]);
+  assert.equal(cl.suggestedFixes.length, 2);
+  rmSync(d2, { recursive: true, force: true });
+});
 
 // ── L7 SDK 배럴: 외부 import 가능 ──
 check("SDK: evaluateClaim import 동작", () => {

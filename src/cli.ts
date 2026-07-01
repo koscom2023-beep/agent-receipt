@@ -143,7 +143,7 @@ agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
 
 ■ Evidence Graph(쌓인 Verification Receipt 활용 — 읽기전용·중립):
   graph query --dir <d> [--commit|--input|--model|--receipt-id] [--format json]   receipt 필터 + pass/fail 중립 카운트(--format json=UI/기계용)
-  graph view --dir <d> [--out <html>]   자체완결 정적 HTML 뷰어(서버 0·share-proof 패턴): 필터 + 무결성·per-claim per-check drill-down(왜 통과/실패)
+  graph view --dir <d> [--out <html>] [--format json]   HTML=자체완결 정적 뷰어(Evidence Browser: 무결성·per-check·Reason·Suggested Fix) / json=rich 소비자 API(무결성+per-claim+failedChecks+suggestedFixes)
 
 ■ 증빙 / 감사 묶음(git 증거):
   report [--type developer|client|audit] / receipt [--format ...] [--content] [--strict-redact] [--committed] [--agent <n>] [--model <m>] / receipts [--latest|--cat|--dir]
@@ -287,7 +287,7 @@ function main(): void {
     // Evidence Graph — 쌓인 Verification Receipt 조회(query·읽기전용) / 정적 HTML 뷰어(view·서버 0).
     const filt = { commit: getArg("--commit"), input: getArg("--input"), model: getArg("--model"), receiptId: getArg("--receipt-id") };
     if (process.argv[3] === "query") runGraphQuery(getArg("--dir"), filt, getArg("--format"));
-    if (process.argv[3] === "view") runGraphView(getArg("--dir"), getArg("--out"));
+    if (process.argv[3] === "view") runGraphView(getArg("--dir"), getArg("--out"), getArg("--format"));
     console.error("graph: 사용법 — graph query [--format json] · graph view --out <html>  (--dir <d> [--commit|--input|--model|--receipt-id])");
     process.exit(2);
   }

@@ -56,7 +56,7 @@ This keeps agent-receipt **neutral**: it observes and verifies; it never decides
 
 ## What is NOT built here (consumer plane or deferred)
 
-Execution/orchestration, Cost **selection** (model picking), Scheduler, Governance enforcement, Capability/Resource registries, Simulation/Digital-Twin, and most KPIs are **consumer concerns or judgments** — they belong to the agent/engine that runs work (Promptia, Claude Code, Cursor, …), not to the neutral core. Execution is a **role**, not one app: agent-receipt observes whichever engine executes.
+Execution/orchestration, Cost **selection** (model picking), Scheduler, Governance enforcement, Capability/Resource registries, Simulation/Digital-Twin, and most KPIs are **consumer concerns or judgments** — they belong to the agent/engine that runs work (Claude Code, Cursor, or any generation engine), not to the neutral core. Execution is a **role**, not one app: agent-receipt observes whichever engine executes.
 
 **Intelligence is always-on; Analytics is later.** They are different. *Intelligence* = neutral pattern observation available from the first receipt (e.g. `insights` already flags a command that fails repeatedly — recurrence, no prediction, no judgment). That is a check and stays in the core, gated only by `SMALL_N`. *Analytics* = dashboards / charts / rich statistics — a later, heavier consumer surface. The rule/lesson **generated** from a pattern ("so add a check next time") is judgment → consumer. So: observe patterns always (neutral); build dashboards later; never let the core generate the rule.
 
@@ -64,13 +64,13 @@ KPI = ledger projections (`insights` category), frozen behind real data + `SMALL
 
 Cost **accounting** (record per-task cost) can be core-shaped but is **tier-C** (git can't verify cost) — must be labeled attested, never laundered into the hash-chain as a verified fact.
 
-Promptia stays a **separate** product (a consumer), not merged.
+The neutral core is **never merged** into a generation engine or consumer app — those stay separate products. agent-receipt is engine-agnostic; it is not tied to any one consumer.
 
 ## Dev order (the loop, closed early — not a big-bang)
 
 1. agent-receipt = the verification substrate (near-complete).
 2. `research` + `council` as subcommands → one verifiable AI-work loop.
-3. Promptia as first dogfood consumer → real usage data.
+3. A dogfood consumer → real usage data. (Which app the owner wires for dogfood is incidental; it is not part of agent-receipt's identity, which stays neutral and engine-agnostic.)
 4. Later, gated by real data + a labeling loop: analytics/KPI, cost accounting.
 5. Everything speculative (Org/Capability/Resource/Scheduler/Simulation): added only when real usage demands it. **OS is a result, not a goal.**
 
@@ -81,4 +81,4 @@ Promptia stays a **separate** product (a consumer), not merged.
 ## Honest limits
 
 - **Determinism is necessary, not sufficient.** A substring/hash/diff/recompute check is implementable by anyone in time. The durable value is not any single check — it is the **loop** (Evidence → Decision → Execution → Receipt → learning) plus two things a vertically-integrated model vendor structurally cannot offer: **audit independence** (they verify their own model's output — self-audit) and **model-agnostic** coverage (we verify any vendor's agent). Lead with those, not with "deterministic" or "local" alone.
-- **The real test is the market, not the code.** Do teams pay to solve this? Do regulated / multi-vendor orgs adopt an independent verification layer? Does a first user beyond Promptia choose it freely? Until a real customer says yes, the architecture is sound but unproven.
+- **The real test is the market, not the code.** Do teams pay to solve this? Do regulated / multi-vendor orgs adopt an independent verification layer? Does a first user beyond the owner's own dogfood choose it freely? Until a real customer says yes, the architecture is sound but unproven.
