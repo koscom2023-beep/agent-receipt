@@ -1,9 +1,12 @@
 import { readFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
-import { normalizeForCitation, verifyCitationInText, citationStatus, type CitationStatus } from "./evidencekernel.js";
+import {
+  normalizeForCitation, verifyCitationInText, citationStatus, type CitationStatus,
+  numberStatus, type NumberStatus,
+} from "./evidencekernel.js";
 
-// 인용 검증 커널은 공유 Evidence Kernel(evidencekernel.ts)로 이동했다(피드백: research·council 이 같은 코어 재사용).
-// 여기선 그 커널을 파일 IO(출처 스냅샷 읽기)와 CLI 출력에 엮는 surface 만 담당한다.
+// 인용/수치 검증 커널은 공유 Evidence Kernel(evidencekernel.ts)에 있다(research·council 이 같은 코어 재사용).
+// 여기선 그 커널을 파일 IO(출처 스냅샷)·라이브 fetch·CLI 출력에 엮는 surface 만 담당한다.
 // 하위호환: 커널 함수를 재export(기존 test/외부 소비 불변).
 export { normalizeForCitation, verifyCitationInText, citationStatus };
 export type { CitationStatus };
@@ -21,10 +24,15 @@ const line = "─".repeat(56);
 interface ResearchClaim {
   id?: unknown;
   statement?: unknown; // 주장(표시용)
-  sourceUrl?: unknown; // 출처 URL — provenance 라벨(표시용·검증은 텍스트로)
+  sourceUrl?: unknown; // 출처 URL — provenance 라벨 · --fetch 시 라이브 대조 대상
   quotedText?: unknown; // 주장이 기대는 원문 인용(검증 대상)
   sourceText?: unknown; // 인라인 출처 스냅샷
   sourceFile?: unknown; // 또는 로컬 출처 스냅샷 파일 경로
+  // 수치 검증(선택) — Claude Science 벤치마크 차용. statedValue 있으면 수치 커널로 대조.
+  statedValue?: unknown; // 주장이 명시한 수(모드A: 출처에 실재 / 모드B: op+operands 재계산과 상등)
+  op?: unknown; // 재계산 연산(sum|mean|product|diff|ratio|percent|min|max)
+  operands?: unknown; // 재계산 피연산자(report 가 줌·발명 0)
+  eps?: unknown; // 허용오차(기본 1e-9)
 }
 interface ResearchReport {
   schemaVersion?: unknown;
@@ -52,14 +60,61 @@ export function checkClaimCitation(claim: ResearchClaim): CitationStatus {
   return citationStatus(quote, resolveSource(claim));
 }
 
+// HTML → 텍스트(라이브 fetch 대조용). script/style 제거·태그 제거·기본 엔티티 디코드(공백 정규화는 커널이).
+export function stripHtml(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'");
+}
+
+// 라이브 출처 fetch(--fetch) — 네트워크. 실패/비200/타임아웃 → null(unreachable=링크로트).
+// tsc lib 의존을 피하려 globalThis 로 fetch/AbortController 접근(런타임 Node18+ 보장).
+async function fetchSource(url: string, timeoutMs = 12000): Promise<string | null> {
+  const g = globalThis as {
+    fetch?: (u: string, o?: unknown) => Promise<{ ok: boolean; text: () => Promise<string> }>;
+    AbortController?: new () => { signal: unknown; abort: () => void };
+  };
+  if (typeof g.fetch !== "function") return null;
+  try {
+    const ctl = g.AbortController ? new g.AbortController() : null;
+    const t = ctl ? setTimeout(() => ctl.abort(), timeoutMs) : null;
+    const res = await g.fetch(url, ctl ? { signal: ctl.signal, redirect: "follow" } : { redirect: "follow" });
+    if (t) clearTimeout(t);
+    if (!res.ok) return null;
+    return stripHtml(await res.text());
+  } catch {
+    return null;
+  }
+}
+
+// claim 의 stated 수치 파싱(number 또는 숫자 문자열). 아니면 null.
+function statedNumber(claim: ResearchClaim): number | null {
+  if (typeof claim.statedValue === "number" && Number.isFinite(claim.statedValue)) return claim.statedValue;
+  if (typeof claim.statedValue === "string") {
+    const n = Number(claim.statedValue.replace(/,/g, ""));
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
 /**
- * `agent-receipt research verify --file <report.json>` — ResearchReport 의 각 인용을 출처와 결정론 대조.
+ * `agent-receipt research verify --file <report.json> [--fetch]` — 각 주장의 인용·수치를 출처와 결정론 대조.
  *  - 파일 없음/파싱 실패 → exit 2
- *  - 날조 인용(출처에 없음) 1건+ → exit 1
- *  - 전부 검증(또는 대조할 인용 없음) → exit 0
- *  no-source(검증할 출처 없음)는 advisory — 실패로 세지 않되 표시(claims 의 self-report 취급과 동형).
+ *  - 날조 인용(not-found) 또는 수치 불일치(mismatch) 1건+ → exit 1
+ *  - 전부 통과(또는 대조할 것 없음) → exit 0
+ *  --fetch: sourceUrl 을 라이브 재-fetch 해 그 텍스트로 대조(독립 출처·네트워크). 실패 시 unreachable.
  */
-export function runResearchVerify(fileArg: string | undefined): never {
+export async function runResearchVerify(
+  fileArg: string | undefined,
+  opts: { fetch?: boolean } = {},
+): Promise<never> {
   if (!fileArg) {
     console.error("research verify: --file <path> 가 필요합니다 (ResearchReport JSON).");
     process.exit(2);
@@ -88,42 +143,70 @@ export function runResearchVerify(fileArg: string | undefined): never {
 
   console.log("");
   console.log(line);
-  console.log(`research 인용검증: ${typeof report.query === "string" ? report.query : "(query 없음)"}  (인용 vs 출처 · 결정론)`);
+  const mode = opts.fetch ? "인용/수치 vs 라이브 출처 · 결정론 · ⚠ 네트워크" : "인용/수치 vs 출처 · 결정론";
+  console.log(`research 검증: ${typeof report.query === "string" ? report.query : "(query 없음)"}  (${mode})`);
   console.log(line);
 
-  let verified = 0;
-  let notFound = 0;
-  let noSource = 0;
-  claims.forEach((claim, i) => {
-    const status = checkClaimCitation(claim);
+  let failed = 0; // not-found 인용 or mismatch 수치
+  let ok = 0; // 검증 통과(인용/수치 중 하나 이상 verified·fail 없음)
+  let advisory = 0; // 검증할 근거 없음
+  let unreachable = 0; // --fetch 시 출처 도달 실패
+
+  for (let i = 0; i < claims.length; i++) {
+    const claim = claims[i] as ResearchClaim;
     const stmt = typeof claim.statement === "string" ? claim.statement : "(statement 없음)";
-    const url = typeof claim.sourceUrl === "string" ? claim.sourceUrl : "(출처 URL 없음)";
+    const url = typeof claim.sourceUrl === "string" ? claim.sourceUrl : "";
     const quote = typeof claim.quotedText === "string" ? claim.quotedText : "";
-    console.log(`[${i + 1}] ${stmt}`);
-    console.log(`    출처 : ${url}`);
-    console.log(`    인용 : ${quote.length > 80 ? quote.slice(0, 77) + "..." : quote}`);
-    if (status === "verified") {
-      verified++;
-      console.log("    ✓ verified — 인용문이 출처에 실재");
-    } else if (status === "not-found") {
-      notFound++;
-      console.log("    ✗ not-found — 인용문이 출처에 없음(날조 가능)");
+
+    // 출처 해석: --fetch 면 라이브, 아니면 offline 스냅샷/인라인.
+    let source: string | null;
+    let fetchNote = "";
+    if (opts.fetch && url) {
+      source = await fetchSource(url);
+      if (source === null) {
+        unreachable++;
+        fetchNote = " (⚠ unreachable — 링크로트/차단)";
+      }
     } else {
-      noSource++;
-      console.log("    · no-source — 검증할 출처 없음(advisory·미검증)");
+      source = resolveSource(claim);
     }
-  });
-  if (claims.length === 0) console.log("(검증할 인용 없음)");
+
+    const cite: CitationStatus | null = quote ? citationStatus(quote, source) : null;
+    const stated = statedNumber(claim);
+    const num: NumberStatus | null =
+      stated !== null
+        ? numberStatus(stated, { source, op: claim.op, operands: Array.isArray(claim.operands) ? (claim.operands as number[]) : undefined, eps: typeof claim.eps === "number" ? claim.eps : undefined })
+        : null;
+
+    const claimFailed = cite === "not-found" || num === "mismatch";
+    const claimVerified = (cite === "verified" || num === "verified") && !claimFailed;
+    if (claimFailed) failed++;
+    else if (claimVerified) ok++;
+    else advisory++;
+
+    console.log(`[${i + 1}] ${stmt}`);
+    if (url) console.log(`    출처 : ${url}${fetchNote}`);
+    if (quote) console.log(`    인용 : ${quote.length > 72 ? quote.slice(0, 69) + "..." : quote}  → ${cite}`);
+    if (stated !== null) console.log(`    수치 : ${stated}${claim.op ? ` (재계산 ${String(claim.op)})` : ""}  → ${num}`);
+    console.log(
+      claimFailed
+        ? "    ✗ FAIL — 근거가 출처와 불일치(날조/수치오류)"
+        : claimVerified
+          ? "    ✓ verified — 근거가 출처와 정합"
+          : "    · advisory — 검증할 근거 없음(미검증)",
+    );
+  }
+  if (claims.length === 0) console.log("(검증할 주장 없음)");
 
   console.log(line);
-  console.log(`결과: verified ${verified} · not-found ${notFound} · no-source ${noSource}`);
+  console.log(`결과: verified ${ok} · FAIL ${failed} · advisory ${advisory}${opts.fetch ? ` · unreachable ${unreachable}` : ""}`);
   console.log(
-    notFound
-      ? `  ❌ 날조 인용 ${notFound}건 — 이 인용문들은 출처에 없음`
-      : "  ✅ 검증된 인용은 전부 출처에 실재 (no-source 는 미검증)",
+    failed
+      ? `  ❌ 불일치 ${failed}건 — 인용이 출처에 없거나 수치가 재계산/출처와 다름`
+      : "  ✅ 불일치 없음 (advisory 는 근거 미제출·미검증)",
   );
-  console.log("  보증 범위: 인용 충실성(인용문이 출처에 있나)이지 진위(주장이 옳나) 아님. 라이브 URL 재-fetch = v2.");
+  console.log("  보증 범위: 근거가 출처/재계산과 정합하나(충실성)이지 진위(주장이 옳나) 아님." + (opts.fetch ? "" : " 라이브 대조=--fetch."));
   console.log(line);
   console.log("");
-  process.exit(notFound ? 1 : 0);
+  process.exit(failed ? 1 : 0);
 }

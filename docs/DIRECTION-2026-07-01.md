@@ -1,6 +1,14 @@
 # Direction — the verifiable AI-work loop (2026-07-01)
 
-A durable decision record from four design councils. Captures **what was decided and why**, not the blow-by-blow. This is the north star for what agent-receipt grows into.
+A durable decision record from the design councils. Captures **what was decided and why**, not the blow-by-blow. This is the north star for what agent-receipt grows into.
+
+## Identity: AI Audit Infrastructure
+
+agent-receipt is not an AI agent framework, orchestrator, or assistant. Its identity is **AI Audit Infrastructure** — the independent layer that makes AI work *trustworthy*, not *smarter*. The product center is **Evidence** (Evidence → Verification → Replay → Audit as a system), of which the Receipt is one artifact.
+
+Five phases (current work in **bold**): **P1 Receipt/Replay/Ledger/Research-verify/Council** → **P3 Deterministic Verification Engine** (citation ✓ · number/calculation ✓ · date/link/document next) → P2 Evidence Graph (claims → sources → DAG) → P4 AI Audit SDK (any agent emits receipts) → P5 AI Audit Platform (enterprise / auditor / regulator share one receipt).
+
+**Honest "why us" (investment-scrutiny, not a yes-council).** The independence argument — a vendor auditing its own model's output is self-audit, invalid in accounting — answers *why not OpenAI/Anthropic*, **not** *why us*: an independent audit firm, another startup, or an open standard could also be independent. Our defensible "why us" is narrower and must be earned: (a) the **breadth + depth of the deterministic kernel** (citation, number, calculation, date, link, document — git-native, model-agnostic, no-cloud — a library that takes time and range to match), (b) first-mover on the artifact, (c) **a first real user**. The moat is also *contingent* on regulation or strong multi-vendor distrust, neither proven to pay today. So the work is: widen the kernel (P3) and get the first user — the code does not prove this; the market does.
 
 ## The one product (not a kit of packages)
 

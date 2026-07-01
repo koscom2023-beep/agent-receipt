@@ -1,7 +1,7 @@
 // research 인용검증 커널 — quotedText 가 출처의 리터럴 부분문자열인지 결정론 대조(비-LLM).
 // `node test/research-verify.test.mjs`.
 import assert from "node:assert/strict";
-import { verifyCitationInText, normalizeForCitation, checkClaimCitation } from "../dist/research.js";
+import { verifyCitationInText, normalizeForCitation, checkClaimCitation, stripHtml } from "../dist/research.js";
 
 let pass = 0;
 const fail = [];
@@ -34,6 +34,15 @@ check("status no-source: 인용 없음", () =>
   assert.equal(checkClaimCitation({ sourceText: "some source" }), "no-source"));
 check("status no-source: 못 읽는 sourceFile", () =>
   assert.equal(checkClaimCitation({ quotedText: "x", sourceFile: "/no/such/file/xyz-987.txt" }), "no-source"));
+
+// ── stripHtml (--fetch 라이브 대조용 HTML→텍스트) ──
+check("stripHtml: 태그 제거", () => assert.ok(!stripHtml("<p>hello <b>world</b></p>").includes("<")));
+check("stripHtml: 인용문 텍스트 보존", () => {
+  const t = stripHtml("<div><p>the sky is blue</p></div>");
+  assert.equal(verifyCitationInText("the sky is blue", t), true);
+});
+check("stripHtml: script 블록 제거", () => assert.ok(!stripHtml("<script>var x='the sky is blue'</script><p>hi</p>").includes("var x")));
+check("stripHtml: 엔티티 디코드", () => assert.ok(stripHtml("a &amp; b &lt;c&gt;").includes("a & b <c>")));
 
 if (fail.length) { console.error(`research-verify: ${pass} pass, ${fail.length} FAIL`); for (const f of fail) console.error("  ✗ " + f); process.exit(1); }
 console.log(`research-verify: ${pass} pass ✅`);

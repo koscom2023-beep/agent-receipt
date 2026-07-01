@@ -30,3 +30,67 @@ export function citationStatus(quote: string, source: string | null): CitationSt
   if (source === null || normalizeForCitation(quote) === "") return "no-source";
   return verifyCitationInText(quote, source) ? "verified" : "not-found";
 }
+
+// ── 수치 검증 커널 (Claude Science 벤치마크 차용 · Phase3) ──
+// 리뷰어가 "인용 + 계산식·수치"를 검토하듯, 인용 커널의 형제로 수치를 모델 밖 산술로 대조한다.
+// 보증 범위(정직·좁게): "수치가 출처/자기 피연산자와 정합하나"이지 "그 수치가 옳으냐"가 아니다.
+
+export type NumberStatus = "verified" | "mismatch" | "no-basis";
+
+// 텍스트에서 숫자 토큰 추출(천단위 콤마 제거·소수·음수). 퍼센트/단위 기호는 무시하고 수만 뽑음.
+export function parseNumbersFromText(text: string): number[] {
+  const out: number[] = [];
+  const re = /-?\d[\d,]*(?:\.\d+)?/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    const n = Number(m[0].replace(/,/g, ""));
+    if (Number.isFinite(n)) out.push(n);
+  }
+  return out;
+}
+
+export function numbersClose(a: number, b: number, eps: number): boolean {
+  return Math.abs(a - b) <= eps;
+}
+
+const NUMBER_OPS = ["sum", "mean", "product", "diff", "ratio", "percent", "min", "max"] as const;
+export type NumberOp = (typeof NUMBER_OPS)[number];
+export function isNumberOp(s: unknown): s is NumberOp {
+  return typeof s === "string" && (NUMBER_OPS as readonly string[]).includes(s);
+}
+
+// 결정론 재계산. 알 수 없는 op / 잘못된 피연산자 → null.
+export function recompute(op: NumberOp, operands: number[]): number | null {
+  const xs = operands.filter((x): x is number => typeof x === "number" && Number.isFinite(x));
+  if (!xs.length) return null;
+  switch (op) {
+    case "sum": return xs.reduce((a, b) => a + b, 0);
+    case "mean": return xs.reduce((a, b) => a + b, 0) / xs.length;
+    case "product": return xs.reduce((a, b) => a * b, 1);
+    case "diff": return xs.reduce((a, b) => a - b);
+    case "ratio": return xs.length >= 2 && xs[1] !== 0 ? (xs[0] as number) / (xs[1] as number) : null;
+    case "percent": return xs.length >= 2 && xs[1] !== 0 ? ((xs[0] as number) / (xs[1] as number)) * 100 : null;
+    case "min": return Math.min(...xs);
+    case "max": return Math.max(...xs);
+  }
+}
+
+// stated 수치 판정. 모드 B(op+operands 재계산) 우선 → 없으면 모드 A(source 에 실재) → 둘 다 없으면 no-basis.
+export function numberStatus(
+  stated: number | null,
+  opts: { source?: string | null; op?: unknown; operands?: number[]; eps?: number },
+): NumberStatus {
+  if (stated === null || !Number.isFinite(stated)) return "no-basis";
+  const eps = typeof opts.eps === "number" && opts.eps >= 0 ? opts.eps : 1e-9;
+  if (isNumberOp(opts.op) && Array.isArray(opts.operands) && opts.operands.length) {
+    const r = recompute(opts.op, opts.operands);
+    if (r === null) return "no-basis";
+    return numbersClose(stated, r, eps) ? "verified" : "mismatch";
+  }
+  if (typeof opts.source === "string") {
+    const nums = parseNumbersFromText(opts.source);
+    if (!nums.length) return "no-basis";
+    return nums.some((n) => numbersClose(stated, n, eps)) ? "verified" : "mismatch";
+  }
+  return "no-basis";
+}
