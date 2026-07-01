@@ -88,6 +88,8 @@ function normVolatile(s: string): string {
   out = out.replace(/"npmVersion": ("[^"]*"|null)/g, '"npmVersion": "<NPM>"');
   out = out.replace(/"release": "[^"]*"/g, '"release": "<OSREL>"');
   out = out.replace(/"agentReceiptVersion": "[^"]*"/g, '"agentReceiptVersion": "<VER>"');
+  // agentSession(#7): 실행 세션마다 다르고 CI(사람)에선 null → UUID·null 둘 다 <SESSION>으로 정규화(실행환경 무관).
+  out = out.replace(/"agentSession": ("[^"]*"|null)/g, '"agentSession": "<SESSION>"');
   out = out.replace(/"toolVersion": ("[^"]*"|null)/g, '"toolVersion": "<VER>"');
   out = out.replace(/"version": "[0-9][^"]*"/g, '"version": "<VER>"');
   // doctor 설치 진단(0.9.1): '현재 버전 : <semver>' → <VER>(버전 bump churn 방지), '실행 파일 : <path>' → <BIN>(clone 경로 무관).

@@ -26,6 +26,9 @@ export interface Environment {
   policyHash: string | null;
   // provenance(에이전트/모델) — 명시값만. 자동 추측 0. flag(--agent/--model) > env(AGENT_RECEIPT_AGENT/MODEL) > none.
   provenance: { agent: string | null; model: string | null; source: "flag" | "env" | "none" };
+  // 어느 에이전트 세션이 이 영수증을 만들었나(추적성). Claude Code 세션 안(훅 포함)이면 CLAUDE_CODE_SESSION_ID,
+  // 사람이 직접 실행하면 null → "에이전트 세션 산출 아님"을 의미있게 구분. contentHash 입력엔 미포함(environment 전체 제외).
+  agentSession: string | null;
   note: string;
 }
 
@@ -101,6 +104,7 @@ export function captureEnvironment(opts: CaptureOpts = {}): Environment {
     contractHash: hashFileOrNull(opts.contractPath),
     policyHash: hashFileOrNull(opts.policyPath),
     provenance: resolveProvenance(opts),
+    agentSession: process.env.CLAUDE_CODE_SESSION_ID?.trim() || null,
     note: "git 작업트리 기준 환경 메타 — .gitignore·레포 밖·OS·DB·외부 서비스는 담지 않음. 에이전트/모델은 자동 추측하지 않고 명시값(--agent/--model 또는 AGENT_RECEIPT_AGENT/MODEL)만 기록.",
   };
 }

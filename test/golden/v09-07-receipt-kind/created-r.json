@@ -85,6 +85,7 @@
       "model": null,
       "source": "none"
     },
+    "agentSession": "<SESSION>",
     "note": "git 작업트리 기준 환경 메타 — .gitignore·레포 밖·OS·DB·외부 서비스는 담지 않음. 에이전트/모델은 자동 추측하지 않고 명시값(--agent/--model 또는 AGENT_RECEIPT_AGENT/MODEL)만 기록."
   },
   "disclosure": "이 도구는 git 작업트리 기준입니다 — .gitignore된 파일·레포 밖·OS 명령·DB write·외부 서비스 변경은 직접 볼 수 없습니다.",
