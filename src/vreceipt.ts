@@ -27,9 +27,10 @@ export function tierProvenance(reported: unknown): { verified: Record<string, un
   const verified: Record<string, unknown> = {};
   if (reported && typeof reported === "object" && !Array.isArray(reported)) {
     const p = reported as Record<string, unknown>;
-    // commit: git 으로 존재 확인 가능(계산검증). git 저장소 아니면 null(미확인).
+    // commitExistsInRepo: 그 commit 이 저장소에 *존재*하는가만(계산검증). git 저장소 아니면 null.
+    //   ⚠ 존재 확인일 뿐 — "이 영수증이 그 commit 으로 생성됐다"는 뜻이 절대 아니다(그 연결은 여전히 자가보고).
     if (typeof p.commit === "string") {
-      verified.commitExists = g.isGitRepo() ? g.commitExists(p.commit) : null;
+      verified.commitExistsInRepo = g.isGitRepo() ? g.commitExists(p.commit) : null;
     }
     // inputFiles: 우리가 실제 해시(계산검증). 못 읽으면 sha256:null.
     if (Array.isArray(p.inputFiles)) {
