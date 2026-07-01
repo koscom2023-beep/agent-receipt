@@ -31,8 +31,13 @@ Deep-dive on its data model & semantics: [`AI_LEDGER_MODEL.md`](AI_LEDGER_MODEL.
 
 **Key point:** *Claim ≠ Observation ≠ Difference* is already separated in code —
 Claim (`claims.ts`), Observation (`runVerify` → `Receipt`), Difference
-(`diffClaimField` in `claimdiff.ts`). The receipt is closer to a verified
-**voucher** than a paper receipt.
+(`diffClaimField` in `claimdiff.ts`). The receipt is a *verified, sealed* record
+(accounting would call it a voucher — an analogy, not our vocabulary).
+
+**See also:** the design philosophy and cross-discipline comparisons in
+[`AI_ACCOUNTING.md`](AI_ACCOUNTING.md); the ledger deep-dive in
+[`AI_LEDGER_MODEL.md`](AI_LEDGER_MODEL.md); unresolved design questions in
+[`OPEN_QUESTIONS.md`](OPEN_QUESTIONS.md).
 
 ## Invariants (do not cross)
 

@@ -5,6 +5,13 @@
 > is only about what the ledger *is*, what a line *means*, and what it deliberately
 > does **not** hold. Grounded in the current code (`src/ledger.ts`), not aspiration.
 
+> **Accounting is the analogy, not the vocabulary.** The product's terms are plain
+> — *Evidence · Receipt · Ledger Entry · Audit*. This page borrows the accounting
+> parallel to explain *why* the shape is right; the deeper design philosophy (and
+> the comparisons to Git / event sourcing / forensics) lives in
+> [`AI_ACCOUNTING.md`](AI_ACCOUNTING.md). Users learn "how to trust AI work," not
+> accounting.
+
 ## 1. What the ledger is (and is not)
 
 Accounting keeps three distinct things, and so does agent-receipt:
@@ -16,11 +23,11 @@ Accounting keeps three distinct things, and so does agent-receipt:
 | Ledger posting (전기) — the append-only book line | a **LedgerEntry** (`ledger.jsonl`) | one line per receipt |
 
 **The ledger does not store the receipt, and it does not store the evidence.**
-A ledger line is a **posting**: a *pointer to a sealed receipt* plus a *minimal
-verdict summary* plus *chain linkage*. The detail stays in the voucher (receipt);
-the evidence stays in git and the capture log. This is the accounting answer to
-the owner's question — *what goes in the ledger?* → **not the receipt, not the
-evidence, but a verdict-posting that references them.**
+A ledger line is a **summary + pointer** (an accountant would call it a *posting*):
+a *pointer to a sealed receipt* plus a *minimal verdict summary* plus *chain
+linkage*. The detail stays in the receipt; the evidence stays in git and the
+capture log. So — *what goes in the ledger?* → **not the receipt, not the evidence,
+but a verdict line that references them.**
 
 ## 2. What a line stores today (grounded — `ledgerEntryFromReceipt`, ledger.ts:38)
 
@@ -84,7 +91,7 @@ These six are the whole IP. Every application layer (`share-proof`, `audit-pack`
 
 ## 5. Why the current structure is already right
 
-The line is a *posting that references a sealed voucher*, not a copy of it. That
+The line is a *summary that references a sealed receipt*, not a copy of it. That
 is precisely why accounting ledgers survived centuries and why git's object store
 (not its commit viewer) is the durable part: **the durable core is an append-only
 log of pointers to immutable, content-addressed records.** agent-receipt already
@@ -118,10 +125,15 @@ that does not cross an invariant:
   ledger edges — would risk over-claim and a graph store (crosses §3.5).
 - **Cross-machine / team aggregation, Evidence Bus, SIEM export** — network
   transport, outside git-only.
-- **The Promptia closed loop** (ledger → prompt evolution as a *learning asset*).
-  Compelling, but it requires a separate product identity and network/data
-  aggregation that this git-only tool intentionally is not. Recorded here so the
-  idea is not lost — **not** a thing to start.
+- **Any "consumer learns from the ledger" loop** (e.g. a generator improving from
+  its own accumulated evidence). Compelling, but it needs a separate product
+  identity and data aggregation this git-only tool intentionally is not.
+
+> **Consumers sit on top; they are not part of the tool.** agent-receipt is a
+> vendor-neutral evidence layer. Its consumers — Cursor, Claude Code, Codex,
+> Promptia — each *use* it; none of them is a parent of it, and no consumer's loop
+> is on this roadmap. Promptia is simply expected to be the **first** consumer, not
+> a special one.
 
 This tool does not declare an industry "AI Ledger standard." Standards are adopted,
 not announced. It defines *its own* ledger semantics rigorously; that consistency
@@ -133,7 +145,7 @@ is the competitive edge.
 - Should a purely-read session (no git change) produce a posting at all? (Today:
   `close-recon` can, with zero changes.)
 - What is the minimal verdict a posting must carry to be *self-explanatory* on
-  `grep` without opening the voucher — and where is the line between "summary" and
+  `grep` without opening the receipt — and where is the line between "summary" and
   "leaking the diff"?
 
 *These are for deliberate human design, grounded in real ledgers once they exist —

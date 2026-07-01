@@ -39,7 +39,7 @@ AI Session ─▶ Evidence ─▶ Verification ─▶ Verified Receipt ─▶ Le
 - **Session** — one unit of AI work (`begin` / `start`).
 - **Evidence** — what happened: the agent's *claim*, the *git diff*, and beyond-git actions (`capture`).
 - **Verification** — is it true? `verify` + `check`, and reconcile the claim against git.
-- **Verified Receipt** — the sealed fact + integrity hash (`receipt` / `done`). Closer to a verified **voucher** than a paper receipt.
+- **Verified Receipt** — the sealed fact + integrity hash (`receipt` / `done`). A *verified, tamper-evident* record, not a bare note.
 - **Ledger** — append-only, hash-chained trail (`ledger`).
 - **Audit** — read-only judgment: `risk` · `controls` · `insights`.
 - **Publication** — how a fact leaves your machine: `share-proof` · `anchor`.
