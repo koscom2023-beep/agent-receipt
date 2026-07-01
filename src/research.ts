@@ -4,6 +4,7 @@ import {
   normalizeForCitation, verifyCitationInText, citationStatus, type CitationStatus,
   evaluateClaim,
 } from "./evidencekernel.js";
+import { writeVerificationReceipt } from "./vreceipt.js";
 
 // 인용/수치 검증 커널은 공유 Evidence Kernel(evidencekernel.ts)에 있다(research·council 이 같은 코어 재사용).
 // 여기선 그 커널을 파일 IO(출처 스냅샷)·라이브 fetch·CLI 출력에 엮는 surface 만 담당한다.
@@ -43,6 +44,7 @@ interface ResearchReport {
   schemaVersion?: unknown;
   query?: unknown;
   claims?: unknown;
+  provenance?: unknown; // 자가보고 계보(model/prompt/inputFiles/commit/tests) — 영수증에 기록·검증 아님
 }
 
 // 출처 해석: 인라인 sourceText 우선, 없으면 로컬 sourceFile 읽기(파일 IO 는 커널 밖). 둘 다 없거나 못 읽으면 null.
@@ -122,7 +124,7 @@ async function fetchSource(url: string, timeoutMs = 12000): Promise<string | nul
  */
 export async function runResearchVerify(
   fileArg: string | undefined,
-  opts: { fetch?: boolean } = {},
+  opts: { fetch?: boolean; out?: string } = {},
 ): Promise<never> {
   if (!fileArg) {
     console.error("research verify: --file <path> 가 필요합니다 (ResearchReport JSON).");
@@ -160,6 +162,7 @@ export async function runResearchVerify(
   let ok = 0; // 검증 통과(인용/수치 중 하나 이상 verified·fail 없음)
   let advisory = 0; // 검증할 근거 없음
   let unreachable = 0; // --fetch 시 출처 도달 실패
+  const collected: Array<Record<string, unknown>> = []; // --out 영수증용 claim별 결과
 
   for (let i = 0; i < claims.length; i++) {
     const claim = claims[i] as ResearchClaim;
@@ -188,6 +191,7 @@ export async function runResearchVerify(
     if (ev.failed) failed++;
     else if (ev.verified) ok++;
     else advisory++;
+    collected.push({ statement: stmt, sourceUrl: url || null, checks: ev.results, verdict: ev.failed ? "failed" : ev.verified ? "verified" : "advisory" });
 
     console.log(`[${i + 1}] ${stmt}`);
     if (url) console.log(`    출처 : ${url}${fetchNote}${ev.link ? ` [link ${ev.link}]` : ""}`);
@@ -213,6 +217,21 @@ export async function runResearchVerify(
       : "  ✅ 불일치 없음 (advisory 는 근거 미제출·미검증)",
   );
   console.log("  보증 범위: 근거가 출처/재계산과 정합하나(충실성)이지 진위(주장이 옳나) 아님." + (opts.fetch ? "" : " 라이브 대조=--fetch."));
+  if (opts.out) {
+    const outP = isAbsolute(opts.out) ? opts.out : join(process.cwd(), opts.out);
+    const ch = writeVerificationReceipt(outP, {
+      surface: "research",
+      inputFile: fileArg,
+      inputRaw: raw,
+      subject: typeof report.query === "string" ? report.query : "(query 없음)",
+      provenance: report.provenance ?? null,
+      results: collected,
+      summary: opts.fetch ? { verified: ok, failed, advisory, unreachable } : { verified: ok, failed, advisory },
+      verdict: failed ? "fail" : "pass",
+      verifiedAt: new Date().toISOString(),
+    });
+    console.log(`  📄 Verification Receipt: ${opts.out} (contentHash ${ch.slice(0, 12)}…·입력 봉인·provenance 기록)`);
+  }
   console.log(line);
   console.log("");
   process.exit(failed ? 1 : 0);

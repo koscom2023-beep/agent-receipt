@@ -131,10 +131,10 @@ agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
   verify [--json] / check / claims --file <c.json> / pre / prompt [--cursor|--claude]
 
 ■ 리서치 근거검증(출처 대조 — git 아님·검증만·공유 Evidence Kernel):
-  research verify --file <report.json> [--fetch]   각 주장의 인용·수치·날짜·링크를 출처와 결정론 대조 · 충실성(진위 아님) · --fetch=라이브 URL 재대조(네트워크)
+  research verify --file <report.json> [--fetch] [--out <p>]   각 주장의 인용·수치·날짜·링크·해시를 출처와 결정론 대조 · --fetch=라이브 재대조 · --out=Verification Receipt(입력해시+provenance 봉인)
 
 ■ 회의 결정검증(결정↔근거 대조 — 회의 실행 아님·검증만·같은 Evidence Kernel):
-  council verify --file <decision.json> [--log <path>]   결정의 근거(인용·수치·날짜·링크·해시)를 출처와 대조 · append-only DecisionLog(해시체인) · 모순탐지=코어 밖
+  council verify --file <decision.json> [--log <path>] [--out <p>]   결정의 근거(인용·수치·날짜·링크·해시)를 출처와 대조 · --log=append-only DecisionLog · --out=Verification Receipt
 
 ■ Evidence Specification(검증 포맷의 표준 표면):
   spec [--format json]   claim/check 표준 포맷을 사람요약/기계판독(JSON Schema draft-07)으로 방출 · check kinds·상태·보증범위
@@ -259,16 +259,16 @@ function main(): void {
   if (command === "research") {
     // research 는 git 불필요 — ResearchReport JSON 의 인용/수치를 출처와 결정론 대조. --fetch=라이브 URL 재대조(네트워크).
     if (process.argv[3] === "verify") {
-      void runResearchVerify(getArg("--file"), { fetch: hasFlag("--fetch") });
+      void runResearchVerify(getArg("--file"), { fetch: hasFlag("--fetch"), out: getArg("--out") });
       return;
     }
-    console.error("research: 사용법 — research verify --file <report.json> [--fetch]");
+    console.error("research: 사용법 — research verify --file <report.json> [--fetch] [--out <path>]");
     process.exit(2);
   }
   if (command === "council") {
     // council 은 회의를 실행하지 않는다(=소비자 컴파일러의 일). DecisionRecord 의 결정↔근거를 검증만.
-    if (process.argv[3] === "verify") runCouncilVerify(getArg("--file"), getArg("--log"));
-    console.error("council: 사용법 — council verify --file <decision.json> [--log <path>]");
+    if (process.argv[3] === "verify") runCouncilVerify(getArg("--file"), getArg("--log"), getArg("--out"));
+    console.error("council: 사용법 — council verify --file <decision.json> [--log <path>] [--out <path>]");
     process.exit(2);
   }
   if (command === "spec") {

@@ -2,6 +2,7 @@ import { readFileSync, appendFileSync, existsSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { createHash } from "node:crypto";
 import { evaluateClaim } from "./evidencekernel.js";
+import { writeVerificationReceipt } from "./vreceipt.js";
 
 const line = "─".repeat(56);
 
@@ -39,6 +40,7 @@ interface DecisionRecord {
   schemaVersion?: unknown;
   question?: unknown;
   decisions?: unknown;
+  provenance?: unknown; // 자가보고 계보 — 영수증에 기록·검증 아님
 }
 
 export type DecisionGrounding = "grounded" | "ungrounded" | "unsupported";
@@ -121,7 +123,7 @@ export function appendDecisionLog(logPath: string, entryCore: Record<string, unk
  *  - 전부 grounded/unsupported(날조 없음) → exit 0
  *  --log 지정 시 검증 결과를 append-only DecisionLog(해시체인)에 적립.
  */
-export function runCouncilVerify(fileArg: string | undefined, logArg: string | undefined): never {
+export function runCouncilVerify(fileArg: string | undefined, logArg: string | undefined, outArg?: string | undefined): never {
   if (!fileArg) {
     console.error("council verify: --file <path> 가 필요합니다 (DecisionRecord JSON).");
     process.exit(2);
@@ -200,6 +202,21 @@ export function runCouncilVerify(fileArg: string | undefined, logArg: string | u
   );
   if (logNote) console.log(logNote);
   console.log("  보증 범위: 결정이 제출한 근거가 출처에 실재하나(근거 충실성)이지 결정이 옳으냐가 아님. 회의 실행·모순탐지는 코어 밖.");
+  if (outArg) {
+    const outP = isAbsolute(outArg) ? outArg : join(process.cwd(), outArg);
+    const ch = writeVerificationReceipt(outP, {
+      surface: "council",
+      inputFile: fileArg ?? "(input)",
+      inputRaw: raw,
+      subject: question,
+      provenance: record.provenance ?? null,
+      results: logDecisions,
+      summary: { grounded, ungrounded, unsupported },
+      verdict: ungrounded ? "fail" : "pass",
+      verifiedAt: new Date().toISOString(),
+    });
+    console.log(`  📄 Verification Receipt: ${outArg} (contentHash ${ch.slice(0, 12)}…·입력 봉인·provenance 기록)`);
+  }
   console.log(line);
   console.log("");
   process.exit(ungrounded ? 1 : 0);

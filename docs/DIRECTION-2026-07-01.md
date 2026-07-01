@@ -15,8 +15,10 @@ Five phases (current work in **bold**): **P1 Receipt/Replay/Ledger/Research-veri
 No single verifier is a moat — a citation or number checker is a week of work for anyone. The moat is three things together, as Git's **ecosystem and standardization** outgrew Git itself:
 
 1. **Widest deterministic kernel** — citation ✓ · number ✓ · date ✓ · link ✓ → then **file · hash · formula · version · dependency · signature · artifact · replay**. Breadth is a real barrier: matching a broad, git-native, model-agnostic, no-cloud kernel takes range and time.
-2. **A de facto standard format** — one shared, versioned semantics for a verified claim. `evaluateClaim` is that single semantics: research and council both call it, so **the code is the format spec**, not a doc. A standard is *adopted*, not *declared* — but a clean, stable, documented shared format is the necessary condition for adoption.
+2. **An adoptable versioned format** — one shared, versioned semantics for a verified claim (`evidence/1`). `evaluateClaim` is that single semantics: research and council both call it, so **the code is the format spec**, not a doc. We do **not** call it a "standard" — a standard is *adopted*, not *declared*; we design a clean, versioned, documented format that *can be* adopted. (The engine is a **check registry / plugin system**, not an "Evidence VM" — that term implies a DSL / opcodes / execution state we do not have. VM is a future goal, not today.)
 3. **Ecosystem adoption** — not code. This is the market's to grant.
+
+Maturity (honest): **L1** individual checker → **L2** shared Evidence Kernel → **L3** versioned Evidence Specification → **L4** plugin/registry architecture → **L5** Evidence Graph / Provenance → **L6** ecosystem adoption. We are at **L3–L4**, seeding **L5** (verification receipts carry provenance). "Evidence VM" and "industry standard" stay future labels.
 
 Honest: parts 1–2 are buildable now; part 3 is not, and a vendor with distribution (e.g. bundling a checker into their product) could try to define the format first. So the code job is: **widen the kernel and keep one clean shared format** — necessary, not sufficient. (Long-term hypothesis, not a plan: "AI Financial Statements" — firms submitting auditable Evidence of AI decisions/code/work to independent auditors. Whether that market forms is a bet.)
 

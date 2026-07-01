@@ -40,6 +40,25 @@ A claim **fails** if any check is `not-found` / `mismatch` / `invalid`. A claim 
 
 New verifiers register in the **check registry** (`CHECK_REGISTRY`) — one descriptor, no engine change. `spec` reflects them automatically. Planned next: `file`, `formula`, `version`, `dependency`, `signature`, `artifact`, `replay`. This is what raises the copy cost: not the checkers, but the extensible engine + shared format.
 
+This is a **plugin / registry** dispatch, **not** an "Evidence VM" — there is no DSL, opcode set, or execution state yet. That would be a later stage; today it is a clean plugin point.
+
+## Provenance & Verification Receipt
+
+A report may carry a `provenance` block — self-reported chain-of-custody: `{ model, prompt, inputFiles, commit, tests }`. It is **recorded, not certified** (the verifiable parts — file hashes, commit existence — can be checked later; the rest is self-report and labeled as such).
+
+`research verify --out <path>` (and `council verify --out <path>`) seal the run into a **Verification Receipt** — a durable, linkable artifact instead of ephemeral stdout:
+
+```
+schemaVersion, kind: "verification-receipt", surface, verifiedAt,
+tool { name, version },
+input { file, sha256 },        # the exact input, hashed (chain of custody)
+subject, provenance,           # provenance echoed (recorded)
+results [ per-claim/decision ], summary, verdict,
+contentHash                    # sha256 of the above (tamper-evident, replayable)
+```
+
+This is the L5 step: `Claim → Evidence → Verification → Receipt → Provenance` as one sealed object. Same honest scope — it records *what was verified, when, against what, by which version, under what provenance*; it does not certify the AI's judgment.
+
 ## Guarantees (narrow and honest)
 
 - **Reproducible**: same input → same result on any machine. Deterministic, no LLM call, no hidden logic.

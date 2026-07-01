@@ -15,7 +15,7 @@ const check = (name, fn) => { try { fn(); pass++; } catch (e) { fail.push(`${nam
 // 결정론 검증 코어 + 영수증 + 공유 Evidence Kernel. 이들은 판단/오케스트레이션(surface)을 몰라야 한다.
 const CORE = ["claimdiff.ts", "ledger.ts", "replay.ts", "receipt.ts", "evidencekernel.ts"];
 // surface/오케스트레이션 모듈(research·council·spec 등 — 코어를 재사용하되 코어가 이들을 알면 안 됨).
-const SURFACE = ["research", "council", "spec"];
+const SURFACE = ["research", "council", "spec", "vreceipt"];
 
 for (const c of CORE) {
   check(`${c} 는 surface 를 import 하지 않음(core ↛ surface)`, () => {

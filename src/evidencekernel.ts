@@ -205,8 +205,9 @@ function parseStated(v: unknown): number | null {
   return null;
 }
 
-// ── check 레지스트리 (Evidence VM 씨앗) ──
+// ── check 레지스트리 (플러그인 구조 — 아직 VM 아님) ──
 // 새 검증기 = descriptor 한 줄 등록. 엔진(evaluateClaim)은 불변. run 이 null 이면 그 주장엔 미적용.
+// 정직: 이건 플러그인/레지스트리 디스패치지 VM(DSL·opcode·실행컨텍스트·상태)이 아니다. "VM"은 미래 목표.
 // positive=이 검증이 verified 이면 "실증 근거"로 침(link 는 well-formedness 라 positive=false·advisory).
 export interface CheckDescriptor {
   kind: string;
