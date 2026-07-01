@@ -27,6 +27,9 @@ agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
 ■ Evidence Specification(검증 포맷의 표준 표면):
   spec [--format json]   claim/check 표준 포맷을 사람요약/기계판독(JSON Schema draft-07)으로 방출 · check kinds·상태·보증범위
 
+■ Evidence Graph 조회(쌓인 Verification Receipt 질의 — 읽기전용·중립):
+  graph query --dir <d> [--commit <h>] [--input <sha>] [--model <m>] [--receipt-id <id>]   receipt 를 commit/input/model 로 필터 + pass/fail 중립 카운트(조회레이어·edge-DAG는 후속)
+
 ■ 증빙 / 감사 묶음(git 증거):
   report [--type developer|client|audit] / receipt [--format ...] [--content] [--strict-redact] [--committed] [--agent <n>] [--model <m>] / receipts [--latest|--cat|--dir]
   audit [--json] / insights [--since <n>] [--format md|json] / risk [--format md|json] / dashboard / index [--json] / ledger [--json] (rebuild|verify) / replay [--pack <dir>] [--receipt <p>] / attest / anchor [--upload] / controls [--format md|json] / incident
