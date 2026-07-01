@@ -206,6 +206,11 @@ export interface EvalClaimInput {
   signature?: unknown; // base64 ed25519 서명(content 에 대한)
   publicKey?: unknown; // PEM(SPKI) 공개키 — 서명 검증용
 }
+// Evidence = 실패 check 의 *증명*(expected↔actual). reason 은 설명, evidence 는 결정론 비교 근거.
+export interface CheckEvidence {
+  expected: string;
+  actual: string;
+}
 export interface ClaimEvaluation {
   citation: CitationStatus | null;
   number: NumberStatus | null;
@@ -214,6 +219,7 @@ export interface ClaimEvaluation {
   hash: HashStatus | null;
   signature: SignatureStatus | null;
   results: Record<string, string | null>; // 레지스트리 전체 결과(확장 검증기 포함)
+  evidence: Record<string, CheckEvidence>; // 실패 check 별 expected/actual(결정론·증명)
   failed: boolean; // 어느 근거든 불일치(not-found/mismatch/invalid)
   verified: boolean; // 실증된 근거 1+ 이고 불일치 0
 }
@@ -247,6 +253,48 @@ export const CHECK_REGISTRY: CheckDescriptor[] = [
 export const CHECK_KINDS: string[] = CHECK_REGISTRY.map((d) => d.kind);
 const FAILED_STATUSES = new Set(["not-found", "mismatch", "invalid"]);
 
+// 실패 check 의 evidence(expected/actual) 생산 — 결정론(커널이 이미 가진 입력·재계산으로). 추정 없음.
+function evidenceFor(c: EvalClaimInput, source: string | null, results: Record<string, string | null>): Record<string, CheckEvidence> {
+  const ev: Record<string, CheckEvidence> = {};
+  const s = source ?? "";
+  if (results.citation === "not-found" && typeof c.quotedText === "string") {
+    ev.citation = { expected: c.quotedText, actual: "출처 텍스트에 없음 (not present in source)" };
+  }
+  if (results.number === "mismatch") {
+    const stated = parseStated(c.statedValue);
+    let actual = "출처에서 확인 불가";
+    if (isNumberOp(c.op) && Array.isArray(c.operands)) {
+      const r = recompute(c.op, c.operands as number[]);
+      if (r !== null) actual = `재계산 ${String(r)}`;
+    } else {
+      const nums = parseNumbersFromText(s);
+      if (nums.length) actual = `출처의 수치 ${nums.slice(0, 5).join(", ")}`;
+    }
+    ev.number = { expected: stated !== null ? String(stated) : String(c.statedValue), actual };
+  }
+  if (results.date === "mismatch" && typeof c.statedDate === "string") {
+    const found = datesInText(s);
+    ev.date = { expected: canonicalizeDate(c.statedDate) ?? c.statedDate, actual: found.length ? `출처의 날짜 ${found.join(", ")}` : "출처에 날짜 없음" };
+  }
+  if (results.hash === "mismatch" && typeof c.statedHash === "string" && typeof c.content === "string") {
+    const algo = typeof c.algo === "string" ? c.algo : "sha256";
+    let actual = "계산 실패";
+    try {
+      actual = createHash(algo).update(c.content).digest("hex");
+    } catch {
+      /* 알 수 없는 알고리즘 */
+    }
+    ev.hash = { expected: c.statedHash.trim().slice(0, 24), actual: actual.slice(0, 24) };
+  }
+  if (results.signature === "invalid") {
+    ev.signature = { expected: "유효한 ed25519 서명", actual: "검증 실패 (does not verify)" };
+  }
+  if (results.link === "invalid" && typeof c.link === "string") {
+    ev.link = { expected: "http(s) URL", actual: c.link };
+  }
+  return ev;
+}
+
 // 표준 포맷의 단일 의미론: 레지스트리를 디스패치해 한 주장의 모든 typed 근거를 판정.
 export function evaluateClaim(c: EvalClaimInput, source: string | null): ClaimEvaluation {
   const results: Record<string, string | null> = {};
@@ -266,6 +314,7 @@ export function evaluateClaim(c: EvalClaimInput, source: string | null): ClaimEv
     hash: (results.hash as HashStatus) ?? null,
     signature: (results.signature as SignatureStatus) ?? null,
     results,
+    evidence: evidenceFor(c, source, results),
     failed,
     verified: !failed && positiveVerified,
   };

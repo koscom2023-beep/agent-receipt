@@ -143,24 +143,33 @@ const FAILED = new Set(["not-found", "mismatch", "invalid"]);
 export interface FailureReason {
   check: string;
   status: string;
-  reason: string;
-  hint: string;
+  reason: string; // 설명(무엇이 틀렸나)
+  evidence: { expected: string; actual: string } | null; // 증명(expected↔actual·커널 생산)
+  hint: string; // 기계적 조치(고정 매핑)
 }
 interface EnrichedClaim {
   statement: string;
   verdict: string;
   checks: Record<string, string | null>;
-  failures: FailureReason[]; // Reason 객체(check→reason→hint)
+  failures: FailureReason[]; // Reason 객체(check→reason→evidence→hint)
 }
 function enrichClaims(results: unknown): EnrichedClaim[] {
   if (!Array.isArray(results)) return [];
   return results.map((c) => {
     const o = (c && typeof c === "object" ? c : {}) as Record<string, unknown>;
     const checks = (o.checks && typeof o.checks === "object" ? o.checks : {}) as Record<string, string | null>;
+    const evMap = (o.evidence && typeof o.evidence === "object" ? o.evidence : {}) as Record<string, { expected?: unknown; actual?: unknown }>;
     const failures: FailureReason[] = [];
     for (const [kind, st] of Object.entries(checks)) {
       if (typeof st === "string" && FAILED.has(st)) {
-        failures.push({ check: kind, status: st, reason: REASON_MAP[kind] ?? "검증 실패", hint: HINT_MAP[kind] ?? "확인 필요" });
+        const e = evMap[kind];
+        failures.push({
+          check: kind,
+          status: st,
+          reason: REASON_MAP[kind] ?? "검증 실패",
+          evidence: e && typeof e === "object" ? { expected: String(e.expected ?? ""), actual: String(e.actual ?? "") } : null,
+          hint: HINT_MAP[kind] ?? "확인 필요",
+        });
       }
     }
     return {
@@ -223,6 +232,51 @@ export function buildFailures(rows: ViewRow[]): FailureEntry[] {
       });
       return { receiptId: r.receiptId, subject: r.subject, reasons: [...reasons], affectedClaims };
     });
+}
+
+// FailureEvent = 실패 1건(claim×실패check)을 flat 정규화 — indexes 의 source.
+export interface FailureEvent {
+  receiptId: string;
+  subject: string;
+  model: string | null;
+  commit: string | null;
+  claimIndex: number;
+  statement: string;
+  check: string;
+  status: string;
+  reason: string;
+}
+export function buildFailureEvents(rows: ViewRow[]): FailureEvent[] {
+  const out: FailureEvent[] = [];
+  for (const r of rows) {
+    r.claims.forEach((c, i) => {
+      c.failures.forEach((f) => {
+        out.push({ receiptId: r.receiptId, subject: r.subject, model: r.model, commit: r.commit, claimIndex: i + 1, statement: c.statement, check: f.check, status: f.status, reason: f.reason });
+      });
+    });
+  }
+  return out;
+}
+
+// Failure Index: 실패를 5차원으로 pivot(소비자가 receipt 순회 없이 lookup 한 번에).
+export interface GraphIndexes {
+  byCheck: Record<string, FailureEvent[]>;
+  byModel: Record<string, FailureEvent[]>;
+  bySubject: Record<string, FailureEvent[]>;
+  byCommit: Record<string, FailureEvent[]>;
+  byReason: Record<string, FailureEvent[]>;
+}
+export function buildIndexes(rows: ViewRow[]): GraphIndexes {
+  const events = buildFailureEvents(rows);
+  const by = (keyFn: (e: FailureEvent) => string | null): Record<string, FailureEvent[]> => {
+    const m: Record<string, FailureEvent[]> = {};
+    for (const e of events) {
+      const k = keyFn(e) ?? "(none)";
+      (m[k] ??= []).push(e);
+    }
+    return m;
+  };
+  return { byCheck: by((e) => e.check), byModel: by((e) => e.model), bySubject: by((e) => e.subject), byCommit: by((e) => e.commit), byReason: by((e) => e.reason) };
 }
 
 export function buildViewData(dir: string): ViewRow[] {
@@ -298,6 +352,7 @@ code{color:#79c0ff}.big{font-size:15px;font-weight:700}
 <script id="ar-data" type="application/json">${embedded}</script>
 <script>const P=JSON.parse(document.getElementById('ar-data').textContent);const DATA=P.receipts||[],S=P.summary||{};
 const el=id=>document.getElementById(id);
+const esc=x=>String(x==null?'':x).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 function ok(b){return b===true?'<span class="pass">✅</span>':b===false?'<span class="fail">❌</span>':'<span class="warn">⚠ n/a</span>'}
 function st(s){return s==='verified'||s==='valid'?'<span class="pass">✅ '+s+'</span>':s==='not-found'||s==='mismatch'||s==='invalid'?'<span class="fail">❌ '+s+'</span>':'<span class="mut">· '+(s||'-')+'</span>'}
 function cd(l,n,c){return '<div class="cd"><div class="n '+(c||'')+'">'+n+'</div><div class="l">'+l+'</div></div>'}
@@ -315,10 +370,12 @@ h+='<div class="chk"><span class="k">Receipt Integrity</span>'+ok(ig.contentHash
 '<span class="k">Commit Exists</span>'+ok(ig.commitRecheck)+'<span class="k">Input Unchanged</span>'+ok(ig.inputMatch)+'</div>';
 h+='<div class="mut">receiptId <code>'+(d.receiptId||'')+'</code></div></div>';
 (d.claims||[]).forEach((c,i)=>{const ch=c.checks||{};const v=c.verdict;const failed=(c.failures||[]).length;
-h+='<div class="card"><div><b>Claim #'+(i+1)+'</b> — '+((c.statement||'')).slice(0,60)+' → <b class="'+(v==='failed'?'fail':v==='verified'?'pass':'mut')+'">'+(v||'').toUpperCase()+'</b></div><div class="chk">';
+h+='<div class="card"><div><b>Claim #'+(i+1)+'</b> — '+esc((c.statement||'').slice(0,80))+' → <b class="'+(v==='failed'?'fail':v==='verified'?'pass':'mut')+'">'+esc((v||'').toUpperCase())+'</b></div><div class="chk">';
 ['citation','number','date','hash','signature','link'].forEach(k=>{if(ch[k]!=null){h+='<span class="k">'+k+'</span>'+st(ch[k])}});h+='</div>';
 if(failed){h+='<div style="margin-top:6px">Failures:</div>';(c.failures||[]).forEach(f=>{
-h+='<div class="rz"><b class="fail">'+f.check+'</b> — '+f.status+'<div class="mut">Reason: '+f.reason+'</div><div class="mut">Hint (mechanical · 표시만): '+f.hint+'</div></div>'})}
+h+='<div class="rz"><b class="fail">'+esc(f.check)+'</b> — '+esc(f.status)+'<div class="mut">Reason: '+esc(f.reason)+'</div>'+
+(f.evidence?'<div>Evidence — expected: <code>'+esc(f.evidence.expected)+'</code> · actual: <code>'+esc(f.evidence.actual)+'</code></div>':'')+
+'<div class="mut">Hint (mechanical · 표시만): '+esc(f.hint)+'</div></div>'})}
 h+='</div>'});
 el('detail').innerHTML=h}
 function apply(){const c=el('fc').value.trim(),i=el('fi').value.trim(),m=el('fm').value.trim();
@@ -334,7 +391,7 @@ export function runGraphView(dirArg: string | undefined, outArg: string | undefi
   const dir = resolveDir(dirArg);
   const data = buildViewData(dir);
   if (format === "json") {
-    const out = JSON.stringify({ dir, summary: buildSummary(data), failures: buildFailures(data), receipts: data }, null, 2);
+    const out = JSON.stringify({ dir, summary: buildSummary(data), indexes: buildIndexes(data), failures: buildFailures(data), receipts: data }, null, 2);
     if (outArg) {
       const outP = isAbsolute(outArg) ? outArg : join(process.cwd(), outArg);
       writeFileSync(outP, out + "\n");

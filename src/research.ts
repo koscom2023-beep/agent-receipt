@@ -193,7 +193,7 @@ export async function runResearchVerify(
     if (ev.failed) failed++;
     else if (ev.verified) ok++;
     else advisory++;
-    collected.push({ statement: stmt, sourceUrl: url || null, checks: ev.results, verdict: ev.failed ? "failed" : ev.verified ? "verified" : "advisory" });
+    collected.push({ statement: stmt, sourceUrl: url || null, checks: ev.results, evidence: ev.evidence, verdict: ev.failed ? "failed" : ev.verified ? "verified" : "advisory" });
 
     console.log(`[${i + 1}] ${stmt}`);
     if (url) console.log(`    출처 : ${url}${fetchNote}${ev.link ? ` [link ${ev.link}]` : ""}`);

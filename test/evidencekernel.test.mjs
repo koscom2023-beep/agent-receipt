@@ -106,6 +106,18 @@ check("eval signature invalid → failed", () => {
   assert.equal(e.signature, "invalid"); assert.equal(e.failed, true);
 });
 
+// ── evidence(expected/actual·증명) ──
+check("evidence: number mismatch → expected/actual(재계산)", () => {
+  const e = evaluateClaim({ statedValue: 10, op: "sum", operands: [1, 2] }, null);
+  assert.equal(e.number, "mismatch");
+  assert.equal(e.evidence.number.expected, "10");
+  assert.ok(e.evidence.number.actual.includes("3"));
+});
+check("evidence: 통과 시 비어있음", () => {
+  const e = evaluateClaim({ quotedText: "sky is blue" }, "the sky is blue");
+  assert.equal(Object.keys(e.evidence).length, 0);
+});
+
 // ── Evidence Specification ──
 check("CHECK_KINDS: 레지스트리에 hash·signature 확장 반영", () => assert.ok(CHECK_KINDS.includes("hash") && CHECK_KINDS.includes("signature") && CHECK_KINDS.includes("citation")));
 check("claimSchema: schemaVersion + 구조 + checkKinds", () => {

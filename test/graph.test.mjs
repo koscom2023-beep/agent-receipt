@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadReceipts, queryReceipts, buildViewData, buildGraphHtml, buildSummary, buildFailures } from "../dist/graph.js";
+import { loadReceipts, queryReceipts, buildViewData, buildGraphHtml, buildSummary, buildFailures, buildIndexes } from "../dist/graph.js";
 import { evaluateClaim, SCHEMA_VERSION } from "../dist/index.js"; // SDK 배럴(L7 씨앗)
 
 let pass = 0;
@@ -46,14 +46,17 @@ check("buildGraphHtml: 외부 리소스/서버 없음(자체완결)", () => {
   const html = buildGraphHtml([]);
   assert.ok(!html.includes("<script src") && !html.includes("<link "));
 });
-check("Evidence Browser: 실패 check → Reason 객체(check→reason→hint)", () => {
+check("Evidence Browser: Reason 객체(check→reason→evidence→hint)", () => {
   const d2 = mkdtempSync(join(tmpdir(), "argraph2-"));
-  writeFileSync(join(d2, "r.json"), JSON.stringify({ kind: "verification-receipt", receiptId: "idE", subject: "E", verdict: "fail", surface: "research", input: { sha256: "s" }, results: [{ statement: "S", verdict: "failed", checks: { citation: "not-found", number: "verified", hash: "mismatch" } }] }));
+  writeFileSync(join(d2, "r.json"), JSON.stringify({ kind: "verification-receipt", receiptId: "idE", subject: "E", verdict: "fail", surface: "research", input: { sha256: "s" }, results: [{ statement: "S", verdict: "failed", checks: { citation: "not-found", number: "verified", hash: "mismatch" }, evidence: { hash: { expected: "aa", actual: "bb" } } }] }));
   const v = buildViewData(d2);
   const cl = v[0].claims[0];
   assert.deepEqual(cl.failures.map((f) => f.check).sort(), ["citation", "hash"]);
   const cit = cl.failures.find((f) => f.check === "citation");
   assert.ok(cit.reason && cit.hint && cit.status === "not-found");
+  const hashF = cl.failures.find((f) => f.check === "hash");
+  assert.deepEqual(hashF.evidence, { expected: "aa", actual: "bb" }); // evidence 흐름
+  assert.equal(cit.evidence, null); // evidence 없는 check → null
   rmSync(d2, { recursive: true, force: true });
 });
 check("buildSummary/buildFailures: Dashboard 집계 + failure-first", () => {
@@ -65,6 +68,17 @@ check("buildSummary/buildFailures: Dashboard 집계 + failure-first", () => {
   const f = buildFailures(v);
   assert.equal(f.length, 1); assert.deepEqual(f[0].affectedClaims, [1]); assert.ok(f[0].reasons[0].includes("citation"));
   rmSync(d3, { recursive: true, force: true });
+});
+check("buildIndexes: byCheck/byModel/bySubject/byCommit/byReason(순회 없이 lookup)", () => {
+  const d4 = mkdtempSync(join(tmpdir(), "argraph4-"));
+  writeFileSync(join(d4, "a.json"), JSON.stringify({ kind: "verification-receipt", receiptId: "x", subject: "Proj", verdict: "fail", surface: "research", input: { sha256: "s" }, provenance: { reported: { model: "m", commit: "c9" } }, results: [{ statement: "S", verdict: "failed", checks: { citation: "not-found", hash: "mismatch" } }] }));
+  const ix = buildIndexes(buildViewData(d4));
+  assert.equal(ix.byCheck.citation.length, 1);
+  assert.equal(ix.byCheck.hash.length, 1);
+  assert.equal(ix.byModel.m.length, 2); // 두 실패 모두 model m
+  assert.equal(ix.bySubject.Proj.length, 2);
+  assert.equal(ix.byCommit.c9.length, 2);
+  rmSync(d4, { recursive: true, force: true });
 });
 
 // ── L7 SDK 배럴: 외부 import 가능 ──
