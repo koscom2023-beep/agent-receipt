@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadReceipts, queryReceipts, buildViewData, buildGraphHtml } from "../dist/graph.js";
+import { loadReceipts, queryReceipts, buildViewData, buildGraphHtml, buildSummary, buildFailures } from "../dist/graph.js";
 import { evaluateClaim, SCHEMA_VERSION } from "../dist/index.js"; // SDK 배럴(L7 씨앗)
 
 let pass = 0;
@@ -38,22 +38,33 @@ check("buildViewData: 각 행에 integrity(replay 스냅샷) 포함", () => {
   assert.equal(v.length, 3);
   assert.equal(typeof v[0].integrity.contentHashOk, "boolean");
 });
-check("buildGraphHtml: 자체완결 HTML·데이터 임베드", () => {
+check("buildGraphHtml: Dashboard-first 자체완결 HTML·데이터 임베드", () => {
   const html = buildGraphHtml([{ receiptId: "idXYZ", subject: "S", verdict: "pass", surface: "research", model: "m", commit: "c", inputSha: "s", integrity: { contentHashOk: true, receiptIdOk: true, inputMatch: null, commitRecheck: null }, claims: [] }]);
-  assert.ok(html.includes("<!doctype html>") && html.includes("idXYZ") && html.includes("Evidence Graph"));
+  assert.ok(html.includes("<!doctype html>") && html.includes("idXYZ") && html.includes("Evidence Browser") && html.includes("Most Failed"));
 });
 check("buildGraphHtml: 외부 리소스/서버 없음(자체완결)", () => {
   const html = buildGraphHtml([]);
   assert.ok(!html.includes("<script src") && !html.includes("<link "));
 });
-check("Evidence Browser: 실패 check → failedChecks + suggestedFixes(고정 매핑)", () => {
+check("Evidence Browser: 실패 check → Reason 객체(check→reason→hint)", () => {
   const d2 = mkdtempSync(join(tmpdir(), "argraph2-"));
   writeFileSync(join(d2, "r.json"), JSON.stringify({ kind: "verification-receipt", receiptId: "idE", subject: "E", verdict: "fail", surface: "research", input: { sha256: "s" }, results: [{ statement: "S", verdict: "failed", checks: { citation: "not-found", number: "verified", hash: "mismatch" } }] }));
   const v = buildViewData(d2);
   const cl = v[0].claims[0];
-  assert.deepEqual([...cl.failedChecks].sort(), ["citation", "hash"]);
-  assert.equal(cl.suggestedFixes.length, 2);
+  assert.deepEqual(cl.failures.map((f) => f.check).sort(), ["citation", "hash"]);
+  const cit = cl.failures.find((f) => f.check === "citation");
+  assert.ok(cit.reason && cit.hint && cit.status === "not-found");
   rmSync(d2, { recursive: true, force: true });
+});
+check("buildSummary/buildFailures: Dashboard 집계 + failure-first", () => {
+  const d3 = mkdtempSync(join(tmpdir(), "argraph3-"));
+  writeFileSync(join(d3, "a.json"), JSON.stringify({ kind: "verification-receipt", receiptId: "x1", subject: "X", verdict: "fail", surface: "research", input: { sha256: "s" }, provenance: { reported: { model: "m" } }, results: [{ statement: "S", verdict: "failed", checks: { citation: "not-found" } }] }));
+  const v = buildViewData(d3);
+  const s = buildSummary(v);
+  assert.equal(s.total, 1); assert.equal(s.fail, 1); assert.equal(s.mostFailedCheck, "citation");
+  const f = buildFailures(v);
+  assert.equal(f.length, 1); assert.deepEqual(f[0].affectedClaims, [1]); assert.ok(f[0].reasons[0].includes("citation"));
+  rmSync(d3, { recursive: true, force: true });
 });
 
 // ── L7 SDK 배럴: 외부 import 가능 ──
