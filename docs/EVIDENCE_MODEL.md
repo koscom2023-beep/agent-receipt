@@ -26,6 +26,9 @@ This page maps each object to the code that already implements it.
 | **Audit** | read-only judgment over the ledger/receipts | `risk` · `controls` (evidence-relevant-to controls, A/B/C tiers) · `insights` · `incident` · `audit-pack` · `replay` | `risk.ts` · `controls.ts` · `insights.ts` · `auditpack.ts` |
 | **Publication** | how a fact leaves the machine | `share-proof` (self-contained HTML) · `anchor` (Rekor seal) · `attest` (in-toto) · `export` (stdout preview) | `shareproof.ts` · `anchor.ts` · `attest.ts` |
 
+**The ledger is the durable core** — the one object that outlives every feature.
+Deep-dive on its data model & semantics: [`AI_LEDGER_MODEL.md`](AI_LEDGER_MODEL.md).
+
 **Key point:** *Claim ≠ Observation ≠ Difference* is already separated in code —
 Claim (`claims.ts`), Observation (`runVerify` → `Receipt`), Difference
 (`diffClaimField` in `claimdiff.ts`). The receipt is closer to a verified
