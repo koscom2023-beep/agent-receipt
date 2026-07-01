@@ -2,7 +2,7 @@ import { readFileSync, appendFileSync, existsSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { createHash } from "node:crypto";
 import { evaluateClaim } from "./evidencekernel.js";
-import { writeVerificationReceipt } from "./vreceipt.js";
+import { writeVerificationReceipt, tierProvenance } from "./vreceipt.js";
 
 const line = "─".repeat(56);
 
@@ -204,18 +204,18 @@ export function runCouncilVerify(fileArg: string | undefined, logArg: string | u
   console.log("  보증 범위: 결정이 제출한 근거가 출처에 실재하나(근거 충실성)이지 결정이 옳으냐가 아님. 회의 실행·모순탐지는 코어 밖.");
   if (outArg) {
     const outP = isAbsolute(outArg) ? outArg : join(process.cwd(), outArg);
-    const ch = writeVerificationReceipt(outP, {
+    const { receiptId, contentHash } = writeVerificationReceipt(outP, {
       surface: "council",
       inputFile: fileArg ?? "(input)",
       inputRaw: raw,
       subject: question,
-      provenance: record.provenance ?? null,
+      provenance: tierProvenance(record.provenance),
       results: logDecisions,
       summary: { grounded, ungrounded, unsupported },
       verdict: ungrounded ? "fail" : "pass",
       verifiedAt: new Date().toISOString(),
     });
-    console.log(`  📄 Verification Receipt: ${outArg} (contentHash ${ch.slice(0, 12)}…·입력 봉인·provenance 기록)`);
+    console.log(`  📄 Verification Receipt: ${outArg} (receiptId ${receiptId.slice(0, 12)}…·contentHash ${contentHash.slice(0, 12)}…·provenance verified/reported 분리·증적≠증명)`);
   }
   console.log(line);
   console.log("");

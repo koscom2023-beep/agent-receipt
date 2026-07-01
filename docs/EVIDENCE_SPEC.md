@@ -44,20 +44,28 @@ This is a **plugin / registry** dispatch, **not** an "Evidence VM" — there is 
 
 ## Provenance & Verification Receipt
 
-A report may carry a `provenance` block — self-reported chain-of-custody: `{ model, prompt, inputFiles, commit, tests }`. It is **recorded, not certified** (the verifiable parts — file hashes, commit existence — can be checked later; the rest is self-report and labeled as such).
+A report may carry a `provenance` block: `{ model, prompt, inputFiles, commit, tests, author }`. It is **tiered by trust**, never stored flat — self-report must not be laundered as fact:
+
+- **`verified`** — what we actually computed or checked: `commitExists` (the stated commit looked up in git, or `null` outside a repo), `inputFiles[].sha256` (we hash each file). Computationally / git-verifiable.
+- **`reported`** — self-report echoed verbatim: `model`, `prompt`, `author`, `tests`. We cannot verify that a given model actually used a given prompt today, so it stays labeled as report.
 
 `research verify --out <path>` (and `council verify --out <path>`) seal the run into a **Verification Receipt** — a durable, linkable artifact instead of ephemeral stdout:
 
 ```
-schemaVersion, kind: "verification-receipt", surface, verifiedAt,
-tool { name, version },
+schemaVersion, kind: "verification-receipt",
+receiptId,                     # sha256(schemaVersion + inputSha256 + verifierVersion + verdict)
+                               #   deterministic, timestamp-free → same input+verifier+verdict = same id
+                               #   (a cross-system reconciliation key)
+surface, verifiedAt, tool { name, version },
 input { file, sha256 },        # the exact input, hashed (chain of custody)
-subject, provenance,           # provenance echoed (recorded)
+subject,
+provenance { verified {…}, reported {…} },
 results [ per-claim/decision ], summary, verdict,
-contentHash                    # sha256 of the above (tamper-evident, replayable)
+means,                         # "a record that this verifier version produced this result on this input"
+contentHash                    # sha256 of all the above incl. verifiedAt (full tamper-evidence)
 ```
 
-This is the L5 step: `Claim → Evidence → Verification → Receipt → Provenance` as one sealed object. Same honest scope — it records *what was verified, when, against what, by which version, under what provenance*; it does not certify the AI's judgment.
+**A receipt is a record (증적), not a proof (증명).** It attests: *this verifier version produced this result on this exact input, under this recorded provenance.* It does **not** attest that the model truly used that prompt, that the commit connects to that run, or that the reported provenance is true — nor that the AI's judgment is right. `receiptId` (stable) is the reconciliation key; `contentHash` (with timestamp) is the full tamper seal.
 
 ## Guarantees (narrow and honest)
 

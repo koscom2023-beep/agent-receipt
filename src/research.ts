@@ -4,7 +4,7 @@ import {
   normalizeForCitation, verifyCitationInText, citationStatus, type CitationStatus,
   evaluateClaim,
 } from "./evidencekernel.js";
-import { writeVerificationReceipt } from "./vreceipt.js";
+import { writeVerificationReceipt, tierProvenance } from "./vreceipt.js";
 
 // 인용/수치 검증 커널은 공유 Evidence Kernel(evidencekernel.ts)에 있다(research·council 이 같은 코어 재사용).
 // 여기선 그 커널을 파일 IO(출처 스냅샷)·라이브 fetch·CLI 출력에 엮는 surface 만 담당한다.
@@ -219,18 +219,18 @@ export async function runResearchVerify(
   console.log("  보증 범위: 근거가 출처/재계산과 정합하나(충실성)이지 진위(주장이 옳나) 아님." + (opts.fetch ? "" : " 라이브 대조=--fetch."));
   if (opts.out) {
     const outP = isAbsolute(opts.out) ? opts.out : join(process.cwd(), opts.out);
-    const ch = writeVerificationReceipt(outP, {
+    const { receiptId, contentHash } = writeVerificationReceipt(outP, {
       surface: "research",
       inputFile: fileArg,
       inputRaw: raw,
       subject: typeof report.query === "string" ? report.query : "(query 없음)",
-      provenance: report.provenance ?? null,
+      provenance: tierProvenance(report.provenance),
       results: collected,
       summary: opts.fetch ? { verified: ok, failed, advisory, unreachable } : { verified: ok, failed, advisory },
       verdict: failed ? "fail" : "pass",
       verifiedAt: new Date().toISOString(),
     });
-    console.log(`  📄 Verification Receipt: ${opts.out} (contentHash ${ch.slice(0, 12)}…·입력 봉인·provenance 기록)`);
+    console.log(`  📄 Verification Receipt: ${opts.out} (receiptId ${receiptId.slice(0, 12)}…·contentHash ${contentHash.slice(0, 12)}…·provenance verified/reported 분리·증적≠증명)`);
   }
   console.log(line);
   console.log("");
