@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Playground — agent-receipt (the real kernel, in your browser)</title>
+<meta name="description" content="Run agent-receipt's actual Evidence Kernel in your browser — same code the CLI executes, mechanically transformed, equivalence-tested. Nothing leaves your machine.">
+<style>
+:root{
+  --bg:#f1f2f4;--bg-raised:#f8f9fa;--border:#dadde2;--border-soft:#e6e8eb;
+  --text:#24292f;--mut:#57606a;--pass:#1a7f37;--fail:#d03b3b;--warn:#9a6700;--accent:#0969da;
+  --fail-bg:#d03b3b14;--pass-bg:#1a7f3714;--accent-bg:#0969da14;
+  --font-ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Pretendard,Roboto,"Helvetica Neue",Arial,sans-serif;
+  --font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-ui);font-size:15.5px;line-height:1.6;-webkit-font-smoothing:antialiased}
+nav{display:flex;gap:18px;align-items:center;padding:14px 24px;border-bottom:1px solid var(--border);background:var(--bg-raised)}
+nav .brand{font-family:var(--font-mono);font-weight:700;font-size:16px;color:var(--text);text-decoration:none}
+nav a{color:var(--mut);text-decoration:none;font-size:14px;font-weight:600}
+nav a.on,nav a:hover{color:var(--accent)}
+.wrap{max-width:980px;margin:0 auto;padding:26px 24px 60px}
+h1{font-size:26px;margin:6px 0 4px;letter-spacing:-.01em}
+.sub{color:var(--mut);font-size:14px;margin-bottom:6px}
+.honest{background:var(--accent-bg);border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-size:13.5px;color:var(--mut);margin:12px 0 20px}
+.presets{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}
+.preset{border:1px solid var(--border);background:var(--bg-raised);border-radius:999px;padding:6px 14px;font-size:13px;cursor:pointer;font-weight:600;color:var(--text)}
+.preset:hover{border-color:var(--accent);color:var(--accent)}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:820px){.cols{grid-template-columns:1fr}}
+label{display:block;font-size:12.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin:0 0 6px}
+textarea{width:100%;min-height:210px;background:var(--bg-raised);border:1px solid var(--border);border-radius:10px;padding:12px;font-family:var(--font-mono);font-size:13px;line-height:1.55;color:var(--text);resize:vertical}
+textarea:focus{outline:none;border-color:var(--accent)}
+.run{margin:16px 0;display:flex;gap:10px;align-items:center}
+button.go{background:var(--accent);color:#fff;border:none;border-radius:10px;padding:11px 26px;font-size:15px;font-weight:700;cursor:pointer}
+button.go:hover{filter:brightness(1.06)}
+.out{border:1px solid var(--border);border-radius:12px;background:var(--bg-raised);padding:16px}
+.verdict{font-size:17px;font-weight:700;margin-bottom:8px}
+.chk{display:grid;grid-template-columns:150px 1fr;gap:6px 10px;font-family:var(--font-mono);font-size:13.5px;margin:8px 0}
+.k{color:var(--mut)}
+.pass{color:var(--pass)}.fail{color:var(--fail)}.mut{color:var(--mut)}
+.ev{border-left:3px solid var(--fail);background:var(--fail-bg);border-radius:0 8px 8px 0;padding:8px 12px;margin:8px 0;font-size:13.5px}
+pre.raw{background:#24292f;color:#e6edf3;border-radius:10px;padding:12px 14px;font-size:12px;overflow-x:auto;margin:10px 0 0}
+.err{color:var(--fail);font-family:var(--font-mono);font-size:13px;white-space:pre-wrap}
+footer{border-top:1px solid var(--border);color:var(--mut);font-size:13px;text-align:center;padding:26px 0}
+footer a{color:var(--accent);text-decoration:none}
+</style>
+</head>
+<body>
+<nav>
+  <a class="brand" href="/">agent-receipt</a>
+  <a href="/">Home</a>
+  <a class="on" href="playground.html">Playground</a>
+  <a href="demo.html">Evidence Browser demo</a>
+  <a href="https://github.com/koscom2023-beep/agent-receipt" style="margin-left:auto">GitHub</a>
+</nav>
+<div class="wrap">
+  <h1>Playground — the real kernel, in your browser</h1>
+  <div class="sub">진짜 커널을 브라우저에서 직접 실행합니다 — CLI가 쓰는 바로 그 코드(기계 변환·동등성 테스트로 잠금). 아무것도 서버로 가지 않습니다.</div>
+  <div class="honest"><b>Honest scope:</b> this page runs the <b>pure</b> kinds — citation · number · date · link · schema · version(semver). Crypto kinds (hash · signature · receipt) and git-fact kinds (commit · fileChanged · diffContains · file · artifact) need your machine's crypto/git/filesystem — they run in the CLI. <span style="color:var(--mut)">암호·git 계열은 CLI 몫(브라우저가 재현하면 그게 거짓이라서).</span></div>
+
+  <div class="presets">
+    <button class="preset" data-p="soc2">📋 SOC2 quiet upgrade (citation)</button>
+    <button class="preset" data-p="sum">🧮 sum recompute (number)</button>
+    <button class="preset" data-p="semver">📦 semver range (version)</button>
+    <button class="preset" data-p="schema">🧩 required field (schema)</button>
+    <button class="preset" data-p="date">📅 format-agnostic date</button>
+  </div>
+
+  <div class="cols">
+    <div>
+      <label>Claim (JSON — same fields as the CLI · <a href="https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/EVIDENCE_SPEC.md" style="color:var(--accent)">spec</a>)</label>
+      <textarea id="claim" spellcheck="false"></textarea>
+    </div>
+    <div>
+      <label>Source text (what the claim cites · 출처 원문)</label>
+      <textarea id="source" spellcheck="false"></textarea>
+    </div>
+  </div>
+  <div class="run">
+    <button class="go" id="go">Verify ▸</button>
+    <span class="mut" style="font-size:13px">runs <code style="font-family:var(--font-mono)">evaluateClaim(claim, source)</code> locally</span>
+  </div>
+  <div class="out" id="out"><span class="mut">Pick a preset or write a claim, then Verify.</span></div>
+
+  <footer style="margin-top:40px">same kernel, three surfaces: CLI · SDK · this page — <a href="https://www.npmjs.com/package/@promptia-labs/agent-receipt">@promptia-labs/agent-receipt</a></footer>
+</div>
+
+<script type="module">
+import { evaluateClaim, CHECK_KINDS } from "./kernel.js";
+const $ = (id) => document.getElementById(id);
+const esc = (x) => String(x ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+const PRESETS = {
+  soc2: {
+    claim: { statement: "Acme has passed a SOC 2 Type II audit", quotedText: "has passed a SOC 2 Type II audit" },
+    source: "Vendor security review — Acme Cloud\n\nAcme Cloud completed a SOC 2 Type I audit in March 2026. A Type II audit is scheduled for Q1 2027 but has not started."
+  },
+  sum: { claim: { statement: "the three lanes total 42", statedValue: 42, op: "sum", operands: [11, 14, 16] }, source: "" },
+  semver: { claim: { statement: "installed zod 3.24.0 satisfies the declared range", statedPackage: "zod", statedPackageVersion: "3.24.0", dependencyMap: { zod: "^3.23.8" } }, source: "" },
+  schema: { claim: { statement: "config matches the required shape", schemaData: { enabled: true }, schemaDef: { type: "object", required: ["enabled", "retries"] } }, source: "" },
+  date: { claim: { statement: "the audit date matches", statedDate: "2026-03-01" }, source: "The audit was completed on Mar 1, 2026 by the assessor." },
+};
+document.querySelectorAll(".preset").forEach(b => b.onclick = () => {
+  const p = PRESETS[b.dataset.p];
+  $("claim").value = JSON.stringify(p.claim, null, 2);
+  $("source").value = p.source;
+  run();
+});
+
+function run() {
+  let claim;
+  try { claim = JSON.parse($("claim").value); }
+  catch (e) { $("out").innerHTML = '<div class="err">claim JSON 파싱 실패: ' + esc(e.message) + "</div>"; return; }
+  const source = $("source").value.trim() === "" ? null : $("source").value;
+  let ev;
+  try { ev = evaluateClaim(claim, source); }
+  catch (e) { $("out").innerHTML = '<div class="err">' + esc(e.message) + "</div>"; return; }
+  let h = "";
+  h += '<div class="verdict">' + (ev.failed ? '<span class="fail">✗ FAILED — 근거가 출처/재계산과 불일치</span>' : ev.verified ? '<span class="pass">✓ VERIFIED — 근거가 출처/재계산과 정합</span>' : '<span class="mut">· ADVISORY — 검증할 근거 없음(미검증)</span>') + "</div>";
+  h += '<div class="chk">';
+  for (const k of CHECK_KINDS) {
+    const v = ev.results[k];
+    if (v == null) continue;
+    const bad = ["not-found","mismatch","invalid"].includes(v);
+    h += '<span class="k">' + esc(k) + '</span><span class="' + (v === "verified" || v === "valid" ? "pass" : bad ? "fail" : "mut") + '">' + esc(v) + "</span>";
+  }
+  h += "</div>";
+  for (const [k, e] of Object.entries(ev.evidence || {})) {
+    h += '<div class="ev"><b>' + esc(k) + "</b> — expected: <code>" + esc(e.expected) + "</code> · actual: <code>" + esc(e.actual) + "</code></div>";
+  }
+  h += '<pre class="raw">' + esc(JSON.stringify({ results: ev.results, failed: ev.failed, verified: ev.verified }, null, 2)) + "</pre>";
+  $("out").innerHTML = h;
+}
+$("go").onclick = run;
+</script>
+</body>
+</html>
