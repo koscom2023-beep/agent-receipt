@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import { writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadReceipts, queryReceipts, buildViewData, buildGraphHtml, buildSummary, buildFailures, buildIndexes, buildGraph, buildFailureEvents, filterFailureEvents, buildGraphDiff, buildHistory, resolveFingerprintPrefix, buildSubjects } from "../dist/graph.js";
+import { loadReceipts, queryReceipts, buildViewData, buildGraphHtml, buildSummary, buildFailures, buildIndexes, buildGraph, buildFailureEvents, filterFailureEvents, buildGraphDiff, buildHistory, resolveFingerprintPrefix, buildSubjects, foldReceipts, foldVRRows } from "../dist/graph.js";
 import { evaluateClaim, SCHEMA_VERSION, claimFingerprintV1 } from "../dist/index.js"; // SDK 배럴(L7 씨앗)
 
 let pass = 0;
@@ -437,6 +437,91 @@ check("HTML: Subjects(상태판) 탭 + subjects 임베드", () => {
   assert.ok(html.includes("Subjects(상태판)"));
   assert.ok(html.includes('"subjects"'));
   assert.ok(html.includes("subject 상태판 — 카운트 롤업(판단 아님)"));
+});
+
+// ── 감사 fix(2026-07-02): 접힘(fold) — buildSummary/buildFailures/buildFailureEvents/buildIndexes/
+//   buildSubjects/graph query 전부가 buildGraph 와 같은 방식으로 receiptId 를 접어야 한다.
+//   사용자 실사례 재현: 같은 fixture 를 반복 재검증(dogfood 등)하면 파일은 늘지만 고유 결과는 그대로.
+check("buildSummary: fileCount(파일수)≠total(고유결과) — 같은 fixture 7회 재검증", () => {
+  const dP = mkdtempSync(join(tmpdir(), "argraphP-"));
+  const base = { kind: "verification-receipt", receiptId: "dup1", subject: "S", verdict: "fail", surface: "research", input: { sha256: "s" }, results: [{ statement: "X", verdict: "failed", checks: { citation: "not-found" } }] };
+  for (let i = 0; i < 7; i++) writeFileSync(join(dP, `r${i}.json`), JSON.stringify({ ...base, verifiedAt: `2026-07-0${(i % 9) + 1}T00:00:00Z` }));
+  const rows = buildViewData(dP);
+  assert.equal(rows.length, 7); // 파일은 7개
+  const s = buildSummary(rows);
+  assert.equal(s.fileCount, 7); // 파일수는 정직하게 노출
+  assert.equal(s.total, 1); // 고유 결과는 1건뿐(반복 재검증)
+  assert.equal(s.fail, 1); // fail 카운트도 접힘 후 1(7 아님)
+  rmSync(dP, { recursive: true, force: true });
+});
+check("buildFailures/buildFailureEvents: occurrences 필드로 반복 횟수 노출(리스트 중복 제거)", () => {
+  const dQ = mkdtempSync(join(tmpdir(), "argraphQ-"));
+  const base = { kind: "verification-receipt", receiptId: "dup2", subject: "S", verdict: "fail", surface: "research", input: { sha256: "s" }, results: [{ statement: "X", verdict: "failed", checks: { citation: "not-found" } }] };
+  writeFileSync(join(dQ, "a.json"), JSON.stringify({ ...base, verifiedAt: "2026-07-01T00:00:00Z" }));
+  writeFileSync(join(dQ, "b.json"), JSON.stringify({ ...base, verifiedAt: "2026-07-02T00:00:00Z" }));
+  writeFileSync(join(dQ, "c.json"), JSON.stringify({ ...base, verifiedAt: "2026-07-03T00:00:00Z" }));
+  const rows = buildViewData(dQ);
+  const failures = buildFailures(rows);
+  assert.equal(failures.length, 1); // 3파일이 아니라 1개 실패 항목
+  assert.equal(failures[0].occurrences, 3);
+  const events = buildFailureEvents(rows);
+  assert.equal(events.length, 1); // 마찬가지로 1개 이벤트
+  assert.equal(events[0].occurrences, 3);
+  assert.equal(events[0].allFiles.length, 3);
+  assert.equal(events[0].file, "c.json"); // 최신(verifiedAt 가장 늦은) 파일이 대표
+  const ix = buildIndexes(rows);
+  assert.equal(ix.byCheck.citation.length, 1); // indexes 도 접힘 상속(buildFailureEvents 경유)
+  rmSync(dQ, { recursive: true, force: true });
+});
+check("buildSubjects: receipts=고유 결과 수(파일수 아님)", () => {
+  const dR = mkdtempSync(join(tmpdir(), "argraphR-"));
+  const base = { kind: "verification-receipt", receiptId: "dup3", subject: "ProjZ", verdict: "pass", surface: "research", input: { sha256: "s" } };
+  writeFileSync(join(dR, "a.json"), JSON.stringify({ ...base, verifiedAt: "2026-07-01T00:00:00Z" }));
+  writeFileSync(join(dR, "b.json"), JSON.stringify({ ...base, verifiedAt: "2026-07-02T00:00:00Z" }));
+  const subs = buildSubjects(buildViewData(dR));
+  assert.equal(subs[0].receipts, 1); // 파일 2개지만 고유 결과는 1
+  rmSync(dR, { recursive: true, force: true });
+});
+check("foldReceipts: receiptId 결측은 안 접힘(file 이 키) · 서로 다른 receiptId 도 안 접힘", () => {
+  const dS = mkdtempSync(join(tmpdir(), "argraphS-"));
+  writeFileSync(join(dS, "a.json"), JSON.stringify({ kind: "verification-receipt", subject: "A", verdict: "pass", surface: "research", input: { sha256: "s1" } }));
+  writeFileSync(join(dS, "b.json"), JSON.stringify({ kind: "verification-receipt", subject: "B", verdict: "pass", surface: "research", input: { sha256: "s2" } }));
+  writeFileSync(join(dS, "c.json"), JSON.stringify({ kind: "verification-receipt", receiptId: "uniq1", subject: "C", verdict: "pass", surface: "research", input: { sha256: "s3" } }));
+  const folded = foldReceipts(buildViewData(dS));
+  assert.equal(folded.length, 3); // 셋 다 서로 다름 — 접히면 안 됨
+  assert.ok(folded.every((f) => f.occurrences === 1));
+  rmSync(dS, { recursive: true, force: true });
+});
+check("graph query(VRRow 경로)도 접힘: aggregate·표시 카운트가 파일수 아니라 고유수", () => {
+  const dT = mkdtempSync(join(tmpdir(), "argraphT-"));
+  const base = { kind: "verification-receipt", receiptId: "dupQ", subject: "S", verdict: "pass", surface: "research", input: { sha256: "s" }, provenance: { reported: { model: "m" } } };
+  writeFileSync(join(dT, "a.json"), JSON.stringify({ ...base, verifiedAt: "2026-07-01T00:00:00Z" }));
+  writeFileSync(join(dT, "b.json"), JSON.stringify({ ...base, verifiedAt: "2026-07-02T00:00:00Z" }));
+  const all = loadReceipts(dT);
+  assert.equal(all.length, 2); // 파일 2개
+  const folded = foldVRRows(queryReceipts(all, {}));
+  assert.equal(folded.length, 1); // 접히면 1건
+  assert.equal(folded[0].occurrences, 2);
+  rmSync(dT, { recursive: true, force: true });
+});
+
+check("HTML: 접힘 반영 — folded 임베드·반복배지(×N)·Files 카드", () => {
+  const dU = mkdtempSync(join(tmpdir(), "argraphU-"));
+  const base = { kind: "verification-receipt", receiptId: "dupU", subject: "S", verdict: "fail", surface: "research", input: { sha256: "s" }, results: [{ statement: "X", verdict: "failed", checks: { citation: "not-found" } }] };
+  writeFileSync(join(dU, "a.json"), JSON.stringify({ ...base, verifiedAt: "2026-07-01T00:00:00Z" }));
+  writeFileSync(join(dU, "b.json"), JSON.stringify({ ...base, verifiedAt: "2026-07-02T00:00:00Z" }));
+  const rows = buildViewData(dU);
+  const html = buildGraphHtml(rows);
+  assert.ok(html.includes('"folded"')); // 접힘 데이터 임베드
+  assert.ok(html.includes("occurrences>1")); // JS 배지 로직 존재
+  assert.ok(html.includes("반복 기록됨")); // detail() 반복 안내 문구
+  assert.ok(html.includes("Files")); // Dashboard 파일수 보조카드(fileCount!==total 일 때만)
+  const emb = JSON.parse(html.match(/<script id="ar-data"[^>]*>(.*?)<\/script>/s)[1]);
+  assert.equal(emb.folded.length, 1); // 2파일이 1건으로 접힘
+  assert.equal(emb.folded[0].occurrences, 2);
+  assert.equal(emb.summary.fileCount, 2);
+  assert.equal(emb.summary.total, 1);
+  rmSync(dU, { recursive: true, force: true });
 });
 
 // ── L7 SDK 배럴: 외부 import 가능 ──

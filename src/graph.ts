@@ -78,7 +78,7 @@ function resolveDir(dirArg: string | undefined): string {
   return dirArg ? (isAbsolute(dirArg) ? dirArg : join(process.cwd(), dirArg)) : join(process.cwd(), ".agent-guard", "vreceipts");
 }
 
-function aggregate(rows: VRRow[]): { pass: number; fail: number; byModel: Record<string, { pass: number; fail: number }> } {
+function aggregate(rows: FoldedVRRow[]): { pass: number; fail: number; byModel: Record<string, { pass: number; fail: number }> } {
   const pass = rows.filter((r) => r.verdict === "pass").length;
   const byModel: Record<string, { pass: number; fail: number }> = {};
   for (const r of rows) {
@@ -92,25 +92,25 @@ function aggregate(rows: VRRow[]): { pass: number; fail: number; byModel: Record
 
 /**
  * `agent-receipt graph query --dir <d> [--commit <h>] [--input <sha>] [--model <m>] [--receipt-id <id>] [--format json]`
- *  쌓인 Verification Receipt 를 질의. 읽기전용·중립 카운트. --format json = UI/기계용. exit 0.
+ *  쌓인 Verification Receipt 를 질의(접힘 후=고유 결과). 읽기전용·중립 카운트. --format json = UI/기계용. exit 0.
  */
 export function runGraphQuery(dirArg: string | undefined, f: GraphFilters, format?: string): never {
   const dir = resolveDir(dirArg);
-  const all = loadReceipts(dir);
-  const rows = queryReceipts(all, f);
+  const allRaw = loadReceipts(dir);
+  const rows = foldVRRows(queryReceipts(allRaw, f)); // 접힘: 같은 receiptId 반복(예: dogfood 재검증)은 한 행
   const agg = aggregate(rows);
 
   if (format === "json") {
-    console.log(JSON.stringify({ dir, total: all.length, matched: rows.length, rows, aggregate: agg }, null, 2));
+    console.log(JSON.stringify({ dir, fileCount: allRaw.length, total: rows.length, matched: rows.length, rows, aggregate: agg }, null, 2));
     process.exit(0);
   }
 
   console.log("");
   console.log(line);
-  console.log(`Evidence Graph 조회: ${dir}  (총 ${all.length}건 중 ${rows.length}건 일치)`);
+  console.log(`Evidence Graph 조회: ${dir}  (파일 ${allRaw.length}개 중 고유 ${rows.length}건 일치)`);
   console.log(line);
   for (const r of rows) {
-    console.log(`  ${r.verdict === "pass" ? "✓" : "✗"} ${r.receiptId.slice(0, 12)}… [${r.surface}] ${r.subject.slice(0, 40)}`);
+    console.log(`  ${r.verdict === "pass" ? "✓" : "✗"} ${r.receiptId.slice(0, 12)}… [${r.surface}] ${r.subject.slice(0, 40)}${r.occurrences > 1 ? ` ×${r.occurrences}` : ""}`);
     console.log(`      model=${r.model ?? "-"} · commit=${r.commit ? r.commit.slice(0, 8) : "-"} · input=${r.inputSha ? r.inputSha.slice(0, 8) : "-"}`);
   }
   if (!rows.length) console.log("  (일치 영수증 없음)");
@@ -205,9 +205,10 @@ interface ViewRow {
   claims: EnrichedClaim[];
 }
 
-// Dashboard 요약(생성시점 집계·중립 카운트).
+// Dashboard 요약(생성시점 집계·중립 카운트). total=고유 결과 수(receiptId 접힘 후) · fileCount=파일 수(접기 전) —
+//   같은 fixture 를 반복 재검증(dogfood 등)하면 total<fileCount 로 벌어짐. 정직: 둘 다 노출(하나 숨기지 않음).
 export interface GraphSummary {
-  total: number; pass: number; fail: number;
+  total: number; fileCount: number; pass: number; fail: number;
   byModel: Record<string, { pass: number; fail: number }>;
   checkFailures: Record<string, number>;
   mostFailedCheck: string | null;
@@ -215,10 +216,11 @@ export interface GraphSummary {
   tamperedCount: number; // contentHashOk/receiptIdOk 불일치
 }
 export function buildSummary(rows: ViewRow[]): GraphSummary {
+  const folded = foldReceipts(rows);
   let pass = 0, fail = 0, driftCount = 0, tamperedCount = 0;
   const byModel: Record<string, { pass: number; fail: number }> = {};
   const checkFailures: Record<string, number> = {};
-  for (const r of rows) {
+  for (const r of folded) {
     if (r.verdict === "pass") pass++;
     else if (r.verdict === "fail") fail++;
     const m = r.model ?? "(unknown)";
@@ -230,13 +232,13 @@ export function buildSummary(rows: ViewRow[]): GraphSummary {
     for (const c of r.claims) for (const f of c.failures) checkFailures[f.check] = (checkFailures[f.check] ?? 0) + 1;
   }
   const entries = Object.entries(checkFailures).sort((a, b) => b[1] - a[1]);
-  return { total: rows.length, pass, fail, byModel, checkFailures, mostFailedCheck: entries[0]?.[0] ?? null, driftCount, tamperedCount };
+  return { total: folded.length, fileCount: rows.length, pass, fail, byModel, checkFailures, mostFailedCheck: entries[0]?.[0] ?? null, driftCount, tamperedCount };
 }
 
-// Failure-first: 실패 receipt 별 reason + 영향받은 claim.
-export interface FailureEntry { receiptId: string; subject: string; reasons: string[]; affectedClaims: number[] }
+// Failure-first: 실패 receipt 별 reason + 영향받은 claim. rows 는 접힘(fold) 후 — 같은 결과 반복은 occurrences 로.
+export interface FailureEntry { receiptId: string; subject: string; reasons: string[]; affectedClaims: number[]; occurrences: number }
 export function buildFailures(rows: ViewRow[]): FailureEntry[] {
-  return rows
+  return foldReceipts(rows)
     .filter((r) => r.verdict === "fail")
     .map((r) => {
       const reasons = new Set<string>();
@@ -247,19 +249,21 @@ export function buildFailures(rows: ViewRow[]): FailureEntry[] {
           c.failures.forEach((f) => reasons.add(`${f.check}: ${f.reason}`));
         }
       });
-      return { receiptId: r.receiptId, subject: r.subject, reasons: [...reasons], affectedClaims };
+      return { receiptId: r.receiptId, subject: r.subject, reasons: [...reasons], affectedClaims, occurrences: r.occurrences };
     });
 }
 
-// FailureEvent = 실패 1건(claim×실패check)을 flat 정규화 — indexes 의 source.
+// FailureEvent = 실패 1건(claim×실패check)을 flat 정규화 — indexes 의 source. rows 는 접힘 후(같은 결과 반복=occurrences).
 export interface FailureEvent {
   receiptId: string;
-  file: string; // 안정 식별자(receiptId 결측/중복 파일에도 정확 귀속)
+  file: string; // 접힘 후 대표(최신) 파일명 — allFiles 에 전체
+  allFiles: string[]; // 접힌 파일명 전부(occurrences 와 길이 일치)
+  occurrences: number; // 이 논리적 결과가 몇 개 파일로 반복됐나(같은 fixture 재검증 등)
   subject: string;
   model: string | null;
   commit: string | null; // 자가보고(provenance.reported)
   inputSha: string | null;
-  verifiedAt: string | null; // 자가보고 타임스탬프
+  verifiedAt: string | null; // 자가보고 타임스탬프(접힘 후=최신)
   tampered: boolean; // 영수증 봉인 재검증 실패(contentHash/receiptId)
   claimIndex: number;
   statement: string;
@@ -270,12 +274,13 @@ export interface FailureEvent {
 }
 export function buildFailureEvents(rows: ViewRow[]): FailureEvent[] {
   const out: FailureEvent[] = [];
-  for (const r of rows) {
+  for (const r of foldReceipts(rows)) {
     const tampered = !r.integrity.contentHashOk || !r.integrity.receiptIdOk;
     r.claims.forEach((c, i) => {
       c.failures.forEach((f) => {
         out.push({
-          receiptId: r.receiptId, file: r.file, subject: r.subject, model: r.model, commit: r.commit,
+          receiptId: r.receiptId, file: r.file, allFiles: r.allFiles, occurrences: r.occurrences,
+          subject: r.subject, model: r.model, commit: r.commit,
           inputSha: r.inputSha, verifiedAt: r.verifiedAt, tampered,
           claimIndex: i + 1, statement: c.statement, fingerprint: c.fingerprint, check: f.check, status: f.status, reason: f.reason,
         });
@@ -308,7 +313,7 @@ export function buildIndexes(rows: ViewRow[]): GraphIndexes {
 
 // ── Subject 상태판(L6) — subject 별 순수 롤업(카운트만·추세/점수 판정 0) ──
 // "이 프로젝트가 늘었나/줄었나"는 여기가 아니라 graph diff(두 집합 비교 사실)의 bySubject 가 답한다.
-// 시각(first/last)은 verifiedAt=자가보고 — 표시 시 라벨.
+// 시각(first/last)은 verifiedAt=자가보고 — 표시 시 라벨. receipts=고유 결과 수(접힘 후·파일수 아님).
 export interface SubjectRollup {
   subject: string;
   receipts: number;
@@ -322,7 +327,7 @@ export interface SubjectRollup {
 }
 export function buildSubjects(rows: ViewRow[]): SubjectRollup[] {
   const m = new Map<string, SubjectRollup>();
-  for (const r of rows) {
+  for (const r of foldReceipts(rows)) {
     const k = r.subject || "(subject 없음)";
     const s = m.get(k) ?? { subject: k, receipts: 0, pass: 0, fail: 0, failureEvents: 0, tamperedReceipts: 0, byCheck: {}, firstVerifiedAt: null, lastVerifiedAt: null };
     s.receipts++;
@@ -352,12 +357,12 @@ export function runGraphSubjects(dirArg: string | undefined, format?: string): n
   const rows = buildViewData(dir);
   const subs = buildSubjects(rows);
   if (format === "json") {
-    console.log(JSON.stringify({ dir, total: rows.length, subjects: subs, note: "카운트 롤업(판단 아님)·증감은 graph diff 의 bySubject·시각=verifiedAt(자가보고)" }, null, 2));
+    console.log(JSON.stringify({ dir, fileCount: rows.length, total: foldReceipts(rows).length, subjects: subs, note: "receipts=고유 결과(접힘 후)·판단 아님·증감은 graph diff 의 bySubject·시각=verifiedAt(자가보고)" }, null, 2));
     process.exit(0);
   }
   console.log("");
   console.log(line);
-  console.log(`Subject 상태판: ${dir}  (영수증 ${rows.length}건 · subject ${subs.length}개 · 실패 많은 순)`);
+  console.log(`Subject 상태판: ${dir}  (파일 ${rows.length}개 중 고유 ${foldReceipts(rows).length}건 · subject ${subs.length}개 · 실패 많은 순)`);
   console.log(line);
   if (!subs.length) console.log("  (영수증 없음)");
   for (const s of subs) {
@@ -427,48 +432,74 @@ const canonTime = (v: string | null): string | null => {
 };
 const cmpStr = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0); // 코드포인트·로케일 비의존
 
-export function buildGraph(rows: ViewRow[]): { nodes: GraphNode[]; edges: GraphEdge[] } {
-  interface Ent { row: ViewRow; rid: string; ct: string | null; times: string[]; occurrences: number }
-  const byRid = new Map<string, Ent>();
+// ── 접힘(fold) SSOT — 같은 receiptId(=같은 입력·검증기버전·verdict)를 한 논리적 결과로 묶는다 ──
+// 감사 발견(2026-07-02): buildGraph 는 이 접힘을 하는데 buildSummary/buildFailures/buildIndexes/
+//   HTML 목록은 파일 단위로 순회해 안 접었다 — 같은 dogfood 픽스처를 npm test 로 반복 돌리면
+//   "파일 22개·고유결과 9개"인데 화면엔 22개가 다 다른 것처럼 나열되는 결함으로 드러남.
+//   이제 이 함수가 유일한 접힘 로직(SSOT) — buildGraph 와 아래 buildSummary/buildFailures/
+//   buildFailureEvents/buildSubjects 전부 이걸 공유해 항상 같은 방식으로 접는다.
+// receiptId 결측은 접지 않음(file 이 사실상 유일 키). 최신 verifiedAt 행의 필드 유지 +
+//   occurrences/verifiedAtAll/allFiles 로 접힌 기록 전부 보존(나중 재검증 사실을 버리지 않음).
+interface FoldExtra { foldKey: string; occurrences: number; verifiedAtAll: string[]; allFiles: string[] }
+export type FoldedRow = ViewRow & FoldExtra;
+export type FoldedVRRow = VRRow & FoldExtra;
+// 제네릭 구현 — ViewRow(graph view 계열)·VRRow(graph query 계열) 둘 다 이 하나로 접는다(SSOT 실제 공유).
+// foldKey: receiptId 또는 `file:<파일명>`(결측 시). 최신 verifiedAt 행의 필드 유지 +
+//   occurrences/verifiedAtAll/allFiles 로 접힌 기록 전부 보존(나중 재검증 사실을 버리지 않음).
+function foldByReceipt<T extends { receiptId: string; file: string; verifiedAt: string | null }>(rows: T[]): (T & FoldExtra)[] {
+  interface Ent { row: T; foldKey: string; ct: string | null; times: string[]; files: string[] }
+  const byKey = new Map<string, Ent>();
   for (const row of rows) {
-    const rid = row.receiptId ? `receipt:${row.receiptId}` : `receipt:file:${row.file}`;
+    const foldKey = row.receiptId || `file:${row.file}`;
     const ct = canonTime(row.verifiedAt);
-    const prev = byRid.get(rid);
+    const prev = byKey.get(foldKey);
     if (!prev) {
-      byRid.set(rid, { row, rid, ct, times: row.verifiedAt ? [row.verifiedAt] : [], occurrences: 1 });
+      byKey.set(foldKey, { row, foldKey, ct, times: row.verifiedAt ? [row.verifiedAt] : [], files: [row.file] });
       continue;
     }
-    prev.occurrences++;
     if (row.verifiedAt) prev.times.push(row.verifiedAt);
+    prev.files.push(row.file);
     // 최신 verifiedAt 행 유지(동률이면 file 코드포인트 큰 쪽 — readdir 순서 비의존 tie-break)
     if ((cmpStr(ct ?? "", prev.ct ?? "") || cmpStr(row.file, prev.row.file)) > 0) {
       prev.row = row;
       prev.ct = ct;
     }
   }
-  const uniq = [...byRid.values()].sort(
-    (a, b) => cmpStr(a.ct ?? "", b.ct ?? "") || cmpStr(a.rid, b.rid) || cmpStr(a.row.file, b.row.file),
-  );
+  return [...byKey.values()]
+    .sort((a, b) => cmpStr(a.ct ?? "", b.ct ?? "") || cmpStr(a.foldKey, b.foldKey) || cmpStr(a.row.file, b.row.file))
+    .map((e) => ({
+      ...e.row,
+      foldKey: e.foldKey,
+      occurrences: e.files.length,
+      verifiedAtAll: e.times.slice().sort((x, y) => cmpStr(canonTime(x) ?? x, canonTime(y) ?? y)),
+      allFiles: e.files.slice().sort(cmpStr),
+    }));
+}
+export const foldReceipts = (rows: ViewRow[]): FoldedRow[] => foldByReceipt(rows);
+export const foldVRRows = (rows: VRRow[]): FoldedVRRow[] => foldByReceipt(rows);
+
+export function buildGraph(rows: ViewRow[]): { nodes: GraphNode[]; edges: GraphEdge[] } {
+  const uniq = foldReceipts(rows);
   const nodes: GraphNode[] = [];
   const edges: GraphEdge[] = [];
-  const isTampered = (e: Ent): boolean => !e.row.integrity.contentHashOk || !e.row.integrity.receiptIdOk;
-  const inputRehashed = (e: Ent): boolean => e.row.integrity.inputMatch === true;
-  for (const e of uniq) {
-    const r = e.row;
+  const isTampered = (e: FoldedRow): boolean => !e.integrity.contentHashOk || !e.integrity.receiptIdOk;
+  const inputRehashed = (e: FoldedRow): boolean => e.integrity.inputMatch === true;
+  for (const r of uniq) {
+    const rid = `receipt:${r.foldKey}`;
     const node: GraphNode = {
-      id: e.rid, type: "receipt", subject: r.subject, verdict: r.verdict, surface: r.surface,
+      id: rid, type: "receipt", subject: r.subject, verdict: r.verdict, surface: r.surface,
       model: r.model, commit: r.commit, inputSha: r.inputSha, verifiedAt: r.verifiedAt, file: r.file,
     };
-    if (isTampered(e)) node.tampered = true; // 봉인 확인 실패 — 숨기지 않고 표시
-    if (e.occurrences > 1) {
-      node.occurrences = e.occurrences; // 접힌 파일 수(기록 보존)
-      node.verifiedAtAll = e.times.slice().sort((x, y) => cmpStr(canonTime(x) ?? x, canonTime(y) ?? y));
+    if (isTampered(r)) node.tampered = true; // 봉인 확인 실패 — 숨기지 않고 표시
+    if (r.occurrences > 1) {
+      node.occurrences = r.occurrences; // 접힌 파일 수(기록 보존)
+      node.verifiedAtAll = r.verifiedAtAll;
     }
     nodes.push(node);
     r.claims.forEach((c, i) => {
-      const cid = `${e.rid}/claim/${i + 1}`;
+      const cid = `${rid}/claim/${i + 1}`;
       nodes.push({ id: cid, type: "claim", statement: c.statement, verdict: c.verdict, fingerprint: c.fingerprint });
-      edges.push(edge("asserts", e.rid, cid, "receipt-structure", "영수증 파일에서 직접 읽은 포함관계(구조 사실)", "verified"));
+      edges.push(edge("asserts", rid, cid, "receipt-structure", "영수증 파일에서 직접 읽은 포함관계(구조 사실)", "verified"));
       for (const [kind, stt] of Object.entries(c.checks)) {
         if (stt == null) continue;
         const kid = `${cid}/check/${kind}`;
@@ -477,10 +508,11 @@ export function buildGraph(rows: ViewRow[]): { nodes: GraphNode[]; edges: GraphE
       }
     });
   }
-  const groupBy = (key: (r: ViewRow) => string | null): Map<string, Ent[]> => {
-    const m = new Map<string, Ent[]>();
+  const ridOf = (e: FoldedRow): string => `receipt:${e.foldKey}`;
+  const groupBy = (key: (r: FoldedRow) => string | null): Map<string, FoldedRow[]> => {
+    const m = new Map<string, FoldedRow[]>();
     for (const e of uniq) {
-      const k = key(e.row);
+      const k = key(e);
       if (!k) continue;
       const arr = m.get(k) ?? [];
       arr.push(e);
@@ -495,20 +527,21 @@ export function buildGraph(rows: ViewRow[]): { nodes: GraphNode[]; edges: GraphE
         const rehashedBoth = inputRehashed(g[i]) && inputRehashed(g[j]);
         edges.push(
           rehashedBoth
-            ? edge("same_input", g[j].rid, g[i].rid, "input.sha256-rehashed", "input.sha256 동일 — 양쪽 입력 파일 재해시로 확인(inputMatch)", "verified")
-            : edge("same_input", g[j].rid, g[i].rid, "input.sha256-stated", "input.sha256 동일 — 영수증 기재값 기준(입력 재해시 불가/미일치 포함)", "reported"),
+            ? edge("same_input", ridOf(g[j]), ridOf(g[i]), "input.sha256-rehashed", "input.sha256 동일 — 양쪽 입력 파일 재해시로 확인(inputMatch)", "verified")
+            : edge("same_input", ridOf(g[j]), ridOf(g[i]), "input.sha256-stated", "input.sha256 동일 — 영수증 기재값 기준(입력 재해시 불가/미일치 포함)", "reported"),
         );
       }
     for (let i = 0; i + 1 < g.length; i++) {
       const a = g[i], b = g[i + 1];
-      if (a.ct && b.ct && b.ct > a.ct)
-        edges.push(edge("reverifies", b.rid, a.rid, "verifiedAt-order", "같은 input.sha256 + verifiedAt 시간순 — verifiedAt 은 자가보고 타임스탬프(파생의 증명 아님)", "reported"));
+      const at = canonTime(a.verifiedAt), bt = canonTime(b.verifiedAt);
+      if (at && bt && bt > at)
+        edges.push(edge("reverifies", ridOf(b), ridOf(a), "verifiedAt-order", "같은 input.sha256 + verifiedAt 시간순 — verifiedAt 은 자가보고 타임스탬프(파생의 증명 아님)", "reported"));
     }
   }
   for (const g of groupBy((r) => r.commit).values()) {
     for (let i = 0; i < g.length; i++)
       for (let j = i + 1; j < g.length; j++)
-        edges.push(edge("same_commit", g[j].rid, g[i].rid, "reported.commit", "provenance.reported.commit 동일(자가보고)", "reported"));
+        edges.push(edge("same_commit", ridOf(g[j]), ridOf(g[i]), "reported.commit", "provenance.reported.commit 동일(자가보고)", "reported"));
   }
   return { nodes, edges };
 }
@@ -569,7 +602,7 @@ export function buildGraphHtml(data: ViewRow[]): string {
   const histories: Record<string, HistoryItem[]> = {};
   for (const fp of [...fps].sort(cmpStr)) histories[fp] = buildHistory(data, { claim: fp }).timeline;
   const embedded = JSON.stringify({
-    receipts: data, summary: buildSummary(data), indexes: buildIndexes(data), failures: buildFailures(data), histories,
+    receipts: data, folded: foldReceipts(data), summary: buildSummary(data), indexes: buildIndexes(data), failures: buildFailures(data), histories,
     subjects: buildSubjects(data),
   }).replace(/</g, "\\u003c");
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -602,17 +635,17 @@ code{color:#79c0ff}.big{font-size:15px;font-weight:700}
 <span class="mut" id="count"></span></div><div class="list" id="list"></div></div>
 <div class="detail" id="detail"><div class="mut">← 왼쪽에서 실패(탭) 또는 Receipt 선택</div></div></div>
 <script id="ar-data" type="application/json">${embedded}</script>
-<script>const P=JSON.parse(document.getElementById('ar-data').textContent);const DATA=P.receipts||[],S=P.summary||{},IX=P.indexes||{},HIST=P.histories||{},SUBS=P.subjects||[];
+<script>const P=JSON.parse(document.getElementById('ar-data').textContent);const DATA=P.receipts||[],FOLDED=P.folded||DATA,S=P.summary||{},IX=P.indexes||{},HIST=P.histories||{},SUBS=P.subjects||[];
 const el=id=>document.getElementById(id);
 const esc=x=>String(x==null?'':x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function ok(b){return b===true?'<span class="pass">✅</span>':b===false?'<span class="fail">❌</span>':'<span class="warn">⚠ n/a</span>'}
 function st(s){return s==='verified'||s==='valid'?'<span class="pass">✅ '+esc(s)+'</span>':s==='not-found'||s==='mismatch'||s==='invalid'?'<span class="fail">❌ '+esc(s)+'</span>':'<span class="mut">· '+esc(s||'-')+'</span>'}
 function cd(l,n,c){return '<div class="cd"><div class="n '+(c||'')+'">'+n+'</div><div class="l">'+l+'</div></div>'}
-el('dash').innerHTML=cd('Total',S.total||0)+cd('PASS',S.pass||0,'pass')+cd('FAIL',S.fail||0,'fail')+
+el('dash').innerHTML=cd('Total',S.total||0)+(S.fileCount&&S.fileCount!==S.total?cd('Files',S.fileCount,'mut'):'')+cd('PASS',S.pass||0,'pass')+cd('FAIL',S.fail||0,'fail')+
 cd('Most Failed',S.mostFailedCheck||'-')+cd('Drift',S.driftCount||0,(S.driftCount?'warn':''))+cd('Tampered',S.tamperedCount||0,(S.tamperedCount?'fail':''));
 const TABS=[['subjects','Subjects(상태판)'],['byCheck','Check별 실패'],['byModel','Model별'],['bySubject','Subject별'],['byCommit','Commit별'],['byReason','Reason별'],['receipts','Receipts']];
 let cur=Object.keys(IX.byCheck||{}).length?'byCheck':'receipts';
-function tabs(){el('tabs').innerHTML=TABS.map(t=>{const n=t[0]==='receipts'?DATA.length:t[0]==='subjects'?SUBS.length:Object.keys(IX[t[0]]||{}).length;
+function tabs(){el('tabs').innerHTML=TABS.map(t=>{const n=t[0]==='receipts'?FOLDED.length:t[0]==='subjects'?SUBS.length:Object.keys(IX[t[0]]||{}).length;
 return '<span class="tab'+(t[0]===cur?' on':'')+'" data-t="'+t[0]+'">'+t[1]+' ('+n+')</span>'}).join('');
 el('tabs').querySelectorAll('.tab').forEach(x=>x.onclick=()=>{cur=x.dataset.t;tabs();renderTab()})}
 function renderTab(){if(cur==='receipts'){el('filters').style.display='flex';apply();return}
@@ -628,9 +661,10 @@ if(!keys.length){L.innerHTML='<div class="row mut">실패 없음 — 전부 PASS
 keys.forEach(k=>{const h=document.createElement('div');h.className='ghead';h.innerHTML='<b>'+esc(k)+'</b> <span class="mut">'+g[k].length+'건</span>';L.appendChild(h);
 g[k].forEach(e=>{const r=document.createElement('div');r.className='row';
 r.innerHTML='<span class="fail">❌ '+esc(e.check)+'</span> <span class="mut">'+esc(e.status)+'</span> · claim #'+e.claimIndex+' '+esc((e.statement||'').slice(0,42))+
-'<div class="mut">'+esc(e.reason)+' · <code>'+esc((e.receiptId||'').slice(0,10))+'…</code></div>';
+(e.occurrences>1?' <span class="warn">×'+e.occurrences+'</span>':'')+
+'<div class="mut">'+esc(e.reason)+' · '+esc(e.verifiedAt||'-')+' · <code>'+esc((e.receiptId||'').slice(0,10))+'…</code></div>';
 r.onclick=()=>failureDetail(e);L.appendChild(r)})})}
-function wire(){el('detail').querySelectorAll('[data-r]').forEach(x=>x.onclick=()=>{const d=DATA.find(y=>y.file===x.dataset.r);if(d)detail(d)});
+function wire(){el('detail').querySelectorAll('[data-r]').forEach(x=>x.onclick=()=>{const d=FOLDED.find(y=>y.file===x.dataset.r||(y.allFiles||[]).includes(x.dataset.r));if(d)detail(d)});
 el('detail').querySelectorAll('[data-h]').forEach(x=>x.onclick=()=>historyDetail(x.dataset.h))}
 function subjectDetail(s){
 let h='<div class="card"><div class="big">'+esc(s.subject)+'</div><div class="mut">subject 상태판 — 카운트 롤업(판단 아님)</div>';
@@ -666,6 +700,7 @@ el('detail').innerHTML=h;wire()}
 function failureDetail(e){const d=DATA.find(x=>x.file===e.file)||{};const c=(d.claims||[])[e.claimIndex-1]||{};
 const f=(c.failures||[]).find(x=>x.check===e.check&&x.status===e.status)||{};
 let h='<div class="card"><div class="big fail">❌ '+esc(e.check)+' — '+esc(e.status)+'</div>';
+h+='<div class="mut">최근 '+esc(e.verifiedAt||'-')+' (자가보고)'+(e.occurrences>1?' · <b class="warn">'+e.occurrences+'개 파일로 반복</b>':'')+'</div>';
 h+='<div style="margin-top:6px">Reason: '+esc(f.reason||e.reason)+'</div>';
 if(f.evidence)h+='<div>Evidence — expected: <code>'+esc(f.evidence.expected)+'</code> ↔ actual: <code>'+esc(f.evidence.actual)+'</code></div>';
 if(f.hint)h+='<div class="mut">Hint (mechanical · 표시만): '+esc(f.hint)+'</div>';h+='</div>';
@@ -674,13 +709,15 @@ h+='<div class="card"><b>Affected Claim #'+e.claimIndex+'</b><div style="margin:
 h+='<div class="card">주장 지문 <code>'+esc(e.fingerprint||(c.fingerprint||''))+'</code> · <span class="lnk" data-h="'+esc(e.fingerprint||(c.fingerprint||''))+'">이 주장의 이력 보기 →</span></div>';
 h+='<div class="card mut">Receipt <code>'+esc((e.receiptId||'').slice(0,16))+'…</code> · <span class="lnk" data-r="'+esc(e.file||'')+'">Receipt 전체 보기(맨 마지막 drill-down) →</span></div>';
 el('detail').innerHTML=h;wire()}
-function render(list){const L=el('list');L.innerHTML='';el('count').textContent=list.length+' / '+DATA.length;
-list.slice().sort((a,b)=>(a.verdict==='fail'?0:1)-(b.verdict==='fail'?0:1)).forEach(d=>{const v=d.verdict==='pass';const div=document.createElement('div');div.className='row';
+function render(list){const L=el('list');L.innerHTML='';el('count').textContent=list.length+' / '+FOLDED.length;
+list.slice().sort((a,b)=>(a.verdict==='fail'?0:1)-(b.verdict==='fail'?0:1)||(b.verifiedAt||'').localeCompare(a.verifiedAt||'')).forEach(d=>{const v=d.verdict==='pass';const div=document.createElement('div');div.className='row';
 const nf=(d.claims||[]).reduce((s,c)=>s+((c.failures||[]).length?1:0),0);
-div.innerHTML='<span class="'+(v?'pass':'fail')+'">'+(v?'✅ PASS':'❌ FAIL')+'</span> <code>'+esc((d.receiptId||'').slice(0,12))+'…</code> ['+esc(d.surface)+'] '+esc((d.subject||'').slice(0,38))+
-'<div class="mut">'+(nf?nf+' claim(s) failed · ':'')+'model='+esc(d.model||'-')+' · commit='+esc(((d.commit||'-')).slice(0,8))+'</div>';
+div.innerHTML='<span class="'+(v?'pass':'fail')+'">'+(v?'✅ PASS':'❌ FAIL')+'</span> <b>'+esc(d.verifiedAt||'-')+'</b>'+(d.occurrences>1?' <span class="warn">×'+d.occurrences+'</span>':'')+' ['+esc(d.surface)+'] '+esc((d.subject||'').slice(0,38))+
+'<div class="mut">'+(nf?nf+' claim(s) failed · ':'')+'model='+esc(d.model||'-')+' · commit='+esc(((d.commit||'-')).slice(0,8))+' · <code>'+esc((d.receiptId||'').slice(0,10))+'…</code></div>';
 div.onclick=()=>detail(d);L.appendChild(div)})}
-function detail(d){const ig=d.integrity||{};let h='<div class="card"><div class="big">'+(d.verdict==='fail'?'<span class="fail">❌ FAILED</span>':'<span class="pass">✅ PASSED</span>')+'</div>';
+function detail(d){const ig=d.integrity||{};let h='<div class="card"><div class="big">'+(d.verdict==='fail'?'<span class="fail">❌ FAILED</span>':'<span class="pass">✅ PASSED</span>')+
+' <span class="mut">'+esc(d.verifiedAt||'-')+' (자가보고)</span></div>';
+if(d.occurrences>1)h+='<div class="mut">이 결과는 <b class="warn">'+d.occurrences+'개 파일</b>로 반복 기록됨(같은 입력 재검증 등) — 시각: '+(d.verifiedAtAll||[]).map(esc).join(' · ')+'</div>';
 h+='<div class="chk"><span class="k">Receipt Integrity</span>'+ok(ig.contentHashOk&&ig.receiptIdOk)+
 '<span class="k">Content Hash</span>'+ok(ig.contentHashOk)+'<span class="k">Receipt ID</span>'+ok(ig.receiptIdOk)+
 '<span class="k">Commit Exists</span>'+ok(ig.commitRecheck)+'<span class="k">Input Unchanged</span>'+ok(ig.inputMatch)+'</div>';
@@ -694,13 +731,12 @@ h+='<div class="rz"><b class="fail">'+esc(f.check)+'</b> — '+esc(f.status)+'<d
 '<div class="mut">Hint (mechanical · 표시만): '+esc(f.hint)+'</div></div>'})}
 if(c.fingerprint)h+='<div class="mut">지문 <code>'+esc((c.fingerprint||'').slice(0,21))+'…</code> · <span class="lnk" data-h="'+esc(c.fingerprint)+'">이력 →</span></div>';
 h+='</div>'});
-const seenR={};const rel=DATA.filter(x=>x.file!==d.file&&x.inputSha&&x.inputSha===d.inputSha&&!(x.receiptId&&d.receiptId&&x.receiptId===d.receiptId))
-.filter(x=>{const k=x.receiptId||x.file;if(seenR[k])return 0;seenR[k]=1;return 1});
-if(rel.length){h+='<div class="card"><b>같은 입력(same_input) 영수증 '+rel.length+'건</b>'+
-rel.map(x=>'<div class="lnk" data-r="'+esc(x.file||'')+'"><code>'+esc((x.receiptId||'').slice(0,12))+'…</code> '+(x.verdict==='pass'?'✅':'❌')+' <span class="mut">'+esc(x.verifiedAt||'')+'</span></div>').join('')+'</div>'}
+const rel=FOLDED.filter(x=>x.file!==d.file&&x.inputSha&&x.inputSha===d.inputSha&&!(x.receiptId&&d.receiptId&&x.receiptId===d.receiptId));
+if(rel.length){h+='<div class="card"><b>같은 입력(same_input) 영수증 '+rel.length+'건(고유)</b>'+
+rel.map(x=>'<div class="lnk" data-r="'+esc(x.file||'')+'"><code>'+esc((x.receiptId||'').slice(0,12))+'…</code> '+(x.verdict==='pass'?'✅':'❌')+(x.occurrences>1?' <span class="warn">×'+x.occurrences+'</span>':'')+' <span class="mut">'+esc(x.verifiedAt||'')+'</span></div>').join('')+'</div>'}
 el('detail').innerHTML=h;wire()}
 function apply(){const c=el('fc').value.trim(),i=el('fi').value.trim(),m=el('fm').value.trim();
-render(DATA.filter(d=>(!c||(d.commit||'').startsWith(c))&&(!i||(d.inputSha||'').startsWith(i))&&(!m||(d.model||'')===m)))}
+render(FOLDED.filter(d=>(!c||(d.commit||'').startsWith(c))&&(!i||(d.inputSha||'').startsWith(i))&&(!m||(d.model||'')===m)))}
 ['fc','fi','fm'].forEach(id=>el(id).addEventListener('input',apply));tabs();renderTab();</script></body></html>`;
 }
 
@@ -717,7 +753,7 @@ export function runGraphView(dirArg: string | undefined, outArg: string | undefi
     if (outArg) {
       const outP = isAbsolute(outArg) ? outArg : join(process.cwd(), outArg);
       writeFileSync(outP, out + "\n");
-      console.log(`Evidence Graph JSON: ${outArg}  (${data.length}건 · 소비자 API · summary+indexes+graph{nodes,edges}+failures+receipts)`);
+      console.log(`Evidence Graph JSON: ${outArg}  (파일 ${data.length}개 중 고유 ${foldReceipts(data).length}건 · 소비자 API · summary+indexes+graph{nodes,edges}+failures+receipts)`);
     } else {
       console.log(out);
     }
@@ -727,7 +763,7 @@ export function runGraphView(dirArg: string | undefined, outArg: string | undefi
   if (outArg) {
     const outP = isAbsolute(outArg) ? outArg : join(process.cwd(), outArg);
     writeFileSync(outP, html);
-    console.log(`Evidence Browser: ${outArg}  (${data.length}건 · Failure-first · 자체완결 정적 HTML · 서버 0 · 브라우저로 열기)`);
+    console.log(`Evidence Browser: ${outArg}  (파일 ${data.length}개 중 고유 ${foldReceipts(data).length}건 · Failure-first · 자체완결 정적 HTML · 서버 0 · 브라우저로 열기)`);
   } else {
     console.log(html);
   }
