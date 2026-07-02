@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { isAbsolute, join } from "node:path";
 import {
   normalizeForCitation, verifyCitationInText, citationStatus, type CitationStatus,
@@ -283,11 +284,14 @@ export async function runResearchVerify(
     // 출처 해석: --fetch 면 라이브, 아니면 offline 스냅샷/인라인.
     let source: string | null;
     let fetchNote = "";
+    let fetched: { url: string; textSha256: string } | null = null; // Phase9: 표류감지용 — 대조에 쓴 그 텍스트(strip 후) 해시를 봉인
     if (opts.fetch && url) {
       source = await fetchSource(url);
       if (source === null) {
         unreachable++;
         fetchNote = " (⚠ unreachable — 링크로트/차단)";
+      } else {
+        fetched = { url, textSha256: createHash("sha256").update(source).digest("hex") };
       }
     } else {
       source = resolveSource(claim);
@@ -319,7 +323,7 @@ export async function runResearchVerify(
       sourceUrl: url || null,
       checkKinds: Object.entries(ev.results).filter(([, v]) => v != null).map(([k]) => k),
     });
-    collected.push({ statement: stmt, sourceUrl: url || null, fingerprint, checks: ev.results, evidence: ev.evidence, verdict: ev.failed ? "failed" : ev.verified ? "verified" : "advisory" });
+    collected.push({ statement: stmt, sourceUrl: url || null, fingerprint, checks: ev.results, evidence: ev.evidence, verdict: ev.failed ? "failed" : ev.verified ? "verified" : "advisory", ...(fetched ? { fetched } : {}) });
 
     console.log(`[${i + 1}] ${stmt}`);
     if (url) console.log(`    출처 : ${url}${fetchNote}${ev.link ? ` [link ${ev.link}]` : ""}`);

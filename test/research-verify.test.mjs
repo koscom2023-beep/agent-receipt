@@ -202,5 +202,61 @@ check("stripHtml: 엔티티 디코드", () => assert.ok(stripHtml("a &amp; b &lt
   rmSync(dir, { recursive: true, force: true });
 }
 
+// ── Phase9: --fetch 봉인 + replay --fetch 표류감지 ──
+// 서버는 *별도 프로세스*(spawn) — 같은 프로세스 서버+동기 execFileSync 는 서로 블록(데드락)이라 불가(실측).
+{
+  const { spawn } = await import("node:child_process");
+  const dir = mkdtempSync(join(tmpdir(), "ardrift-"));
+  const bodyFile = join(dir, "body.txt");
+  writeFileSync(bodyFile, "<p>the audited total was 42 units</p>");
+  const srvCode = `const h=require("http");const f=require("fs");h.createServer((q,r)=>{r.writeHead(200,{"content-type":"text/html"});r.end(f.readFileSync(process.argv[1],"utf8"))}).listen(process.argv[2],"127.0.0.1",()=>console.log("up"));`;
+  const srv = spawn("node", ["-e", srvCode, bodyFile, "47391"], { stdio: ["ignore", "pipe", "ignore"] });
+  await new Promise((r) => srv.stdout.once("data", r)); // "up" 대기
+  const url = "http://127.0.0.1:47391/doc";
+  const rep = join(dir, "r.json");
+  writeFileSync(rep, JSON.stringify({ query: "drift", claims: [{ statement: "합계", quotedText: "the audited total was 42 units", sourceUrl: url }] }));
+  const outR = join(dir, "vr.json");
+  let code = 0;
+  try { execFileSync("node", [cli, "research", "verify", "--file", rep, "--fetch", "--out", outR], { encoding: "utf8" }); } catch (e) { code = e.status ?? 1; }
+  check("--fetch: 라이브 검증 pass + fetched.textSha256 봉인됨", () => {
+    assert.equal(code, 0);
+    const vr = JSON.parse(readFileSync(outR, "utf8"));
+    const f = vr.results[0].fetched;
+    assert.ok(f && f.url === url && /^[0-9a-f]{64}$/.test(f.textSha256));
+  });
+  check("replay --receipt --fetch: 불변→그대로 · 파일 교체(페이지 수정)→SOURCE DRIFT", () => {
+    const out1 = execFileSync("node", [cli, "replay", "--receipt", outR, "--fetch"], { encoding: "utf8" });
+    assert.ok(out1.includes("그대로"), "불변 케이스: " + out1.split("\n").find((l) => l.includes("표류")));
+    writeFileSync(bodyFile, "<p>the audited total was 999 units — edited later</p>");
+    const out2 = execFileSync("node", [cli, "replay", "--receipt", outR, "--fetch"], { encoding: "utf8" });
+    assert.ok(out2.includes("SOURCE DRIFT"), "표류 케이스");
+  });
+  check("replay --receipt (--fetch 없음): 네트워크 0 기본 — 표류 줄 자체가 없음", () => {
+    const out = execFileSync("node", [cli, "replay", "--receipt", outR], { encoding: "utf8" });
+    assert.ok(!out.includes("출처 표류"));
+  });
+  srv.kill();
+  rmSync(dir, { recursive: true, force: true });
+}
+
+// ── Phase9: badge — 앵커 없으면 거부·있으면 verifyUrl 링크 스니펫(실물 사이드카) ──
+{
+  const dir = mkdtempSync(join(tmpdir(), "arbadge-"));
+  const rc = join(dir, "vr.json");
+  writeFileSync(join(dir, "rep.json"), JSON.stringify({ query: "b", claims: [{ statement: "s", quotedText: "x", sourceText: "x y" }] }));
+  execFileSync("node", [cli, "research", "verify", "--file", join(dir, "rep.json"), "--out", rc], { encoding: "utf8" });
+  check("badge: 앵커 사이드카 없으면 exit 2(장식 배지 발급 거부)", () => {
+    let code = 0;
+    try { execFileSync("node", [cli, "badge", "--receipt", rc], { encoding: "utf8" }); } catch (e) { code = e.status ?? 1; }
+    assert.equal(code, 2);
+  });
+  check("badge: 사이드카 있으면 verifyUrl 로 점프하는 마크다운 스니펫", () => {
+    writeFileSync(rc + ".rekor.json", JSON.stringify({ uuid: "u1", logIndex: 12345, verifyUrl: "https://search.sigstore.dev/?logIndex=12345", apiUrl: "x" }));
+    const out = execFileSync("node", [cli, "badge", "--receipt", rc], { encoding: "utf8" });
+    assert.ok(out.includes("badge.svg") && out.includes("https://search.sigstore.dev/?logIndex=12345") && out.includes("logIndex 12345"));
+  });
+  rmSync(dir, { recursive: true, force: true });
+}
+
 if (fail.length) { console.error(`research-verify: ${pass} pass, ${fail.length} FAIL`); for (const f of fail) console.error("  ✗ " + f); process.exit(1); }
 console.log(`research-verify: ${pass} pass ✅`);

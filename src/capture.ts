@@ -24,7 +24,7 @@ export type ActionFlag =
 
 export interface CaptureRecord {
   ts: string;
-  phase: "pre" | "post" | "fail"; // fail=PostToolUseFailure(도구 실패 *시도* — Phase8·값/에러텍스트 미저장)
+  phase: "pre" | "post" | "fail" | "denied"; // fail=실패한 시도 · denied=권한 거부된 시도(PermissionDenied) — 값/에러텍스트 미저장
   tool: string;
   op: "read" | "write" | "delete" | "network" | "command" | "capture-degraded";
   path?: string;
@@ -72,6 +72,7 @@ export interface CaptureAction {
   host?: string;
   flag: ActionFlag;
   failed?: boolean; // PostToolUseFailure 유래 — *실패한 시도*(성공 행위와 절대 혼동 금지·표시 병기)
+  denied?: boolean; // PermissionDenied 유래 — *권한이 거부한 시도*(실행 안 됨·표시 병기)
 }
 
 export interface ActionsResult {
@@ -166,7 +167,7 @@ export function normalizeEnvelope(payload: unknown): NormalizedEnvelope {
 }
 
 /** 정규화된 envelope(또는 {tool,input}) → CaptureRecord[](없으면 []). 값 미저장. */
-export function classifyEvent(payload: unknown, phase: "pre" | "post" | "fail" = "post", ts = ""): CaptureRecord[] {
+export function classifyEvent(payload: unknown, phase: "pre" | "post" | "fail" | "denied" = "post", ts = ""): CaptureRecord[] {
   const o = payload as { tool_name?: string; tool?: string; tool_input?: Record<string, unknown>; input?: Record<string, unknown> };
   const tool = String(o?.tool_name ?? o?.tool ?? "");
   if (!tool) return [];
@@ -228,7 +229,7 @@ export function aggregateActions(records: CaptureRecord[], gitChangedPaths: Set<
     else if (r.op === "network") flag = "EXTERNAL_NETWORK_CALL";
     else if (r.op === "write") flag = r.path && deletes.has(r.path) ? "CREATED_THEN_DELETED" : "FILE_WRITE";
     else flag = "COMMAND_RUN";
-    actions.push({ tool: r.tool, op: r.op, path: r.path, host: r.host, flag, ...(r.phase === "fail" ? { failed: true } : {}) });
+    actions.push({ tool: r.tool, op: r.op, path: r.path, host: r.host, flag, ...(r.phase === "fail" ? { failed: true } : {}), ...(r.phase === "denied" ? { denied: true } : {}) });
   }
 
   return {
@@ -464,7 +465,7 @@ export function reconcileCapture(records: CaptureRecord[], gitChanged: Set<strin
 }
 
 /** 실패를 조용히 삼키지 않고 'capture-degraded' 마커를 체인에 남긴다(비차단 exit 0). 마커 기록조차 실패하면 조용히 통과. */
-function markDegraded(phase: "pre" | "post" | "fail", ts: string, reason: string): never {
+function markDegraded(phase: "pre" | "post" | "fail" | "denied", ts: string, reason: string): never {
   try {
     appendCapture([{ ts, phase, tool: "(capture)", op: "capture-degraded", reason }], undefined);
   } catch {
@@ -475,20 +476,25 @@ function markDegraded(phase: "pre" | "post" | "fail", ts: string, reason: string
 
 /** `agent-receipt capture [--event pre|post]` — 훅 stdin(JSON) 1건을 분류·마스킹·체인 append. 항상 통과(비차단). */
 export function runCaptureIngest(event: string | undefined): never {
-  const phase: "pre" | "post" | "fail" = event === "pre" ? "pre" : event === "fail" ? "fail" : "post"; // fail 명시(모르는 값은 post 유지 — 구버전 동작 보존)
+  // 명시 파싱(Phase9): 미지 이벤트를 post 로 강하시키면 "실패/거부가 성공으로 오기록"되는 함정(fail 때 실증) —
+  // 이제 미지 값은 degraded 갭 마커로 남긴다(사라짐 아님·오기록 아님·DA③ 수용).
+  const KNOWN = { pre: "pre", post: "post", fail: "fail", denied: "denied" } as const;
+  const phase: "pre" | "post" | "fail" | "denied" | undefined = KNOWN[event as keyof typeof KNOWN];
+  if (event !== undefined && phase === undefined) markDegraded("post", new Date().toISOString(), `unknown-event:${String(event).slice(0, 20)}`);
+  const ph = phase ?? "post";
   if (process.stdin.isTTY) process.exit(0); // 파이프 입력 없으면 무동작(실패 아님)
   const now = new Date().toISOString();
   let raw = "";
   try {
     raw = readFileSync(0, "utf8");
   } catch {
-    markDegraded(phase, now, "stdin 읽기 실패");
+    markDegraded(ph, now, "stdin 읽기 실패");
   }
   let payload: unknown;
   try {
     payload = JSON.parse(raw);
   } catch {
-    markDegraded(phase, now, "stdin JSON 파싱 실패");
+    markDegraded(ph, now, "stdin JSON 파싱 실패");
   }
   // 7차 council: 벤더중립 정규화 토대 — 다양한 에이전트 envelope 를 공통 모양으로(추정 0·passthrough+단순 alias).
   const env = normalizeEnvelope(payload);
@@ -497,7 +503,7 @@ export function runCaptureIngest(event: string | undefined): never {
     try {
       appendCapture(recs, env.sessionId, env.source);
     } catch {
-      markDegraded(phase, now, "capture 락 획득 실패(동시 훅 경합 또는 stale)"); // 정직 마커(비차단)·silent 누락 금지
+      markDegraded(ph, now, "capture 락 획득 실패(동시 훅 경합 또는 stale)"); // 정직 마커(비차단)·silent 누락 금지
     }
   }
   process.exit(0);
@@ -519,7 +525,7 @@ export function runCaptureShow(json: boolean): never {
   const s = result.actionsSummary;
   const { notable, mutedCount } = splitActionsForDisplay(result.actions);
   console.log(`\nagent-receipt capture (alpha) — git 너머 행위 ${s.total}건 (주목 ${notable.length})`);
-  for (const a of notable) console.log(`  ⚠️ ${a.flag}  ${a.path ?? a.host ?? ""}${a.failed ? "  (실패 시도)" : ""}`);
+  for (const a of notable) console.log(`  ⚠️ ${a.flag}  ${a.path ?? a.host ?? ""}${a.failed ? "  (실패 시도)" : ""}${a.denied ? "  (권한 거부됨)" : ""}`);
   if (mutedCount) console.log(`  · 그 외 일반 read/command ${mutedCount}건 (기록됨·접힘)`);
   console.log(`\n  git 가 보는 것: ${s.gitVisible}  ⟷  주목 행위: ${notable.length}  (전체 기록 ${s.total})`);
   // 대사(11차 council): git 변경 ↔ capture write 교차대조 + 잔차 분류(자동 cleared 금지·미설명은 남김).
@@ -586,7 +592,7 @@ export function runCaptureReset(): never {
 // `.` 이 들어가는 순간 matcher 전체가 regex 경로(unanchored test·공식 문서 실측)가 되므로
 // `^(...)$` 로 명시 anchor — unanchored "Read" 가 임의 신규 도구명에 부분매칭하는 사고 방지.
 const HOOK_MATCHER = `^(${COVERED_TOOLS.map((t) => (t === "mcp__*" ? "mcp__.*" : t)).join("|")})$`;
-const captureCommand = (phase: "pre" | "post" | "fail"): string => `agent-receipt capture --event ${phase}`;
+const captureCommand = (phase: "pre" | "post" | "fail" | "denied"): string => `agent-receipt capture --event ${phase}`;
 
 interface HookCmd {
   type?: string;
@@ -606,11 +612,13 @@ export function mergeCaptureHooks(input: SettingsShape): { merged: SettingsShape
   const merged: SettingsShape = JSON.parse(JSON.stringify(input ?? {}));
   if (!merged.hooks || typeof merged.hooks !== "object") merged.hooks = {};
   let changed = false;
-  const phases: Array<["PreToolUse" | "PostToolUse" | "PostToolUseFailure", "pre" | "post" | "fail"]> = [
+  const phases: Array<["PreToolUse" | "PostToolUse" | "PostToolUseFailure" | "PermissionDenied", "pre" | "post" | "fail" | "denied"]> = [
     ["PreToolUse", "pre"],
     ["PostToolUse", "post"],
     // 도구 실패도 사실(시도) — 문서 실측: 비차단 이벤트·tool_name/tool_input 공통형만 읽음(에러 텍스트=값·미저장).
     ["PostToolUseFailure", "fail"],
+    // 권한 거부된 시도도 사실(Phase9) — 문서의 tool-events 목록에 PermissionDenied 실재(같은 tool_name 매칭).
+    ["PermissionDenied", "denied"],
   ];
   for (const [key, phase] of phases) {
     const cmd = captureCommand(phase);
