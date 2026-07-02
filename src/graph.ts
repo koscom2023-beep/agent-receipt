@@ -713,7 +713,7 @@ h+='<div class="card mut">gate 우회(작업영수증 트랙)는 여기 없음 �
 el('detail').innerHTML=h;wire()}
 el('dash').innerHTML=cd('전체',S.total||0)+(S.fileCount&&S.fileCount!==S.total?cd('파일',S.fileCount,'mut'):'')+cd('통과',S.pass||0,'pass')+cd('실패',S.fail||0,'fail')+
 (NEWCNT!==null?cd('신규 실패',NEWCNT,(NEWCNT?'fail':'pass')):'')+
-cd('최다 실패',S.mostFailedCheck||'-')+cd('드리프트',S.driftCount||0,(S.driftCount?'warn':''))+cd('봉인확인실패',S.tamperedCount||0,(S.tamperedCount?'fail':''))+
+cd('최다 실패',S.mostFailedCheck||'-')+cd('검증후 변동',S.driftCount||0,(S.driftCount?'warn':''))+cd('봉인확인실패',S.tamperedCount||0,(S.tamperedCount?'fail':''))+
 (excTotal?'<div class="cd warn" id="exc-chip" style="cursor:pointer" title="클릭하면 분류가 열립니다"><div class="n">'+excTotal+'</div><div class="l">예외 · 분류보기</div></div>':'');
 if(excTotal)el('exc-chip').onclick=excDetail;
 if(HTRUNC){const n=document.createElement('div');n.className='mut';n.style.cssText='padding:4px 24px;font-size:12px';n.textContent='이력 사전계산 '+HTRUNC.shown+'/'+HTRUNC.total+'건 — 나머지는 CLI: graph history --claim <지문>';el('dash').after(n)}

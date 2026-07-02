@@ -233,7 +233,7 @@ check("stripHtml: 엔티티 디코드", () => assert.ok(stripHtml("a &amp; b &lt
   });
   check("replay --receipt (--fetch 없음): 네트워크 0 기본 — 표류 줄 자체가 없음", () => {
     const out = execFileSync("node", [cli, "replay", "--receipt", outR], { encoding: "utf8" });
-    assert.ok(!out.includes("출처 표류"));
+    assert.ok(!out.includes("출처 재확인"));
   });
   srv.kill();
   rmSync(dir, { recursive: true, force: true });

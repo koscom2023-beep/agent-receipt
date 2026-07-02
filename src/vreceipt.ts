@@ -166,17 +166,17 @@ export async function runReplayReceipt(pathArg: string | undefined, opts: { fetc
   console.log(line);
   console.log(`  contentHash 재계산: ${r.contentHashOk ? "✓ 무변조" : "✗ TAMPERED(변조)"}`);
   console.log(`  receiptId 재계산  : ${r.receiptIdOk ? "✓ 정합" : "✗ 불일치"}`);
-  console.log(`  입력 재해시       : ${r.inputMatch === null ? "· (입력 파일 없음·건너뜀)" : r.inputMatch ? "✓ 입력 불변" : "✗ 입력 변경(드리프트)"}`);
+  console.log(`  입력 재해시       : ${r.inputMatch === null ? "· (입력 파일 없음·건너뜀)" : r.inputMatch ? "✓ 입력 불변" : "✗ 입력 변경(검증 때와 달라짐)"}`);
   console.log(`  commit 재조회     : ${r.commitRecheck === null ? "· (git 없음/commit 없음)" : r.commitRecheck ? "✓ 여전히 존재" : "✗ 소멸(링크로트)"}`);
   // Phase9: 출처 표류 감지(--fetch 옵트인) — 봉인된 fetched.textSha256 재대조.
   if (opts.fetch) {
     const results = Array.isArray(receipt.results) ? (receipt.results as Array<{ fetched?: { url?: unknown; textSha256?: unknown } }>) : [];
     const seals = results.map((x) => x.fetched).filter((f): f is { url: string; textSha256: string } => !!f && typeof f.url === "string" && typeof f.textSha256 === "string");
-    if (!seals.length) console.log("  출처 표류(--fetch)   : · (봉인된 fetched 해시 없음 — 검증을 --fetch 로 했을 때만 기록됨)");
+    if (!seals.length) console.log("  출처 재확인(--fetch)  : · (봉인된 fetched 해시 없음 — 검증을 --fetch 로 했을 때만 기록됨)");
     for (const f of seals) {
       const now = await refetchTextSha(f.url);
-      const label = now === null ? "· 도달 실패(unreachable — 판정 불가)" : now === f.textSha256 ? "✓ 그대로(검증 당시 텍스트와 동일)" : "✗ 표류(SOURCE DRIFT — 검증 이후 페이지가 바뀜)";
-      console.log(`  출처 표류(--fetch)   : ${label}  ${f.url.slice(0, 60)}`);
+      const label = now === null ? "· 도달 실패(unreachable — 판정 불가)" : now === f.textSha256 ? "✓ 그대로(검증 당시 텍스트와 동일)" : "✗ 바뀜(SOURCE DRIFT — 검증 이후 인용한 페이지가 수정됨)";
+      console.log(`  출처 재확인(--fetch)  : ${label}  ${f.url.slice(0, 60)}`);
     }
   }
   const fail = !r.contentHashOk || !r.receiptIdOk;
