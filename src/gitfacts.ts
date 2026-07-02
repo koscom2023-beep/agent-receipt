@@ -1,5 +1,7 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { replayVerificationReceipt } from "./vreceipt.js";
+import type { ReceiptFacts } from "./evidencekernel.js";
 
 // ── git/의존성 사실 조회 surface (Phase4) ──
 // 커널(evidencekernel.ts)은 이 모듈을 모른다(core ↛ surface 불변식 유지) — 여기서 IO(git 프로세스 실행·
@@ -47,6 +49,46 @@ export function resolveChangedFiles(commit: string, repoDir: string): string | n
 export function resolveDiffText(commit: string, path: string, repoDir: string): string | null {
   if (!/^[0-9a-fA-F]{4,40}$/.test(commit)) return null;
   return runGit(["show", commit, "--", path], repoDir);
+}
+
+// 파일 실재 여부(존재만·내용 안 읽음). 경로 접근 불가 예외 → null(no-basis).
+export function resolveFileExists(path: string): boolean | null {
+  try {
+    return existsSync(path);
+  } catch {
+    return null;
+  }
+}
+
+// 인용된 영수증 파일을 읽어 기존 replay 로 봉인 재계산 — 커널엔 이 사실(ReceiptFacts)만 넘긴다.
+// 인용된 파일 1개만 읽음(디렉터리 순회 없음). v1: verification-receipt 만 재계산(그 외 kind 는 사실만 표기).
+export function resolveReceiptFacts(receiptFile: string): ReceiptFacts {
+  let raw: string;
+  try {
+    raw = readFileSync(receiptFile, "utf8");
+  } catch {
+    return { found: false, isVerificationReceipt: false, contentHashOk: null, receiptIdOk: null, actualReceiptId: null };
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { found: false, isVerificationReceipt: false, contentHashOk: null, receiptIdOk: null, actualReceiptId: null };
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return { found: false, isVerificationReceipt: false, contentHashOk: null, receiptIdOk: null, actualReceiptId: null };
+  }
+  const r = parsed as Record<string, unknown>;
+  const isVR = r.kind === "verification-receipt";
+  if (!isVR) return { found: true, isVerificationReceipt: false, contentHashOk: null, receiptIdOk: null, actualReceiptId: typeof r.receiptId === "string" ? r.receiptId : null };
+  const replay = replayVerificationReceipt(r);
+  return {
+    found: true,
+    isVerificationReceipt: true,
+    contentHashOk: replay.contentHashOk,
+    receiptIdOk: replay.receiptIdOk,
+    actualReceiptId: typeof r.receiptId === "string" ? r.receiptId : null,
+  };
 }
 
 // package.json(류)을 읽어 dependencies+devDependencies+peer+optional 을 이름→버전 맵으로 병합.

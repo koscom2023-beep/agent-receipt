@@ -3,7 +3,8 @@ import { isAbsolute, join } from "node:path";
 import { createHash } from "node:crypto";
 import { evaluateClaim, claimFingerprintV1 } from "./evidencekernel.js";
 import { writeVerificationReceipt, tierProvenance } from "./vreceipt.js";
-import { resolveCommitExists, resolveChangedFiles, resolveDiffText, resolveDependencyMap } from "./gitfacts.js";
+import { resolveCommitExists, resolveChangedFiles, resolveDiffText, resolveDependencyMap, resolveFileExists, resolveReceiptFacts } from "./gitfacts.js";
+import type { ReceiptFacts } from "./evidencekernel.js";
 
 const line = "─".repeat(56);
 
@@ -42,6 +43,9 @@ interface SupportingClaim {
   statedPackage?: unknown;
   statedPackageVersion?: unknown;
   dependencyFile?: unknown;
+  statedFile?: unknown;
+  statedReceiptId?: unknown;
+  receiptFile?: unknown;
 }
 interface Decision {
   id?: unknown;
@@ -78,6 +82,8 @@ interface ResolvedFacts {
   changedFiles?: string | null;
   diffText?: string | null;
   dependencyMap?: Record<string, string> | null;
+  fileExists?: boolean | null;
+  receiptFacts?: ReceiptFacts | null;
 }
 function resolveFacts(c: SupportingClaim): ResolvedFacts {
   const facts: ResolvedFacts = {};
@@ -90,6 +96,14 @@ function resolveFacts(c: SupportingClaim): ResolvedFacts {
   if (typeof c.dependencyFile === "string" && c.dependencyFile) {
     const p = isAbsolute(c.dependencyFile) ? c.dependencyFile : join(process.cwd(), c.dependencyFile);
     facts.dependencyMap = resolveDependencyMap(p);
+  }
+  if (typeof c.statedFile === "string" && c.statedFile) {
+    const p = isAbsolute(c.statedFile) ? c.statedFile : join(process.cwd(), c.statedFile);
+    facts.fileExists = resolveFileExists(p);
+  }
+  if (typeof c.receiptFile === "string" && c.receiptFile) {
+    const p = isAbsolute(c.receiptFile) ? c.receiptFile : join(process.cwd(), c.receiptFile);
+    facts.receiptFacts = resolveReceiptFacts(p);
   }
   return facts;
 }
@@ -141,6 +155,8 @@ export function gradeDecision(dec: Decision): {
         statedDiffText: c.statedDiffText, diffText: facts.diffText ?? null,
         schemaData: c.schemaData, schemaDef: c.schemaDef,
         statedPackage: c.statedPackage, statedPackageVersion: c.statedPackageVersion, dependencyMap: facts.dependencyMap ?? null,
+        statedFile: c.statedFile, fileExists: facts.fileExists ?? null,
+        statedReceiptId: c.statedReceiptId, receiptFacts: facts.receiptFacts ?? null,
       },
       resolveSource(c),
     );
@@ -248,6 +264,11 @@ export function runCouncilVerify(fileArg: string | undefined, logArg: string | u
 
     console.log(`[${i + 1}] ${stmt}`);
     console.log(`    근거 : verified ${verified} · not-found ${notFound} · no-source ${noSource}`);
+    // 근거주장별 상세(additive · #6) — 어떤 check 가 어떤 상태인지 research 처럼 줄로 노출.
+    for (const g of graded) {
+      const kinds = Object.entries(g.checks).filter(([, v]) => v != null).map(([k, v]) => `${k} ${v}`).join(" · ");
+      if (kinds) console.log(`      ${g.verdict === "failed" ? "✗" : g.verdict === "verified" ? "✓" : "·"} ${g.statement.slice(0, 40)}${g.statement.length > 40 ? "…" : ""} — ${kinds}`);
+    }
     if (grounding === "grounded") console.log("    ✓ grounded — 근거 주장이 출처에 실재");
     else if (grounding === "ungrounded") console.log("    ✗ ungrounded — 날조된 근거(출처에 없음) 포함");
     else console.log("    · unsupported — 검증된 근거 없음(advisory)");

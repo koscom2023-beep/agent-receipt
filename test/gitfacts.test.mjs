@@ -2,10 +2,13 @@
 // `node test/gitfacts.test.mjs`.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { writeFileSync, mkdtempSync, rmSync, mkdirSync } from "node:fs";
+import { writeFileSync, readFileSync, mkdtempSync, rmSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { resolveCommitExists, resolveChangedFiles, resolveDiffText, resolveDependencyMap } from "../dist/gitfacts.js";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import { resolveCommitExists, resolveChangedFiles, resolveDiffText, resolveDependencyMap, resolveFileExists, resolveReceiptFacts } from "../dist/gitfacts.js";
+
+const cliPath = join(dirname(fileURLToPath(import.meta.url)), "..", "dist", "cli.js");
 
 let pass = 0;
 const fail = [];
@@ -57,6 +60,48 @@ check("resolveDependencyMap: JSON 파싱 실패 → null", () => {
   writeFileSync(bad, "{not json");
   assert.equal(resolveDependencyMap(bad), null);
 });
+
+// ── Phase5: 파일 실재 + 영수증 인용 사실(실파일·모킹 없음) ──
+check("resolveFileExists: 실재 true·부재 false", () => {
+  assert.equal(resolveFileExists(pkgPath), true);
+  assert.equal(resolveFileExists(join(dir, "no-such-file.xyz")), false);
+});
+{
+  // 실제 CLI 로 진짜 영수증 생산(손 JSON 아님 — 봉인이 진짜여야 replay 재계산이 의미 있음)
+  const repPath = join(dir, "rep.json");
+  writeFileSync(repPath, JSON.stringify({ query: "q", claims: [{ statement: "s", quotedText: "hello", sourceText: "hello world" }] }));
+  const outPath = join(dir, "vr.json");
+  execFileSync("node", [cliPath, "research", "verify", "--file", repPath, "--out", outPath], { encoding: "utf8" });
+  check("resolveReceiptFacts: 실제 영수증 → found+VR+봉인 재계산 전부 true", () => {
+    const f = resolveReceiptFacts(outPath);
+    assert.equal(f.found, true);
+    assert.equal(f.isVerificationReceipt, true);
+    assert.equal(f.contentHashOk, true);
+    assert.equal(f.receiptIdOk, true);
+    assert.ok(typeof f.actualReceiptId === "string" && f.actualReceiptId.length >= 16);
+  });
+  check("resolveReceiptFacts: 1바이트 변조 → contentHashOk=false(변조 실검출)", () => {
+    const tampered = readFileSync(outPath, "utf8").replace('"verdict": "pass"', '"verdict": "fail"').replace('"verdict":"pass"', '"verdict":"fail"');
+    const tPath = join(dir, "vr-tampered.json");
+    writeFileSync(tPath, tampered);
+    const f = resolveReceiptFacts(tPath);
+    assert.equal(f.found, true);
+    assert.equal(f.contentHashOk, false);
+  });
+  check("resolveReceiptFacts: 파일 부재/JSON 아님 → found=false", () => {
+    assert.equal(resolveReceiptFacts(join(dir, "nope.json")).found, false);
+    const badPath = join(dir, "bad-receipt.json");
+    writeFileSync(badPath, "{not json");
+    assert.equal(resolveReceiptFacts(badPath).found, false);
+  });
+  check("resolveReceiptFacts: 다른 kind(작업영수증류) → found=true·isVR=false", () => {
+    const wPath = join(dir, "work.json");
+    writeFileSync(wPath, JSON.stringify({ schemaVersion: "1.0", ok: true }));
+    const f = resolveReceiptFacts(wPath);
+    assert.equal(f.found, true);
+    assert.equal(f.isVerificationReceipt, false);
+  });
+}
 
 rmSync(dir, { recursive: true, force: true });
 

@@ -67,6 +67,10 @@ export {
   schemaStatus,
   schemaMismatches,
   versionStatus,
+  semverSatisfies,
+  parseSemver,
+  fileStatus,
+  receiptStatus,
 } from "./evidencekernel.js";
 export type {
   CitationStatus,
@@ -81,5 +85,8 @@ export type {
   SchemaStatus,
   SchemaMismatch,
   VersionStatus,
+  FileStatus,
+  ReceiptStatus,
+  ReceiptFacts,
   CheckDescriptor,
 } from "./evidencekernel.js";

@@ -5,7 +5,8 @@ import {
   evaluateClaim, claimFingerprintV1,
 } from "./evidencekernel.js";
 import { writeVerificationReceipt, tierProvenance } from "./vreceipt.js";
-import { resolveCommitExists, resolveChangedFiles, resolveDiffText, resolveDependencyMap } from "./gitfacts.js";
+import { resolveCommitExists, resolveChangedFiles, resolveDiffText, resolveDependencyMap, resolveFileExists, resolveReceiptFacts } from "./gitfacts.js";
+import type { ReceiptFacts } from "./evidencekernel.js";
 
 // 인용/수치 검증 커널은 공유 Evidence Kernel(evidencekernel.ts)에 있다(research·council 이 같은 코어 재사용).
 // 여기선 그 커널을 파일 IO(출처 스냅샷)·라이브 fetch·CLI 출력에 엮는 surface 만 담당한다.
@@ -54,6 +55,9 @@ interface ResearchClaim {
   statedPackage?: unknown;
   statedPackageVersion?: unknown;
   dependencyFile?: unknown; // package.json 등 경로(surface 가 읽어 이름→버전 맵으로 파싱)
+  statedFile?: unknown; // file 검증(선택, Phase5) — 이 파일이 실재하나(존재만)
+  statedReceiptId?: unknown; // receipt 검증(선택, Phase5) — 인용한 영수증 id 접두(≥8자)
+  receiptFile?: unknown; // 인용한 영수증 파일 경로(surface 가 읽어 replay 재계산)
 }
 interface ResearchReport {
   schemaVersion?: unknown;
@@ -102,6 +106,8 @@ interface ResolvedFacts {
   changedFiles?: string | null;
   diffText?: string | null;
   dependencyMap?: Record<string, string> | null;
+  fileExists?: boolean | null;
+  receiptFacts?: ReceiptFacts | null;
 }
 function resolveFacts(claim: ResearchClaim): ResolvedFacts {
   const facts: ResolvedFacts = {};
@@ -115,8 +121,56 @@ function resolveFacts(claim: ResearchClaim): ResolvedFacts {
     const p = isAbsolute(claim.dependencyFile) ? claim.dependencyFile : join(process.cwd(), claim.dependencyFile);
     facts.dependencyMap = resolveDependencyMap(p);
   }
+  if (typeof claim.statedFile === "string" && claim.statedFile) {
+    const p = isAbsolute(claim.statedFile) ? claim.statedFile : join(process.cwd(), claim.statedFile);
+    facts.fileExists = resolveFileExists(p);
+  }
+  if (typeof claim.receiptFile === "string" && claim.receiptFile) {
+    const p = isAbsolute(claim.receiptFile) ? claim.receiptFile : join(process.cwd(), claim.receiptFile);
+    facts.receiptFacts = resolveReceiptFacts(p);
+  }
   return facts;
 }
+
+// ── Markdown 입력 어댑터 (동결 문법 — EVIDENCE_SPEC 에 명시·NLP 0·정규식만) ──
+// 문법: 첫 `# <text>` 줄 = query · `- statement: <text>` 가 주장 시작 · 이어지는 들여쓴
+//   `key: value` 줄이 그 주장의 필드(JSON 과 같은 키 이름 1:1 — 번역표 없음) ·
+//   value 양끝 큰따옴표는 벗김 · operands 는 콤마 구분 숫자 목록 · 그 외 줄은 무시.
+// 주장 0건 = 파싱 실패로 취급(호출부가 exit 2) — 조용한 빈 결과 금지.
+export function parseMarkdownReport(md: string): { query: string; claims: Record<string, unknown>[] } {
+  let query = "";
+  const claims: Record<string, unknown>[] = [];
+  let cur: Record<string, unknown> | null = null;
+  for (const line of md.split(/\r?\n/)) {
+    const h = line.match(/^#\s+(.*)$/);
+    if (h && !query) { query = (h[1] as string).trim(); continue; }
+    const start = line.match(/^-\s+statement:\s*(.*)$/);
+    if (start) {
+      cur = { statement: stripQuotes((start[1] as string).trim()) };
+      claims.push(cur);
+      continue;
+    }
+    if (cur) {
+      const kv = line.match(/^\s+([A-Za-z][A-Za-z0-9]*):\s*(.*)$/);
+      if (kv) {
+        const key = kv[1] as string;
+        const rawVal = stripQuotes((kv[2] as string).trim());
+        if (key === "operands") {
+          cur[key] = rawVal.split(",").map((s) => Number(s.trim())).filter((n) => Number.isFinite(n));
+        } else if (key === "statedValue" || key === "eps") {
+          const n = Number(rawVal.replace(/,/g, ""));
+          cur[key] = Number.isFinite(n) ? n : rawVal;
+        } else {
+          cur[key] = rawVal;
+        }
+        continue;
+      }
+      if (line.trim() === "") cur = null; // 빈 줄 = 주장 블록 종료
+    }
+  }
+  return { query, claims };
+}
+const stripQuotes = (s: string): string => (s.length >= 2 && s.startsWith('"') && s.endsWith('"') ? s.slice(1, -1) : s);
 
 // HTML → 텍스트(라이브 fetch 대조용). script/style 제거·태그 제거·기본 엔티티 디코드(공백 정규화는 커널이).
 export function stripHtml(html: string): string {
@@ -176,13 +230,23 @@ export async function runResearchVerify(
     process.exit(2);
   }
   let report: ResearchReport;
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("not an object");
-    report = parsed as ResearchReport;
-  } catch {
-    console.error(`research: JSON 파싱 실패: ${fileArg}`);
-    process.exit(2);
+  if (/\.(md|markdown)$/i.test(fileArg)) {
+    // Markdown 입력(동결 문법) — 같은 내용이면 JSON 과 판정 동일(동형성 테스트로 고정).
+    const parsed = parseMarkdownReport(raw);
+    if (parsed.claims.length === 0) {
+      console.error(`research: 마크다운에서 주장 0건: ${fileArg} — 문법: '# <query>' + '- statement: <주장>' + 들여쓴 'key: value' (spec 참고)`);
+      process.exit(2);
+    }
+    report = { query: parsed.query || "(query 없음)", claims: parsed.claims };
+  } else {
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("not an object");
+      report = parsed as ResearchReport;
+    } catch {
+      console.error(`research: JSON 파싱 실패: ${fileArg}`);
+      process.exit(2);
+    }
   }
 
   const claims: ResearchClaim[] = Array.isArray(report.claims)
@@ -231,6 +295,8 @@ export async function runResearchVerify(
         statedDiffText: claim.statedDiffText, diffText: facts.diffText ?? null,
         schemaData: claim.schemaData, schemaDef: claim.schemaDef,
         statedPackage: claim.statedPackage, statedPackageVersion: claim.statedPackageVersion, dependencyMap: facts.dependencyMap ?? null,
+        statedFile: claim.statedFile, fileExists: facts.fileExists ?? null,
+        statedReceiptId: claim.statedReceiptId, receiptFacts: facts.receiptFacts ?? null,
       },
       source,
     );
@@ -257,6 +323,8 @@ export async function runResearchVerify(
     if (typeof claim.statedDiffText === "string") console.log(`    diff 포함 : ${claim.statedDiffText.length > 50 ? claim.statedDiffText.slice(0, 47) + "..." : claim.statedDiffText}  → ${ev.diffContains}`);
     if (claim.schemaData !== undefined && claim.schemaDef !== undefined) console.log(`    스키마 : → ${ev.schema}`);
     if (typeof claim.statedPackage === "string") console.log(`    버전 : ${claim.statedPackage}@${String(claim.statedPackageVersion)}  → ${ev.version}`);
+    if (typeof claim.statedFile === "string") console.log(`    파일 : ${claim.statedFile}  → ${ev.file}`);
+    if (typeof claim.statedReceiptId === "string") console.log(`    영수증 : ${String(claim.statedReceiptId).slice(0, 12)}…  → ${ev.receipt}`);
     console.log(
       ev.failed
         ? "    ✗ FAIL — 근거가 출처와 불일치(날조/수치·날짜오류)"

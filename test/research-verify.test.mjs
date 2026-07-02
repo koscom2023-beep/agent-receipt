@@ -2,7 +2,7 @@
 // `node test/research-verify.test.mjs`.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { writeFileSync, mkdtempSync, rmSync } from "node:fs";
+import { writeFileSync, readFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -103,6 +103,89 @@ check("stripHtml: 엔티티 디코드", () => assert.ok(stripHtml("a &amp; b &lt
     assert.equal(code, 1);
   });
 
+  rmSync(dir, { recursive: true, force: true });
+}
+
+// ── Phase5: Markdown 어댑터 — 동결 문법 파싱 + JSON 동형성(같은 내용→같은 판정) ──
+{
+  const dir = mkdtempSync(join(tmpdir(), "armd-"));
+  writeFileSync(join(dir, "src.txt"), "the total was 42 items on 2026-07-01");
+  const mdBody = `# md 동형성 검증
+
+- statement: 합계 주장
+  quotedText: "the total was 42 items"
+  sourceFile: ${join(dir, "src.txt")}
+  statedValue: 42
+
+- statement: 날조 주장
+  quotedText: "totally fabricated sentence"
+  sourceFile: ${join(dir, "src.txt")}
+`;
+  const jsonBody = {
+    query: "md 동형성 검증",
+    claims: [
+      { statement: "합계 주장", quotedText: "the total was 42 items", sourceFile: join(dir, "src.txt"), statedValue: 42 },
+      { statement: "날조 주장", quotedText: "totally fabricated sentence", sourceFile: join(dir, "src.txt") },
+    ],
+  };
+  const mdPath = join(dir, "r.md");
+  const jsonPath = join(dir, "r.json");
+  writeFileSync(mdPath, mdBody);
+  writeFileSync(jsonPath, JSON.stringify(jsonBody));
+  const runCli = (file, out) => {
+    let code = 0, stdout = "";
+    try {
+      stdout = execFileSync("node", [cli, "research", "verify", "--file", file, "--out", out], { encoding: "utf8" });
+    } catch (e) {
+      code = e.status ?? 1;
+      stdout = String(e.stdout ?? "");
+    }
+    return { code, stdout };
+  };
+  const rMd = runCli(mdPath, join(dir, "out-md.json"));
+  const rJs = runCli(jsonPath, join(dir, "out-js.json"));
+  check("md 어댑터: 동일 내용 md↔JSON → exit 코드 동일(둘 다 1 — 날조 1건)", () => {
+    assert.equal(rMd.code, 1);
+    assert.equal(rJs.code, 1);
+  });
+  check("md 어댑터: 영수증 results 의 verdict/checks 완전 동일(동형성)", () => {
+    const a = JSON.parse(readFileSync(join(dir, "out-md.json"), "utf8"));
+    const b = JSON.parse(readFileSync(join(dir, "out-js.json"), "utf8"));
+    const slim = (r) => r.results.map((x) => ({ s: x.statement, v: x.verdict, c: x.checks }));
+    assert.deepEqual(slim(a), slim(b));
+  });
+  check("md 어댑터: 주장 0건 md → exit 2(조용한 빈 결과 금지)", () => {
+    const emptyPath = join(dir, "empty.md");
+    writeFileSync(emptyPath, "# 제목만 있고 주장 없음\n\n그냥 산문.\n");
+    let code = 0;
+    try {
+      execFileSync("node", [cli, "research", "verify", "--file", emptyPath], { encoding: "utf8" });
+    } catch (e) {
+      code = e.status ?? 1;
+    }
+    assert.equal(code, 2);
+  });
+  // ── Phase5: file + receipt 체크 e2e ──
+  check("file 체크 e2e: 실재 파일 verified·부재 파일 not-found→exit 1", () => {
+    const okReport = join(dir, "file-ok.json");
+    writeFileSync(okReport, JSON.stringify({ query: "f", claims: [{ statement: "실재", statedFile: join(dir, "src.txt") }] }));
+    assert.equal(runCli(okReport, join(dir, "fo.json")).code, 0);
+    const badReport = join(dir, "file-bad.json");
+    writeFileSync(badReport, JSON.stringify({ query: "f", claims: [{ statement: "부재", statedFile: join(dir, "ghost.txt") }] }));
+    assert.equal(runCli(badReport, join(dir, "fb.json")).code, 1);
+  });
+  check("receipt 체크 e2e: 진짜 영수증 인용 verified·변조본 인용 exit 1", () => {
+    // out-js.json 은 위에서 CLI 가 실제 봉인한 영수증 — 그 id 를 읽어 인용.
+    const vr = JSON.parse(readFileSync(join(dir, "out-js.json"), "utf8"));
+    const okReport = join(dir, "rc-ok.json");
+    writeFileSync(okReport, JSON.stringify({ query: "rc", claims: [{ statement: "인용 영수증 무결", statedReceiptId: vr.receiptId.slice(0, 12), receiptFile: join(dir, "out-js.json") }] }));
+    assert.equal(runCli(okReport, join(dir, "rco.json")).code, 0);
+    const tampered = readFileSync(join(dir, "out-js.json"), "utf8").replace('"fail"', '"pass"');
+    writeFileSync(join(dir, "vr-t.json"), tampered);
+    const badReport = join(dir, "rc-bad.json");
+    writeFileSync(badReport, JSON.stringify({ query: "rc", claims: [{ statement: "변조 영수증 인용", statedReceiptId: vr.receiptId.slice(0, 12), receiptFile: join(dir, "vr-t.json") }] }));
+    assert.equal(runCli(badReport, join(dir, "rcb.json")).code, 1);
+  });
   rmSync(dir, { recursive: true, force: true });
 }
 

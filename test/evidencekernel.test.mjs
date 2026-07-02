@@ -2,7 +2,7 @@
 // `node test/evidencekernel.test.mjs`.
 import assert from "node:assert/strict";
 import { createHash, generateKeyPairSync, sign as edSign } from "node:crypto";
-import { normalizeForCitation, verifyCitationInText, citationStatus, parseNumbersFromText, recompute, numberStatus, canonicalizeDate, dateStatus, linkStatus, evaluateClaim, hashStatus, signatureStatus, CHECK_KINDS, claimSchema, SCHEMA_VERSION, commitStatus, fileChangedStatus, diffContainsStatus, schemaStatus, schemaMismatches, versionStatus } from "../dist/evidencekernel.js";
+import { normalizeForCitation, verifyCitationInText, citationStatus, parseNumbersFromText, recompute, numberStatus, canonicalizeDate, dateStatus, linkStatus, evaluateClaim, hashStatus, signatureStatus, CHECK_KINDS, claimSchema, SCHEMA_VERSION, commitStatus, fileChangedStatus, diffContainsStatus, schemaStatus, schemaMismatches, versionStatus, semverSatisfies, parseSemver, fileStatus, receiptStatus } from "../dist/evidencekernel.js";
 const sha = (s) => createHash("sha256").update(s).digest("hex");
 const kp = generateKeyPairSync("ed25519");
 const pubPem = kp.publicKey.export({ format: "pem", type: "spki" }).toString();
@@ -220,6 +220,75 @@ check("CHECK_KINDS: Phase4 5종(commit/fileChanged/diffContains/schema/version) 
 check("claimSchema: Phase4 신규 property 노출(statedCommit·schemaDef·statedPackage 등)", () => {
   const s = claimSchema();
   assert.ok(s.properties.statedCommit && s.properties.schemaDef && s.properties.statedPackage && s.properties.statedPackageVersion);
+});
+
+// ── Phase5: semver 진짜 범위판정(승격) — 기존 4결과 불변 + 범위충족 신규 ──
+check("semver: 기존 동작 보존 — 정확일치·접두동일·불일치·no-basis 그대로", () => {
+  assert.equal(versionStatus("zod", "3.23.8", { zod: "3.23.8" }), "verified");
+  assert.equal(versionStatus("zod", "3.23.8", { zod: "^3.23.8" }), "verified");
+  assert.equal(versionStatus("zod", "^3.23.8", { zod: "3.23.8" }), "verified");
+  assert.equal(versionStatus("zod", "3.0.0", { zod: "3.23.8" }), "mismatch");
+});
+check("semver: ^ 범위 진짜 충족 — ^3.23.8 에 3.24.0 은 verified(승격 목적)·4.0.0 은 mismatch", () => {
+  assert.equal(versionStatus("zod", "3.24.0", { zod: "^3.23.8" }), "verified");
+  assert.equal(versionStatus("zod", "4.0.0", { zod: "^3.23.8" }), "mismatch");
+});
+check("semver: ~ 는 minor 고정·비교자 >=/</<=/> 작동", () => {
+  assert.equal(versionStatus("a", "1.2.9", { a: "~1.2.3" }), "verified");
+  assert.equal(versionStatus("a", "1.3.0", { a: "~1.2.3" }), "mismatch");
+  assert.equal(versionStatus("a", "2.0.0", { a: ">=1.5" }), "verified");
+  assert.equal(versionStatus("a", "1.4.9", { a: ">=1.5" }), "mismatch");
+  assert.equal(versionStatus("a", "0.9.0", { a: "<1.0.0" }), "verified");
+});
+check("semver: ^0.y.z 는 npm 규약(최좌측 비0 고정)", () => {
+  assert.equal(versionStatus("a", "0.2.9", { a: "^0.2.3" }), "verified");
+  assert.equal(versionStatus("a", "0.3.0", { a: "^0.2.3" }), "mismatch");
+});
+check("semver: prerelease·복합범위·와일드카드 → no-basis(거짓판정 금지)", () => {
+  assert.equal(versionStatus("a", "1.0.0", { a: "1.0.0-beta" }), "no-basis");
+  assert.equal(versionStatus("a", "1.0.0-rc.1", { a: "^1.0.0" }), "no-basis");
+  assert.equal(versionStatus("a", "1.5.0", { a: ">=1.0.0 <2.0.0" }), "no-basis");
+  assert.equal(versionStatus("a", "1.5.0", { a: "1.x" }), "no-basis");
+});
+check("parseSemver/semverSatisfies 단독: 부분버전 0채움", () => {
+  assert.deepEqual(parseSemver("3"), [3, 0, 0]);
+  assert.equal(semverSatisfies("3.5.0", "^3"), true);
+});
+
+// ── Phase5: file 체크(스펙 Planned 이행) ──
+check("fileStatus: 존재→verified·부재→not-found·조회불가/주장없음→no-basis", () => {
+  assert.equal(fileStatus("a.ts", true), "verified");
+  assert.equal(fileStatus("a.ts", false), "not-found");
+  assert.equal(fileStatus("a.ts", null), "no-basis");
+  assert.equal(fileStatus(null, true), "no-basis");
+});
+
+// ── Phase5: receipt 체크(인용 영수증 실재+무결) ──
+const okFacts = { found: true, isVerificationReceipt: true, contentHashOk: true, receiptIdOk: true, actualReceiptId: "abcdef1234567890" };
+check("receiptStatus: 실재+무결+id 접두 일치 → verified", () =>
+  assert.equal(receiptStatus("abcdef12", okFacts), "verified"));
+check("receiptStatus: 인용 파일 부재 → mismatch(인용 정확성은 인용자 책임·DA① evidence 로 완화)", () =>
+  assert.equal(receiptStatus("abcdef12", { ...okFacts, found: false }), "mismatch"));
+check("receiptStatus: id 접두 불일치 → mismatch", () =>
+  assert.equal(receiptStatus("ffffffff", okFacts), "mismatch"));
+check("receiptStatus: 봉인 재계산 실패(변조) → mismatch", () =>
+  assert.equal(receiptStatus("abcdef12", { ...okFacts, contentHashOk: false }), "mismatch"));
+check("receiptStatus: Work Receipt 등 미지원 종류 → no-basis(v1 정직 범위)", () =>
+  assert.equal(receiptStatus("abcdef12", { ...okFacts, isVerificationReceipt: false }), "no-basis"));
+check("receiptStatus: 접두 8자 미만/facts 없음 → no-basis", () => {
+  assert.equal(receiptStatus("abc", okFacts), "no-basis");
+  assert.equal(receiptStatus("abcdef12", null), "no-basis");
+});
+check("evaluateClaim: file+receipt dispatch + 실패 evidence 생성", () => {
+  const e = evaluateClaim({ statedFile: "x.ts", fileExists: false, statedReceiptId: "abcdef12", receiptFacts: { ...okFacts, found: false } }, null);
+  assert.equal(e.file, "not-found");
+  assert.equal(e.receipt, "mismatch");
+  assert.equal(e.failed, true);
+  assert.ok(e.evidence.file && e.evidence.receipt);
+});
+check("CHECK_KINDS: Phase5 2종(file/receipt) 포함 — 총 13종", () => {
+  assert.ok(CHECK_KINDS.includes("file") && CHECK_KINDS.includes("receipt"));
+  assert.equal(CHECK_KINDS.length, 13);
 });
 
 if (fail.length) { console.error(`evidencekernel: ${pass} pass, ${fail.length} FAIL`); for (const f of fail) console.error("  ✗ " + f); process.exit(1); }

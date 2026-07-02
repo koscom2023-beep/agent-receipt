@@ -273,19 +273,98 @@ export function schemaStatus(data: unknown, schema: unknown): SchemaStatus {
   return schemaMismatches(data, schema).length ? "mismatch" : "verified";
 }
 
-// ── 버전/의존성 검증 커널 (순수 · Phase4) ──
+// ── 버전/의존성 검증 커널 (순수 · Phase4 → Phase5 에서 진짜 범위판정으로 승격) ──
 // depMap: surface 가 package.json 등에서 미리 읽어 파싱한 이름→버전 맵. 커널은 순수 대조만.
-// 흔한 range 접두(^~>=<)는 벗겨내고 비교 — semver range 충족 판정(예: ^1.2.0 이 1.5.0 을 만족)은
-//   범위 밖(문자열 상등만·정직하게 좁음. 필요해지면 별도 semver 커널로 승격).
+// v1(동결): 단일 비교자만 — 정확일치 · ^ · ~ · >= · > · <= · < . 부분버전(^3, >=1.2)은 빠진 자리 0 채움.
+//   prerelease(-포함)·복합범위(공백 결합·||)·와일드카드(x/*)는 no-basis(거짓판정보다 무판정 — 스펙 명시).
 export type VersionStatus = "verified" | "mismatch" | "no-basis";
 function stripRangePrefix(v: string): string {
   return v.trim().replace(/^[\^~>=<]+\s*/, "");
+}
+// "x.y.z" → [x,y,z] (빠진 자리 0). prerelease/빌드메타/비숫자 → null.
+export function parseSemver(v: string): [number, number, number] | null {
+  const t = v.trim();
+  if (t.includes("-") || t.includes("+")) return null; // prerelease/build → 판정 안 함
+  const m = t.match(/^(\d+)(?:\.(\d+))?(?:\.(\d+))?$/);
+  if (!m) return null;
+  return [Number(m[1]), Number(m[2] ?? 0), Number(m[3] ?? 0)];
+}
+const cmpSemver = (a: [number, number, number], b: [number, number, number]): number =>
+  a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
+// 단일 비교자 range 를 stated 구체버전이 충족하는가. 판정 불가(복합/와일드카드/prerelease) → null.
+export function semverSatisfies(stated: string, range: string): boolean | null {
+  const v = parseSemver(stated);
+  if (!v) return null;
+  const r = range.trim();
+  if (/[|]|[\s]/.test(r) || /[xX*]/.test(r)) return null; // 복합·와일드카드 → v1 범위 밖
+  const m = r.match(/^(\^|~|>=|<=|>|<)?\s*(.+)$/);
+  if (!m) return null;
+  const op = m[1] ?? "";
+  const base = parseSemver(m[2] as string);
+  if (!base) return null;
+  const c = cmpSemver(v, base);
+  switch (op) {
+    case "": return c === 0;
+    case ">=": return c >= 0;
+    case ">": return c > 0;
+    case "<=": return c <= 0;
+    case "<": return c < 0;
+    case "~": { // [base, base.minor+1)
+      const upper: [number, number, number] = [base[0], base[1] + 1, 0];
+      return c >= 0 && cmpSemver(v, upper) < 0;
+    }
+    case "^": { // npm 규약: 최좌측 非0 자리 고정
+      let upper: [number, number, number];
+      if (base[0] > 0) upper = [base[0] + 1, 0, 0];
+      else if (base[1] > 0) upper = [0, base[1] + 1, 0];
+      else upper = [0, 0, base[2] + 1];
+      return c >= 0 && cmpSemver(v, upper) < 0;
+    }
+    default: return null;
+  }
 }
 export function versionStatus(pkg: string | null, claimedVersion: string | null, depMap: Record<string, unknown> | null): VersionStatus {
   if (!pkg || !claimedVersion || !depMap) return "no-basis";
   const actual = depMap[pkg];
   if (typeof actual !== "string") return "no-basis";
-  return stripRangePrefix(actual) === stripRangePrefix(claimedVersion) ? "verified" : "mismatch";
+  const stated = stripRangePrefix(claimedVersion); // 주장은 구체버전이어야 — 접두 오면 벗김
+  const sat = semverSatisfies(stated, actual);
+  if (sat === null) {
+    // 범위판정 불가 → 구버전 동작(접두 벗긴 문자열 상등)으로 정직 폴백 — 기존 결과 보존.
+    return stripRangePrefix(actual) === stated ? "verified" : "no-basis";
+  }
+  return sat ? "verified" : "mismatch";
+}
+
+// ── 파일 실재 검증 커널 (Phase5 · 스펙 Planned 이행) ──
+// exists: surface(fs) 사전조회 사실. 존재만 판정 — 내용은 안 읽음(내용 대조는 citation/hash 의 몫).
+export type FileStatus = "verified" | "not-found" | "no-basis";
+export function fileStatus(statedFile: string | null, exists: boolean | null): FileStatus {
+  if (!statedFile) return "no-basis";
+  if (exists === null) return "no-basis";
+  return exists ? "verified" : "not-found";
+}
+
+// ── 영수증 인용 검증 커널 (Phase5 · 스펙 Planned 'replay' 의 이행) ──
+// 주장이 인용한 Verification Receipt 가 실재하고 무결(봉인 재계산 일치)한가.
+// surface 가 파일을 읽고 기존 replay 함수로 재계산한 *사실*만 커널에 넘긴다(재구현 0·커널 무IO).
+// v1 정직 범위: verification-receipt 만 — Work Receipt(schemaVersion 1.0)는 no-basis(미지원 명시).
+export interface ReceiptFacts {
+  found: boolean; // 파일 존재+파싱 성공
+  isVerificationReceipt: boolean;
+  contentHashOk: boolean | null;
+  receiptIdOk: boolean | null;
+  actualReceiptId: string | null;
+}
+export type ReceiptStatus = "verified" | "mismatch" | "no-basis";
+export function receiptStatus(statedReceiptId: string | null, facts: ReceiptFacts | null): ReceiptStatus {
+  if (!statedReceiptId || statedReceiptId.trim().length < 8) return "no-basis"; // 접두 8자 미만=모호
+  if (facts === null) return "no-basis"; // 인용 파일 미지정
+  if (!facts.found) return "mismatch"; // 인용한 영수증이 없음 — citation not-found 와 같은 원칙(인용 정확성은 인용자 책임)
+  if (!facts.isVerificationReceipt) return "no-basis"; // v1 미지원 종류 — 거짓판정 대신 무판정
+  if (typeof facts.actualReceiptId !== "string" || !facts.actualReceiptId.startsWith(statedReceiptId.trim())) return "mismatch";
+  if (facts.contentHashOk !== true || facts.receiptIdOk !== true) return "mismatch"; // 봉인 재계산 불일치=변조
+  return "verified";
 }
 
 // ── 통합 claim 평가 (표준 포맷의 단일 의미론 — research·council 이 공유) ──
@@ -314,6 +393,10 @@ export interface EvalClaimInput {
   statedPackage?: unknown; // version: 이 패키지가
   statedPackageVersion?: unknown; // 이 버전인가
   dependencyMap?: unknown; // surface 사전조회: package.json 등에서 읽은 이름→버전 맵
+  statedFile?: unknown; // file: 이 파일이 디스크에 실재하나
+  fileExists?: unknown; // surface 사전조회 사실(불리언). undefined/null=조회 불가
+  statedReceiptId?: unknown; // receipt: 인용한 영수증 id(접두 ≥8자)
+  receiptFacts?: unknown; // surface 사전조회: ReceiptFacts(기존 replay 재계산 결과)
 }
 // Evidence = 실패 check 의 *증명*(expected↔actual). reason 은 설명, evidence 는 결정론 비교 근거.
 export interface CheckEvidence {
@@ -332,6 +415,8 @@ export interface ClaimEvaluation {
   diffContains: DiffContainsStatus | null;
   schema: SchemaStatus | null;
   version: VersionStatus | null;
+  file: FileStatus | null;
+  receipt: ReceiptStatus | null;
   results: Record<string, string | null>; // 레지스트리 전체 결과(확장 검증기 포함)
   evidence: Record<string, CheckEvidence>; // 실패 check 별 expected/actual(결정론·증명)
   failed: boolean; // 어느 근거든 불일치(not-found/mismatch/invalid)
@@ -368,6 +453,8 @@ export const CHECK_REGISTRY: CheckDescriptor[] = [
   { kind: "diffContains", positive: true, run: (c) => (typeof c.statedDiffText === "string" ? diffContainsStatus(c.statedDiffText, typeof c.diffText === "string" ? c.diffText : null) : null) },
   { kind: "schema", positive: true, run: (c) => (c.schemaData !== undefined && c.schemaDef !== undefined ? schemaStatus(c.schemaData, c.schemaDef) : null) },
   { kind: "version", positive: true, run: (c) => (typeof c.statedPackage === "string" ? versionStatus(c.statedPackage, typeof c.statedPackageVersion === "string" ? c.statedPackageVersion : null, c.dependencyMap && typeof c.dependencyMap === "object" ? (c.dependencyMap as Record<string, unknown>) : null) : null) },
+  { kind: "file", positive: true, run: (c) => (typeof c.statedFile === "string" ? fileStatus(c.statedFile, typeof c.fileExists === "boolean" ? c.fileExists : null) : null) },
+  { kind: "receipt", positive: true, run: (c) => (typeof c.statedReceiptId === "string" ? receiptStatus(c.statedReceiptId, c.receiptFacts && typeof c.receiptFacts === "object" ? (c.receiptFacts as ReceiptFacts) : null) : null) },
 ];
 export const CHECK_KINDS: string[] = CHECK_REGISTRY.map((d) => d.kind);
 const FAILED_STATUSES = new Set(["not-found", "mismatch", "invalid"]);
@@ -429,6 +516,18 @@ function evidenceFor(c: EvalClaimInput, source: string | null, results: Record<s
     const actual = (c.dependencyMap as Record<string, unknown>)[c.statedPackage];
     ev.version = { expected: String(c.statedPackageVersion), actual: typeof actual === "string" ? actual : "의존성 맵에 없음" };
   }
+  if (results.file === "not-found" && typeof c.statedFile === "string") {
+    ev.file = { expected: c.statedFile, actual: "디스크에 없음 (file does not exist)" };
+  }
+  if (results.receipt === "mismatch" && typeof c.statedReceiptId === "string") {
+    const f = c.receiptFacts as ReceiptFacts | null | undefined;
+    let actual = "인용한 영수증 파일 없음 (cited receipt not found)";
+    if (f?.found) {
+      if (typeof f.actualReceiptId === "string" && !f.actualReceiptId.startsWith(c.statedReceiptId.trim())) actual = `실제 receiptId ${f.actualReceiptId.slice(0, 16)}…`;
+      else actual = "봉인 재계산 불일치 (replay mismatch — 변조 의심)";
+    }
+    ev.receipt = { expected: c.statedReceiptId, actual };
+  }
   return ev;
 }
 
@@ -455,6 +554,8 @@ export function evaluateClaim(c: EvalClaimInput, source: string | null): ClaimEv
     diffContains: (results.diffContains as DiffContainsStatus) ?? null,
     schema: (results.schema as SchemaStatus) ?? null,
     version: (results.version as VersionStatus) ?? null,
+    file: (results.file as FileStatus) ?? null,
+    receipt: (results.receipt as ReceiptStatus) ?? null,
     results,
     evidence: evidenceFor(c, source, results),
     failed,
@@ -494,7 +595,9 @@ export function claimSchema(): Record<string, unknown> {
       schemaData: { description: "schema: 이 데이터가(임의 JSON 값)" },
       schemaDef: { type: "object", description: "schema: 이 JSON Schema 서브셋(type/required/properties/enum/items)을 만족하나 — 그 외 키워드는 무시" },
       statedPackage: { type: "string", description: "version: 이 패키지명이" },
-      statedPackageVersion: { type: "string", description: "이 버전인가(dependencyMap 대조 · range 접두 ^~>=< 는 벗기고 비교)" },
+      statedPackageVersion: { type: "string", description: "이 버전인가(단일 비교자 ^ ~ >= > <= < 범위충족 판정 · prerelease/복합범위=no-basis)" },
+      statedFile: { type: "string", description: "file: 이 파일이 디스크에 실재하나(존재만 — 내용 대조는 citation/hash)" },
+      statedReceiptId: { type: "string", description: "receipt: 인용한 Verification Receipt 의 id 접두(≥8자) — 실재+봉인 재계산 일치 판정(Work Receipt 는 v1 미지원=no-basis)" },
     },
   };
 }
