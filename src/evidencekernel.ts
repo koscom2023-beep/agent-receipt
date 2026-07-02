@@ -204,6 +204,90 @@ export function signatureStatus(content: string | null, signature: string | null
   }
 }
 
+// ── git 사실 검증 커널 (commit/fileChanged/diffContains · Phase4) ──
+// 셋 다 git 조회(IO)가 필요하지만, 커널 불변식(core ↛ surface·순수 유지)은 hash/signature 와 같은 패턴으로
+// 지킨다: surface(gitfacts.ts)가 git 을 조회해 사실(불리언/텍스트)을 먼저 계산하고, 커널은 그 사실을
+// 결정론 판정만 한다 — 커널 함수 자체는 git 을 몰라도 된다(테스트도 git 없이 가능).
+
+export type CommitStatus = "verified" | "mismatch" | "no-basis";
+// resolvedExists: surface 가 미리 조회한 사실. null=조회 불가(레포 없음 등) → no-basis(거짓 판정 없음).
+export function commitStatus(claimedCommit: string | null, resolvedExists: boolean | null): CommitStatus {
+  if (!claimedCommit) return "no-basis";
+  if (resolvedExists === null) return "no-basis";
+  return resolvedExists ? "verified" : "mismatch";
+}
+
+export type FileChangedStatus = "verified" | "not-found" | "no-basis";
+// changedFiles: surface 가 조회한 변경파일 목록(줄바꿈 구분 텍스트). 인용 커널과 같은 부분문자열 판정 재사용.
+export function fileChangedStatus(claimedFile: string | null, changedFiles: string | null): FileChangedStatus {
+  if (!claimedFile || changedFiles === null) return "no-basis";
+  return verifyCitationInText(claimedFile, changedFiles) ? "verified" : "not-found";
+}
+
+export type DiffContainsStatus = "verified" | "not-found" | "no-basis";
+// diffText: surface 가 조회한 커밋 diff 텍스트. 마찬가지로 부분문자열 판정.
+export function diffContainsStatus(claimedText: string | null, diffText: string | null): DiffContainsStatus {
+  if (!claimedText || diffText === null) return "no-basis";
+  return verifyCitationInText(claimedText, diffText) ? "verified" : "not-found";
+}
+
+// ── 스키마 검증 커널 (JSON Schema 서브셋 · 순수 · Phase4) ──
+// 지원: type·required·properties(중첩)·enum·items. 미지원 키워드(pattern/format/oneOf 등)는 무시
+//   — 선언 안 한 제약은 검증 안 함(거짓 통과·거짓 실패 둘 다 없음. 지원 범위는 claimSchema()에 명시).
+export type SchemaStatus = "verified" | "mismatch" | "no-basis";
+export interface SchemaMismatch { path: string; reason: string }
+
+function schemaWalk(data: unknown, schema: Record<string, unknown>, path: string, out: SchemaMismatch[]): void {
+  if (typeof schema.type === "string") {
+    const actual = data === null ? "null" : Array.isArray(data) ? "array" : typeof data;
+    if (actual !== schema.type) { out.push({ path, reason: `type ${schema.type} 기대 · 실제 ${actual}` }); return; }
+  }
+  if (Array.isArray(schema.enum) && !schema.enum.some((v) => v === data)) {
+    out.push({ path, reason: `enum ${JSON.stringify(schema.enum)} 중 하나 기대 · 실제 ${JSON.stringify(data)}` });
+  }
+  if (schema.type === "object" && data && typeof data === "object" && !Array.isArray(data)) {
+    const obj = data as Record<string, unknown>;
+    if (Array.isArray(schema.required)) {
+      for (const key of schema.required) if (typeof key === "string" && !(key in obj)) out.push({ path: `${path}.${key}`, reason: "required 필드 없음" });
+    }
+    if (schema.properties && typeof schema.properties === "object") {
+      for (const [key, sub] of Object.entries(schema.properties as Record<string, unknown>)) {
+        if (key in obj && sub && typeof sub === "object") schemaWalk(obj[key], sub as Record<string, unknown>, `${path}.${key}`, out);
+      }
+    }
+  }
+  if (schema.type === "array" && Array.isArray(data) && schema.items && typeof schema.items === "object") {
+    data.forEach((item, i) => schemaWalk(item, schema.items as Record<string, unknown>, `${path}[${i}]`, out));
+  }
+}
+
+// 재계산 가능(캐시 아님) — evidenceFor 가 mismatch 상세를 얻을 때 다시 호출.
+export function schemaMismatches(data: unknown, schema: unknown): SchemaMismatch[] {
+  if (data === undefined || !schema || typeof schema !== "object") return [];
+  const out: SchemaMismatch[] = [];
+  schemaWalk(data, schema as Record<string, unknown>, "$", out);
+  return out;
+}
+export function schemaStatus(data: unknown, schema: unknown): SchemaStatus {
+  if (data === undefined || !schema || typeof schema !== "object") return "no-basis";
+  return schemaMismatches(data, schema).length ? "mismatch" : "verified";
+}
+
+// ── 버전/의존성 검증 커널 (순수 · Phase4) ──
+// depMap: surface 가 package.json 등에서 미리 읽어 파싱한 이름→버전 맵. 커널은 순수 대조만.
+// 흔한 range 접두(^~>=<)는 벗겨내고 비교 — semver range 충족 판정(예: ^1.2.0 이 1.5.0 을 만족)은
+//   범위 밖(문자열 상등만·정직하게 좁음. 필요해지면 별도 semver 커널로 승격).
+export type VersionStatus = "verified" | "mismatch" | "no-basis";
+function stripRangePrefix(v: string): string {
+  return v.trim().replace(/^[\^~>=<]+\s*/, "");
+}
+export function versionStatus(pkg: string | null, claimedVersion: string | null, depMap: Record<string, unknown> | null): VersionStatus {
+  if (!pkg || !claimedVersion || !depMap) return "no-basis";
+  const actual = depMap[pkg];
+  if (typeof actual !== "string") return "no-basis";
+  return stripRangePrefix(actual) === stripRangePrefix(claimedVersion) ? "verified" : "mismatch";
+}
+
 // ── 통합 claim 평가 (표준 포맷의 단일 의미론 — research·council 이 공유) ──
 // 코드가 곧 포맷 스펙: 한 주장이 담은 각 typed 근거(인용/수치/날짜/링크)를 한 곳에서 결정론 판정.
 export interface EvalClaimInput {
@@ -219,6 +303,17 @@ export interface EvalClaimInput {
   algo?: unknown; // 해시 알고리즘(기본 sha256)
   signature?: unknown; // base64 ed25519 서명(content 에 대한)
   publicKey?: unknown; // PEM(SPKI) 공개키 — 서명 검증용
+  statedCommit?: unknown; // commit: 이 해시가 레포에 실재하나(surface 가 조회한 사실을 commitExists 로 넘김)
+  commitExists?: unknown; // surface 사전조회 사실(불리언). undefined/null=조회 불가
+  statedChangedFile?: unknown; // fileChanged: 이 커밋이 이 파일을 변경했나
+  changedFiles?: unknown; // surface 사전조회: 그 커밋의 변경파일 목록(텍스트)
+  statedDiffText?: unknown; // diffContains: 그 커밋의 diff 가 이 텍스트를 포함하나
+  diffText?: unknown; // surface 사전조회: 그 커밋의 diff 텍스트
+  schemaData?: unknown; // schema: 이 데이터가 schemaDef 와 맞나(둘 다 인라인 — IO 불필요)
+  schemaDef?: unknown; // JSON Schema 서브셋(claimSchema() 참고 지원 범위)
+  statedPackage?: unknown; // version: 이 패키지가
+  statedPackageVersion?: unknown; // 이 버전인가
+  dependencyMap?: unknown; // surface 사전조회: package.json 등에서 읽은 이름→버전 맵
 }
 // Evidence = 실패 check 의 *증명*(expected↔actual). reason 은 설명, evidence 는 결정론 비교 근거.
 export interface CheckEvidence {
@@ -232,6 +327,11 @@ export interface ClaimEvaluation {
   link: LinkStatus | null;
   hash: HashStatus | null;
   signature: SignatureStatus | null;
+  commit: CommitStatus | null;
+  fileChanged: FileChangedStatus | null;
+  diffContains: DiffContainsStatus | null;
+  schema: SchemaStatus | null;
+  version: VersionStatus | null;
   results: Record<string, string | null>; // 레지스트리 전체 결과(확장 검증기 포함)
   evidence: Record<string, CheckEvidence>; // 실패 check 별 expected/actual(결정론·증명)
   failed: boolean; // 어느 근거든 불일치(not-found/mismatch/invalid)
@@ -263,6 +363,11 @@ export const CHECK_REGISTRY: CheckDescriptor[] = [
   { kind: "hash", positive: true, run: (c) => (c.statedHash !== undefined ? hashStatus(typeof c.statedHash === "string" ? c.statedHash : null, typeof c.content === "string" ? c.content : null, typeof c.algo === "string" ? c.algo : "sha256") : null) },
   { kind: "signature", positive: true, run: (c) => (c.signature !== undefined || c.publicKey !== undefined ? signatureStatus(typeof c.content === "string" ? c.content : null, typeof c.signature === "string" ? c.signature : null, typeof c.publicKey === "string" ? c.publicKey : null) : null) },
   { kind: "link", positive: false, run: (c) => (typeof c.link === "string" ? linkStatus(c.link) : null) },
+  { kind: "commit", positive: true, run: (c) => (typeof c.statedCommit === "string" ? commitStatus(c.statedCommit, typeof c.commitExists === "boolean" ? c.commitExists : null) : null) },
+  { kind: "fileChanged", positive: true, run: (c) => (typeof c.statedChangedFile === "string" ? fileChangedStatus(c.statedChangedFile, typeof c.changedFiles === "string" ? c.changedFiles : null) : null) },
+  { kind: "diffContains", positive: true, run: (c) => (typeof c.statedDiffText === "string" ? diffContainsStatus(c.statedDiffText, typeof c.diffText === "string" ? c.diffText : null) : null) },
+  { kind: "schema", positive: true, run: (c) => (c.schemaData !== undefined && c.schemaDef !== undefined ? schemaStatus(c.schemaData, c.schemaDef) : null) },
+  { kind: "version", positive: true, run: (c) => (typeof c.statedPackage === "string" ? versionStatus(c.statedPackage, typeof c.statedPackageVersion === "string" ? c.statedPackageVersion : null, c.dependencyMap && typeof c.dependencyMap === "object" ? (c.dependencyMap as Record<string, unknown>) : null) : null) },
 ];
 export const CHECK_KINDS: string[] = CHECK_REGISTRY.map((d) => d.kind);
 const FAILED_STATUSES = new Set(["not-found", "mismatch", "invalid"]);
@@ -306,6 +411,24 @@ function evidenceFor(c: EvalClaimInput, source: string | null, results: Record<s
   if (results.link === "invalid" && typeof c.link === "string") {
     ev.link = { expected: "http(s) URL", actual: c.link };
   }
+  if (results.commit === "mismatch" && typeof c.statedCommit === "string") {
+    ev.commit = { expected: c.statedCommit, actual: "레포에 이 커밋 없음 (commit not found in repo)" };
+  }
+  if (results.fileChanged === "not-found" && typeof c.statedChangedFile === "string") {
+    const cf = typeof c.changedFiles === "string" ? c.changedFiles : "";
+    ev.fileChanged = { expected: c.statedChangedFile, actual: cf ? `그 커밋의 변경파일: ${cf.split("\n").filter(Boolean).slice(0, 5).join(", ")}` : "그 커밋은 파일을 안 바꿈" };
+  }
+  if (results.diffContains === "not-found" && typeof c.statedDiffText === "string") {
+    ev.diffContains = { expected: c.statedDiffText, actual: "그 커밋의 diff 에 없음 (not present in diff)" };
+  }
+  if (results.schema === "mismatch") {
+    const mism = schemaMismatches(c.schemaData, c.schemaDef);
+    ev.schema = { expected: "schemaDef 를 만족하는 데이터", actual: mism.map((m) => `${m.path}: ${m.reason}`).join(" · ") };
+  }
+  if (results.version === "mismatch" && typeof c.statedPackage === "string" && c.dependencyMap && typeof c.dependencyMap === "object") {
+    const actual = (c.dependencyMap as Record<string, unknown>)[c.statedPackage];
+    ev.version = { expected: String(c.statedPackageVersion), actual: typeof actual === "string" ? actual : "의존성 맵에 없음" };
+  }
   return ev;
 }
 
@@ -327,6 +450,11 @@ export function evaluateClaim(c: EvalClaimInput, source: string | null): ClaimEv
     link: (results.link as LinkStatus) ?? null,
     hash: (results.hash as HashStatus) ?? null,
     signature: (results.signature as SignatureStatus) ?? null,
+    commit: (results.commit as CommitStatus) ?? null,
+    fileChanged: (results.fileChanged as FileChangedStatus) ?? null,
+    diffContains: (results.diffContains as DiffContainsStatus) ?? null,
+    schema: (results.schema as SchemaStatus) ?? null,
+    version: (results.version as VersionStatus) ?? null,
     results,
     evidence: evidenceFor(c, source, results),
     failed,
@@ -360,6 +488,13 @@ export function claimSchema(): Record<string, unknown> {
       algo: { type: "string", enum: [...HASH_ALGOS] },
       signature: { type: "string", description: "signature: content 에 대한 base64 ed25519 서명" },
       publicKey: { type: "string", description: "signature 검증용 PEM(SPKI) 공개키" },
+      statedCommit: { type: "string", description: "commit: 이 해시가 레포에 실재하나(surface 가 git 으로 사전조회)" },
+      statedChangedFile: { type: "string", description: "fileChanged: statedCommit 이 이 파일을 변경했나" },
+      statedDiffText: { type: "string", description: "diffContains: statedCommit 의 diff 가 이 텍스트를 포함하나" },
+      schemaData: { description: "schema: 이 데이터가(임의 JSON 값)" },
+      schemaDef: { type: "object", description: "schema: 이 JSON Schema 서브셋(type/required/properties/enum/items)을 만족하나 — 그 외 키워드는 무시" },
+      statedPackage: { type: "string", description: "version: 이 패키지명이" },
+      statedPackageVersion: { type: "string", description: "이 버전인가(dependencyMap 대조 · range 접두 ^~>=< 는 벗기고 비교)" },
     },
   };
 }

@@ -2,7 +2,7 @@
 // `node test/evidencekernel.test.mjs`.
 import assert from "node:assert/strict";
 import { createHash, generateKeyPairSync, sign as edSign } from "node:crypto";
-import { normalizeForCitation, verifyCitationInText, citationStatus, parseNumbersFromText, recompute, numberStatus, canonicalizeDate, dateStatus, linkStatus, evaluateClaim, hashStatus, signatureStatus, CHECK_KINDS, claimSchema, SCHEMA_VERSION } from "../dist/evidencekernel.js";
+import { normalizeForCitation, verifyCitationInText, citationStatus, parseNumbersFromText, recompute, numberStatus, canonicalizeDate, dateStatus, linkStatus, evaluateClaim, hashStatus, signatureStatus, CHECK_KINDS, claimSchema, SCHEMA_VERSION, commitStatus, fileChangedStatus, diffContainsStatus, schemaStatus, schemaMismatches, versionStatus } from "../dist/evidencekernel.js";
 const sha = (s) => createHash("sha256").update(s).digest("hex");
 const kp = generateKeyPairSync("ed25519");
 const pubPem = kp.publicKey.export({ format: "pem", type: "spki" }).toString();
@@ -125,6 +125,101 @@ check("claimSchema: schemaVersion + 구조 + checkKinds", () => {
   assert.equal(s.schemaVersion, SCHEMA_VERSION);
   assert.ok(s.properties && s.properties.quotedText && s.properties.statedHash);
   assert.ok(Array.isArray(s.checkKinds) && s.checkKinds.includes("hash"));
+});
+
+// ── Phase4: git 사실 검증(commit/fileChanged/diffContains) — 커널은 순수, surface 사전조회 사실만 받음 ──
+check("commitStatus: 존재→verified·부재→mismatch·조회불가(null)→no-basis·주장없음→no-basis", () => {
+  assert.equal(commitStatus("abc123", true), "verified");
+  assert.equal(commitStatus("abc123", false), "mismatch");
+  assert.equal(commitStatus("abc123", null), "no-basis");
+  assert.equal(commitStatus(null, true), "no-basis");
+});
+check("fileChangedStatus: 변경목록에 있으면 verified·없으면 not-found·목록없음(null)→no-basis", () => {
+  assert.equal(fileChangedStatus("src/foo.ts", "src/foo.ts\nsrc/bar.ts"), "verified");
+  assert.equal(fileChangedStatus("src/baz.ts", "src/foo.ts\nsrc/bar.ts"), "not-found");
+  assert.equal(fileChangedStatus("src/foo.ts", null), "no-basis");
+  assert.equal(fileChangedStatus(null, "src/foo.ts"), "no-basis");
+});
+check("diffContainsStatus: diff 텍스트에 있으면 verified·없으면 not-found", () => {
+  assert.equal(diffContainsStatus("+  return null;", "@@ -1,2 +1,3 @@\n+  return null;\n"), "verified");
+  assert.equal(diffContainsStatus("+  return 42;", "@@ -1,2 +1,3 @@\n+  return null;\n"), "not-found");
+  assert.equal(diffContainsStatus("x", null), "no-basis");
+});
+
+// ── Phase4: 스키마 검증(JSON Schema 서브셋 · 순수) ──
+check("schemaStatus: 기본 type 일치 → verified", () => assert.equal(schemaStatus("hi", { type: "string" }), "verified"));
+check("schemaStatus: type 불일치 → mismatch", () => assert.equal(schemaStatus(42, { type: "string" }), "mismatch"));
+check("schemaStatus: object required+properties 중첩 검증", () => {
+  const schema = { type: "object", required: ["name", "age"], properties: { name: { type: "string" }, age: { type: "number" } } };
+  assert.equal(schemaStatus({ name: "a", age: 1 }, schema), "verified");
+  assert.equal(schemaStatus({ name: "a" }, schema), "mismatch"); // age 없음(required)
+  assert.equal(schemaStatus({ name: "a", age: "1" }, schema), "mismatch"); // age 타입 틀림
+});
+check("schemaStatus: enum 위반 → mismatch", () => assert.equal(schemaStatus("red", { enum: ["a", "b"] }), "mismatch"));
+check("schemaStatus: array items 중첩 검증", () => {
+  const schema = { type: "array", items: { type: "number" } };
+  assert.equal(schemaStatus([1, 2, 3], schema), "verified");
+  assert.equal(schemaStatus([1, "x", 3], schema), "mismatch");
+});
+check("schemaStatus: data/schema 없음 → no-basis", () => {
+  assert.equal(schemaStatus(undefined, { type: "string" }), "no-basis");
+  assert.equal(schemaStatus("x", null), "no-basis");
+});
+check("schemaMismatches: path+reason 구조로 구체적 위치 보고(재계산 가능·캐시 아님)", () => {
+  const schema = { type: "object", required: ["a"], properties: { a: { type: "number" } } };
+  const m = schemaMismatches({ a: "not-a-number" }, schema);
+  assert.equal(m.length, 1);
+  assert.equal(m[0].path, "$.a");
+  assert.ok(m[0].reason.includes("type"));
+});
+
+// ── Phase4: 버전/의존성 검증(순수) ──
+check("versionStatus: 정확일치 verified·range접두(^~) 벗기고 비교·불일치 mismatch", () => {
+  assert.equal(versionStatus("zod", "3.23.8", { zod: "3.23.8" }), "verified");
+  assert.equal(versionStatus("zod", "3.23.8", { zod: "^3.23.8" }), "verified"); // 접두 벗김
+  assert.equal(versionStatus("zod", "^3.23.8", { zod: "3.23.8" }), "verified"); // 양쪽 다 벗김
+  assert.equal(versionStatus("zod", "3.0.0", { zod: "3.23.8" }), "mismatch");
+});
+check("versionStatus: 맵에 없거나 맵 자체 없음 → no-basis(거짓 mismatch 아님)", () => {
+  assert.equal(versionStatus("nope", "1.0.0", { zod: "3.23.8" }), "no-basis");
+  assert.equal(versionStatus("zod", "3.23.8", null), "no-basis");
+  assert.equal(versionStatus(null, "3.23.8", { zod: "3.23.8" }), "no-basis");
+});
+
+// ── Phase4: evaluateClaim 통합 — 5종 전부 결과에 반영 + CHECK_KINDS/claimSchema 확장 ──
+check("evaluateClaim: commit/fileChanged/diffContains/schema/version 전부 dispatch 됨", () => {
+  const e = evaluateClaim({
+    statedCommit: "deadbeef", commitExists: true,
+    statedChangedFile: "a.ts", changedFiles: "a.ts\nb.ts",
+    statedDiffText: "+x", diffText: "+x\n-y",
+    schemaData: { n: 1 }, schemaDef: { type: "object", required: ["n"] },
+    statedPackage: "zod", statedPackageVersion: "3.23.8", dependencyMap: { zod: "3.23.8" },
+  }, null);
+  assert.equal(e.commit, "verified");
+  assert.equal(e.fileChanged, "verified");
+  assert.equal(e.diffContains, "verified");
+  assert.equal(e.schema, "verified");
+  assert.equal(e.version, "verified");
+  assert.equal(e.failed, false);
+  assert.equal(e.verified, true);
+});
+check("evaluateClaim: 5종 중 하나라도 mismatch/not-found 면 failed=true + evidence 생성", () => {
+  const e = evaluateClaim({ statedCommit: "deadbeef", commitExists: false }, null);
+  assert.equal(e.commit, "mismatch");
+  assert.equal(e.failed, true);
+  assert.ok(e.evidence.commit && e.evidence.commit.expected === "deadbeef");
+});
+check("evaluateClaim: schema mismatch 도 evidence 에 구체적 위치 포함", () => {
+  const e = evaluateClaim({ schemaData: { n: "x" }, schemaDef: { type: "object", properties: { n: { type: "number" } } } }, null);
+  assert.equal(e.schema, "mismatch");
+  assert.ok(e.evidence.schema && e.evidence.schema.actual.includes("$.n"));
+});
+check("CHECK_KINDS: Phase4 5종(commit/fileChanged/diffContains/schema/version) 전부 포함", () => {
+  for (const k of ["commit", "fileChanged", "diffContains", "schema", "version"]) assert.ok(CHECK_KINDS.includes(k), `누락: ${k}`);
+});
+check("claimSchema: Phase4 신규 property 노출(statedCommit·schemaDef·statedPackage 등)", () => {
+  const s = claimSchema();
+  assert.ok(s.properties.statedCommit && s.properties.schemaDef && s.properties.statedPackage && s.properties.statedPackageVersion);
 });
 
 if (fail.length) { console.error(`evidencekernel: ${pass} pass, ${fail.length} FAIL`); for (const f of fail) console.error("  ✗ " + f); process.exit(1); }

@@ -2,7 +2,8 @@
 // `node test/council-verify.test.mjs`.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readFileSync, rmSync, existsSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { readFileSync, rmSync, existsSync, writeFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { gradeDecision, appendDecisionLog } from "../dist/council.js";
@@ -91,6 +92,45 @@ check("gradeDecision.claims: grounded 케이스 verdict=verified·decisionId 없
   assert.equal(r.claims[0].verdict, "verified");
   assert.equal(r.claims[0].decisionId, null);
 });
+
+// ── Phase4: council 도 git/schema/version 근거를 grounding 판정에 반영하나(실 임시 레포) ──
+{
+  const dir = mkdtempSync(join(tmpdir(), "arcouncil-e2e-"));
+  const git = (args) => execFileSync("git", args, { cwd: dir, encoding: "utf8" });
+  git(["init", "-q"]);
+  git(["config", "user.email", "t@example.com"]);
+  git(["config", "user.name", "t"]);
+  writeFileSync(join(dir, "config.ts"), "export const FEATURE_X = true;\n");
+  git(["add", "config.ts"]);
+  git(["commit", "-q", "-m", "feat: add FEATURE_X"]);
+  const realCommit = git(["rev-parse", "HEAD"]).trim();
+
+  check("gradeDecision: 근거가 '이 커밋이 이 파일을 바꿨다'는 실제 git 사실과 일치 → grounded", () => {
+    const r = gradeDecision({
+      statement: "config 이미 FEATURE_X 지원하므로 이 방식으로 결정",
+      supportingClaims: [{ statedCommit: realCommit, statedChangedFile: "config.ts", repoDir: dir }],
+    });
+    assert.equal(r.grounding, "grounded");
+    assert.equal(r.claims[0].checks.fileChanged, "verified");
+  });
+  check("gradeDecision: 날조된 git 근거(그 커밋이 안 바꾼 파일 주장) → ungrounded", () => {
+    const r = gradeDecision({
+      statement: "잘못된 근거로 내린 결정",
+      supportingClaims: [{ statedCommit: realCommit, statedChangedFile: "never-touched.ts", repoDir: dir }],
+    });
+    assert.equal(r.grounding, "ungrounded");
+    assert.equal(r.claims[0].checks.fileChanged, "not-found");
+  });
+  check("gradeDecision: 스키마 근거(인라인·IO 불필요)로도 grounded 판정", () => {
+    const r = gradeDecision({
+      statement: "설정 객체가 이 형태를 만족하므로 채택",
+      supportingClaims: [{ schemaData: { enabled: true }, schemaDef: { type: "object", required: ["enabled"] } }],
+    });
+    assert.equal(r.grounding, "grounded");
+  });
+
+  rmSync(dir, { recursive: true, force: true });
+}
 
 if (fail.length) { console.error(`council-verify: ${pass} pass, ${fail.length} FAIL`); for (const f of fail) console.error("  ✗ " + f); process.exit(1); }
 console.log(`council-verify: ${pass} pass ✅`);

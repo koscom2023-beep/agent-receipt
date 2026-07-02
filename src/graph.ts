@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
-import { claimFingerprintV1 } from "./evidencekernel.js";
+import { claimFingerprintV1, CHECK_KINDS } from "./evidencekernel.js";
 import { replayVerificationReceipt } from "./vreceipt.js";
 
 const line = "─".repeat(56);
@@ -592,6 +592,8 @@ export function buildViewData(dir: string): ViewRow[] {
 }
 
 export function buildGraphHtml(data: ViewRow[]): string {
+  // 체크종류 목록 SSOT — 커널 CHECK_KINDS 를 그대로 임베드(하드코딩 중복 금지·새 체크 추가 시 여기 안 고쳐도 됨).
+  const checkKindsJs = JSON.stringify(CHECK_KINDS);
   // Evidence Browser: Failure-first 순서 — Dashboard → Failures(indexes 탭: Check별/Model별/…) →
   //   Reason(→Evidence) → Affected Claim → 주장 이력(1클릭) → Receipt 상세(맨 마지막 drill-down).
   // 임베드 JSON + vanilla JS. 외부 리소스 0·서버 0(share-proof 패턴·이식 리포트).
@@ -720,7 +722,7 @@ h+='<div style="margin-top:8px">이유: '+esc(f.reason||e.reason)+'</div>';
 if(f.evidence)h+='<div>증거 — 기대값: <code>'+esc(f.evidence.expected)+'</code> ↔ 실제값: <code>'+esc(f.evidence.actual)+'</code></div>';
 if(f.hint)h+='<div class="mut">조치(기계적·표시만): '+esc(f.hint)+'</div>';h+='</div>';
 h+='<div class="card"><b>영향받은 주장 #'+e.claimIndex+'</b><div style="margin:4px 0">'+esc(c.statement||e.statement)+'</div><div class="chk">';
-['citation','number','date','hash','signature','link'].forEach(k=>{const ch=c.checks||{};if(ch[k]!=null){h+='<span class="k">'+k+'</span>'+st(ch[k])}});h+='</div></div>';
+(${checkKindsJs}).forEach(k=>{const ch=c.checks||{};if(ch[k]!=null){h+='<span class="k">'+k+'</span>'+st(ch[k])}});h+='</div></div>';
 h+='<div class="card">주장 지문 <code>'+esc(e.fingerprint||(c.fingerprint||''))+'</code> · <span class="lnk" data-h="'+esc(e.fingerprint||(c.fingerprint||''))+'">이 주장의 이력 보기 →</span></div>';
 h+='<div class="card mut">Receipt <code>'+esc((e.receiptId||'').slice(0,16))+'…</code> · <span class="lnk" data-r="'+esc(e.file||'')+'">Receipt 전체 보기(맨 마지막 drill-down) →</span></div>';
 el('detail').innerHTML=h;wire()}
@@ -740,7 +742,7 @@ h+='<div class="mut">receiptId <code>'+esc(d.receiptId||'')+'</code></div></div>
 const VLABEL={failed:'실패',verified:'검증됨',advisory:'참고'};
 (d.claims||[]).forEach((c,i)=>{const ch=c.checks||{};const v=c.verdict;const failed=(c.failures||[]).length;
 h+='<div class="card"><div><b>주장 #'+(i+1)+'</b> — '+esc((c.statement||'').slice(0,80))+' → <b class="'+(v==='failed'?'fail':v==='verified'?'pass':'mut')+'">'+esc(VLABEL[v]||v||'')+'</b></div><div class="chk">';
-['citation','number','date','hash','signature','link'].forEach(k=>{if(ch[k]!=null){h+='<span class="k">'+k+'</span>'+st(ch[k])}});h+='</div>';
+(${checkKindsJs}).forEach(k=>{if(ch[k]!=null){h+='<span class="k">'+k+'</span>'+st(ch[k])}});h+='</div>';
 if(failed){h+='<div style="margin-top:8px;font-weight:600">실패 목록</div>';(c.failures||[]).forEach(f=>{
 h+='<div class="rz"><b class="fail">'+esc(f.check)+'</b> — '+esc(f.status)+'<div class="mut">이유: '+esc(f.reason)+'</div>'+
 (f.evidence?'<div>증거 — 기대값: <code>'+esc(f.evidence.expected)+'</code> · 실제값: <code>'+esc(f.evidence.actual)+'</code></div>':'')+

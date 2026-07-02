@@ -3,6 +3,7 @@ import { isAbsolute, join } from "node:path";
 import { createHash } from "node:crypto";
 import { evaluateClaim, claimFingerprintV1 } from "./evidencekernel.js";
 import { writeVerificationReceipt, tierProvenance } from "./vreceipt.js";
+import { resolveCommitExists, resolveChangedFiles, resolveDiffText, resolveDependencyMap } from "./gitfacts.js";
 
 const line = "─".repeat(56);
 
@@ -31,6 +32,16 @@ interface SupportingClaim {
   algo?: unknown;
   signature?: unknown;
   publicKey?: unknown;
+  // git/스키마/버전 검증(선택, Phase4) — research 와 같은 표준 포맷.
+  statedCommit?: unknown;
+  statedChangedFile?: unknown;
+  statedDiffText?: unknown;
+  repoDir?: unknown;
+  schemaData?: unknown;
+  schemaDef?: unknown;
+  statedPackage?: unknown;
+  statedPackageVersion?: unknown;
+  dependencyFile?: unknown;
 }
 interface Decision {
   id?: unknown;
@@ -59,6 +70,28 @@ function resolveSource(c: SupportingClaim): string | null {
     }
   }
   return null;
+}
+
+// git/의존성 사실 사전조회 — research 와 동일 shape 이나 self-contained(위 resolveSource 와 같은 이유).
+interface ResolvedFacts {
+  commitExists?: boolean | null;
+  changedFiles?: string | null;
+  diffText?: string | null;
+  dependencyMap?: Record<string, string> | null;
+}
+function resolveFacts(c: SupportingClaim): ResolvedFacts {
+  const facts: ResolvedFacts = {};
+  const repoDir = typeof c.repoDir === "string" && c.repoDir ? c.repoDir : process.cwd();
+  if (typeof c.statedCommit === "string" && c.statedCommit) {
+    facts.commitExists = resolveCommitExists(c.statedCommit, repoDir);
+    if (typeof c.statedChangedFile === "string" && c.statedChangedFile) facts.changedFiles = resolveChangedFiles(c.statedCommit, repoDir);
+    if (typeof c.statedDiffText === "string" && c.statedDiffText && typeof c.statedChangedFile === "string") facts.diffText = resolveDiffText(c.statedCommit, c.statedChangedFile, repoDir);
+  }
+  if (typeof c.dependencyFile === "string" && c.dependencyFile) {
+    const p = isAbsolute(c.dependencyFile) ? c.dependencyFile : join(process.cwd(), c.dependencyFile);
+    facts.dependencyMap = resolveDependencyMap(p);
+  }
+  return facts;
 }
 
 // 한 decision 의 grounding 판정. 근거 주장을 인용 커널로 대조:
@@ -98,9 +131,17 @@ export function gradeDecision(dec: Decision): {
   const graded: GradedClaim[] = [];
   for (const c of claims) {
     const url = typeof c.sourceUrl === "string" ? c.sourceUrl : undefined;
-    // research 와 동일한 통합 평가(표준 포맷 공유): 인용·수치·날짜·링크를 한 곳에서.
+    const facts = resolveFacts(c);
+    // research 와 동일한 통합 평가(표준 포맷 공유): 인용·수치·날짜·링크·해시·commit·fileChanged·diffContains·schema·version 을 한 곳에서.
     const ev = evaluateClaim(
-      { quotedText: c.quotedText, statedValue: c.statedValue, op: c.op, operands: c.operands, eps: c.eps, statedDate: c.statedDate, link: url, statedHash: c.statedHash, content: typeof c.content === "string" ? c.content : undefined, algo: c.algo, signature: c.signature, publicKey: c.publicKey },
+      {
+        quotedText: c.quotedText, statedValue: c.statedValue, op: c.op, operands: c.operands, eps: c.eps, statedDate: c.statedDate, link: url, statedHash: c.statedHash, content: typeof c.content === "string" ? c.content : undefined, algo: c.algo, signature: c.signature, publicKey: c.publicKey,
+        statedCommit: c.statedCommit, commitExists: facts.commitExists ?? null,
+        statedChangedFile: c.statedChangedFile, changedFiles: facts.changedFiles ?? null,
+        statedDiffText: c.statedDiffText, diffText: facts.diffText ?? null,
+        schemaData: c.schemaData, schemaDef: c.schemaDef,
+        statedPackage: c.statedPackage, statedPackageVersion: c.statedPackageVersion, dependencyMap: facts.dependencyMap ?? null,
+      },
       resolveSource(c),
     );
     // 카운트 필드는 인용 상태 기준(하위호환) — citation null 은 no-source 취급.

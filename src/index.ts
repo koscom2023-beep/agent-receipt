@@ -61,6 +61,12 @@ export {
   linkStatus,
   hashStatus,
   signatureStatus,
+  commitStatus,
+  fileChangedStatus,
+  diffContainsStatus,
+  schemaStatus,
+  schemaMismatches,
+  versionStatus,
 } from "./evidencekernel.js";
 export type {
   CitationStatus,
@@ -69,5 +75,11 @@ export type {
   LinkStatus,
   HashStatus,
   SignatureStatus,
+  CommitStatus,
+  FileChangedStatus,
+  DiffContainsStatus,
+  SchemaStatus,
+  SchemaMismatch,
+  VersionStatus,
   CheckDescriptor,
 } from "./evidencekernel.js";

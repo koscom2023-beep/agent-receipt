@@ -5,6 +5,7 @@ import {
   evaluateClaim, claimFingerprintV1,
 } from "./evidencekernel.js";
 import { writeVerificationReceipt, tierProvenance } from "./vreceipt.js";
+import { resolveCommitExists, resolveChangedFiles, resolveDiffText, resolveDependencyMap } from "./gitfacts.js";
 
 // 인용/수치 검증 커널은 공유 Evidence Kernel(evidencekernel.ts)에 있다(research·council 이 같은 코어 재사용).
 // 여기선 그 커널을 파일 IO(출처 스냅샷)·라이브 fetch·CLI 출력에 엮는 surface 만 담당한다.
@@ -41,6 +42,18 @@ interface ResearchClaim {
   algo?: unknown; // 해시 알고리즘(기본 sha256)
   signature?: unknown; // 서명 검증(선택) — content 에 대한 base64 ed25519 서명
   publicKey?: unknown; // PEM 공개키
+  // git 사실 검증(선택, Phase4) — surface 가 git 조회(IO) 후 커널에 사실만 넘김.
+  statedCommit?: unknown; // 이 커밋해시가 레포에 실재하나
+  statedChangedFile?: unknown; // statedCommit 이 이 파일을 변경했나
+  statedDiffText?: unknown; // statedCommit 의 diff 가 이 텍스트를 포함하나(파일은 statedChangedFile 사용)
+  repoDir?: unknown; // git 조회 대상 레포(기본: process.cwd())
+  // 스키마 검증(선택, Phase4) — 둘 다 인라인(IO 불필요).
+  schemaData?: unknown;
+  schemaDef?: unknown;
+  // 버전/의존성 검증(선택, Phase4).
+  statedPackage?: unknown;
+  statedPackageVersion?: unknown;
+  dependencyFile?: unknown; // package.json 등 경로(surface 가 읽어 이름→버전 맵으로 파싱)
 }
 interface ResearchReport {
   schemaVersion?: unknown;
@@ -81,6 +94,28 @@ function resolveContent(claim: ResearchClaim): string | undefined {
     }
   }
   return undefined;
+}
+
+// git/의존성 사실 사전조회(파일 IO·git 프로세스 실행은 커널 밖) — 필요한 필드가 있을 때만 조회.
+interface ResolvedFacts {
+  commitExists?: boolean | null;
+  changedFiles?: string | null;
+  diffText?: string | null;
+  dependencyMap?: Record<string, string> | null;
+}
+function resolveFacts(claim: ResearchClaim): ResolvedFacts {
+  const facts: ResolvedFacts = {};
+  const repoDir = typeof claim.repoDir === "string" && claim.repoDir ? claim.repoDir : process.cwd();
+  if (typeof claim.statedCommit === "string" && claim.statedCommit) {
+    facts.commitExists = resolveCommitExists(claim.statedCommit, repoDir);
+    if (typeof claim.statedChangedFile === "string" && claim.statedChangedFile) facts.changedFiles = resolveChangedFiles(claim.statedCommit, repoDir);
+    if (typeof claim.statedDiffText === "string" && claim.statedDiffText && typeof claim.statedChangedFile === "string") facts.diffText = resolveDiffText(claim.statedCommit, claim.statedChangedFile, repoDir);
+  }
+  if (typeof claim.dependencyFile === "string" && claim.dependencyFile) {
+    const p = isAbsolute(claim.dependencyFile) ? claim.dependencyFile : join(process.cwd(), claim.dependencyFile);
+    facts.dependencyMap = resolveDependencyMap(p);
+  }
+  return facts;
 }
 
 // HTML → 텍스트(라이브 fetch 대조용). script/style 제거·태그 제거·기본 엔티티 디코드(공백 정규화는 커널이).
@@ -185,9 +220,18 @@ export async function runResearchVerify(
       source = resolveSource(claim);
     }
 
-    // 통합 평가(표준 포맷의 단일 의미론) — 인용·수치·날짜·링크·해시를 한 곳에서.
+    // git/의존성 사실 사전조회(claim 이 요구할 때만·IO 는 여기서 끝) → 커널엔 사실만 전달.
+    const facts = resolveFacts(claim);
+    // 통합 평가(표준 포맷의 단일 의미론) — 인용·수치·날짜·링크·해시·commit·fileChanged·diffContains·schema·version 을 한 곳에서.
     const ev = evaluateClaim(
-      { quotedText: claim.quotedText, statedValue: claim.statedValue, op: claim.op, operands: claim.operands, eps: claim.eps, statedDate: claim.statedDate, link: url || undefined, statedHash: claim.statedHash, content: resolveContent(claim), algo: claim.algo, signature: claim.signature, publicKey: claim.publicKey },
+      {
+        quotedText: claim.quotedText, statedValue: claim.statedValue, op: claim.op, operands: claim.operands, eps: claim.eps, statedDate: claim.statedDate, link: url || undefined, statedHash: claim.statedHash, content: resolveContent(claim), algo: claim.algo, signature: claim.signature, publicKey: claim.publicKey,
+        statedCommit: claim.statedCommit, commitExists: facts.commitExists ?? null,
+        statedChangedFile: claim.statedChangedFile, changedFiles: facts.changedFiles ?? null,
+        statedDiffText: claim.statedDiffText, diffText: facts.diffText ?? null,
+        schemaData: claim.schemaData, schemaDef: claim.schemaDef,
+        statedPackage: claim.statedPackage, statedPackageVersion: claim.statedPackageVersion, dependencyMap: facts.dependencyMap ?? null,
+      },
       source,
     );
     if (ev.failed) failed++;
@@ -208,6 +252,11 @@ export async function runResearchVerify(
     if (claim.statedDate !== undefined) console.log(`    날짜 : ${String(claim.statedDate)}  → ${ev.date}`);
     if (claim.statedHash !== undefined) console.log(`    해시 : ${String(claim.statedHash).slice(0, 20)}…  → ${ev.hash}`);
     if (claim.signature !== undefined || claim.publicKey !== undefined) console.log(`    서명 : ed25519  → ${ev.signature}`);
+    if (typeof claim.statedCommit === "string") console.log(`    commit : ${claim.statedCommit.slice(0, 12)}…  → ${ev.commit}`);
+    if (typeof claim.statedChangedFile === "string") console.log(`    변경파일 : ${claim.statedChangedFile}  → ${ev.fileChanged}`);
+    if (typeof claim.statedDiffText === "string") console.log(`    diff 포함 : ${claim.statedDiffText.length > 50 ? claim.statedDiffText.slice(0, 47) + "..." : claim.statedDiffText}  → ${ev.diffContains}`);
+    if (claim.schemaData !== undefined && claim.schemaDef !== undefined) console.log(`    스키마 : → ${ev.schema}`);
+    if (typeof claim.statedPackage === "string") console.log(`    버전 : ${claim.statedPackage}@${String(claim.statedPackageVersion)}  → ${ev.version}`);
     console.log(
       ev.failed
         ? "    ✗ FAIL — 근거가 출처와 불일치(날조/수치·날짜오류)"

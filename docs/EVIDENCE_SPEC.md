@@ -22,6 +22,16 @@ claim:
   link         # URL well-formedness
   # hash (integrity)
   statedHash   +  (content | contentFile)  +  algo?
+  # commit (git fact)
+  statedCommit  +  repoDir?          # surface resolves via `git cat-file -e`
+  # fileChanged (git fact)
+  statedCommit  +  statedChangedFile +  repoDir?   # surface resolves via `git diff-tree --root`
+  # diffContains (git fact)
+  statedCommit  +  statedChangedFile +  statedDiffText  +  repoDir?   # surface resolves via `git show`
+  # schema (pure — no surface IO)
+  schemaData    +  schemaDef
+  # version (dependency fact)
+  statedPackage +  statedPackageVersion  +  dependencyFile
 ```
 
 ## Check kinds & statuses
@@ -34,14 +44,23 @@ claim:
 | `hash` | sha256/… of content == statedHash (integrity) | verified / mismatch / no-basis |
 | `signature` | content is ed25519-signed by the given public key (non-repudiation) | verified / invalid / no-basis |
 | `link` | URL is well-formed http(s) — **advisory, not evidence** | valid / invalid |
+| `commit` | statedCommit exists in the git repo at `repoDir` | verified / mismatch / no-basis |
+| `fileChanged` | statedCommit's changeset includes statedChangedFile | verified / not-found / no-basis |
+| `diffContains` | statedCommit's diff for statedChangedFile contains statedDiffText | verified / not-found / no-basis |
+| `schema` | schemaData satisfies schemaDef (JSON Schema subset: type/required/properties/enum/items) | verified / mismatch / no-basis |
+| `version` | dependencyFile's dependency map has statedPackage == statedPackageVersion (range prefixes `^~>=<` stripped before comparing — not full semver-range satisfaction) | verified / mismatch / no-basis |
 
 `signature` is the one check that promotes self-report toward proof: it confirms *this content was signed by this key* — it does not vouch for the key's trust (that is out of scope).
 
-A claim **fails** if any check is `not-found` / `mismatch` / `invalid`. A claim is **verified** if a positive check (citation/number/date/hash) is `verified` and nothing failed. `link: valid` is advisory (well-formedness ≠ evidence).
+`commit`/`fileChanged`/`diffContains` need git access (IO), which the kernel itself never does — a surface module (`gitfacts.ts`) resolves the git facts first (does this commit exist? what did it change? what does its diff say?) and hands the kernel only the resolved boolean/text, the same pattern `hash`/`signature` already used for file content. This keeps the kernel's "no IO" invariant intact while letting `research verify`/`council verify` check claims against actual repository history, not just static documents — e.g. catching a council decision that claims "the config already supports X" when no commit actually changed the config that way.
+
+`schema` is fully pure (both `schemaData` and `schemaDef` are inline in the claim, no file/git resolution needed) — the smallest-footprint of the ten kinds.
+
+A claim **fails** if any check is `not-found` / `mismatch` / `invalid`. A claim is **verified** if a positive check (citation/number/date/hash/commit/fileChanged/diffContains/schema/version) is `verified` and nothing failed. `link: valid` is advisory (well-formedness ≠ evidence).
 
 ## Extensibility (the engine, not just checkers)
 
-New verifiers register in the **check registry** (`CHECK_REGISTRY`) — one descriptor, no engine change. `spec` reflects them automatically. Planned next: `file`, `formula`, `version`, `dependency`, `signature`, `artifact`, `replay`. This is what raises the copy cost: not the checkers, but the extensible engine + shared format.
+New verifiers register in the **check registry** (`CHECK_REGISTRY`) — one descriptor, no engine change. `spec` reflects them automatically. Ten kinds ship today (citation/number/date/hash/signature/link/commit/fileChanged/diffContains/schema/version). Planned next: `file` (a claimed file exists on disk), `artifact` (a build/test artifact's shape), `replay` (a receipt's own replay result as a checkable claim). Execution-based checks (run a test/command and check its outcome) were deliberately **not** added alongside this batch — a live-execution check is a different trust/security tier than a static file or git-history comparison (arbitrary code execution vs. read-only queries), so it stays a separate, explicitly opt-in track if it ever ships. This is what raises the copy cost: not the checkers, but the extensible engine + shared format.
 
 This is a **plugin / registry** dispatch, **not** an "Evidence VM" — there is no DSL, opcode set, or execution state yet. That would be a later stage; today it is a clean plugin point.
 
