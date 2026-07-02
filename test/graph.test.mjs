@@ -41,7 +41,7 @@ check("buildViewData: 각 행에 integrity(replay 스냅샷) 포함", () => {
 });
 check("buildGraphHtml: Dashboard-first 자체완결 HTML·데이터 임베드", () => {
   const html = buildGraphHtml([{ receiptId: "idXYZ", subject: "S", verdict: "pass", surface: "research", model: "m", commit: "c", inputSha: "s", integrity: { contentHashOk: true, receiptIdOk: true, inputMatch: null, commitRecheck: null }, claims: [] }]);
-  assert.ok(html.includes("<!doctype html>") && html.includes("idXYZ") && html.includes("Evidence Browser") && html.includes("Most Failed"));
+  assert.ok(html.includes("<!doctype html>") && html.includes("idXYZ") && html.includes("Evidence Browser") && html.includes("최다 실패"));
 });
 check("buildGraphHtml: 외부 리소스/서버 없음(자체완결)", () => {
   const html = buildGraphHtml([]);
@@ -434,7 +434,7 @@ check("buildGraphDiff: bySubject 롤업(subject 단위 변화량)", () => {
 });
 check("HTML: Subjects(상태판) 탭 + subjects 임베드", () => {
   const html = buildGraphHtml([]);
-  assert.ok(html.includes("Subjects(상태판)"));
+  assert.ok(html.includes("상태판(Subjects)"));
   assert.ok(html.includes('"subjects"'));
   assert.ok(html.includes("subject 상태판 — 카운트 롤업(판단 아님)"));
 });

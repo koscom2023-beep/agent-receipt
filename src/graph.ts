@@ -607,27 +607,42 @@ export function buildGraphHtml(data: ViewRow[]): string {
   }).replace(/</g, "\\u003c");
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Evidence Browser — Verification Receipts</title><style>
-body{margin:0;background:#0e1117;color:#e6edf3;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px}
-header{padding:12px 18px;border-bottom:1px solid #21262d}h1{margin:0;font-size:15px}.sub{color:#8b949e;font-size:11px;margin-top:3px}
-.dash{display:flex;gap:10px;flex-wrap:wrap;padding:12px 18px;border-bottom:1px solid #21262d}
-.cd{border:1px solid #21262d;border-radius:8px;padding:8px 14px;min-width:78px}.cd .n{font-size:20px;font-weight:700}.cd .l{font-size:10px;color:#8b949e;text-transform:uppercase}
-.tabs{display:flex;gap:2px;padding:8px 18px 0;border-bottom:1px solid #21262d;flex-wrap:wrap}
-.tab{padding:6px 12px;border:1px solid #21262d;border-bottom:none;border-radius:6px 6px 0 0;cursor:pointer;color:#8b949e}
-.tab.on{background:#161b22;color:#e6edf3;font-weight:700}.tab:hover{color:#e6edf3}
-.wrap{display:flex;height:calc(100vh - 190px)}
-.list{width:46%;overflow:auto;border-right:1px solid #21262d}.detail{flex:1;overflow:auto;padding:16px}
-.filters{padding:8px 12px;border-bottom:1px solid #21262d;display:flex;gap:6px;flex-wrap:wrap}
-.filters input{background:#161b22;border:1px solid #30363d;color:#e6edf3;padding:4px 6px;border-radius:4px;font:inherit}
-.row{padding:8px 12px;border-bottom:1px solid #161b22;cursor:pointer}.row:hover{background:#161b22}
-.ghead{padding:8px 12px;background:#161b22;border-bottom:1px solid #21262d;position:sticky;top:0}
-.pass{color:#3fb950}.fail{color:#f85149}.warn{color:#d29922}.mut{color:#8b949e}
-.k{display:inline-block;min-width:130px}.chk{display:grid;grid-template-columns:120px 1fr;gap:2px 10px;margin:6px 0 6px 12px}
-.card{border:1px solid #21262d;border-radius:6px;padding:12px;margin-bottom:12px}
-.rz{margin:4px 0 4px 10px;border-left:2px solid #f85149;padding-left:8px}
-.lnk{cursor:pointer;color:#58a6ff}.lnk:hover{text-decoration:underline}
-code{color:#79c0ff}.big{font-size:15px;font-weight:700}
+:root{
+  --bg:#f1f2f4;--bg-raised:#f8f9fa;--bg-hover:#e9ebee;--border:#dadde2;--border-soft:#e6e8eb;
+  --text:#24292f;--mut:#57606a;--pass:#1a7f37;--fail:#d03b3b;--warn:#9a6700;--accent:#0969da;
+  --pass-bg:#1a7f3717;--fail-bg:#d03b3b14;--warn-bg:#9a670014;--accent-bg:#0969da14;
+  --font-ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Pretendard,Roboto,"Helvetica Neue",Arial,sans-serif;
+  --font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-ui);font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+header{padding:18px 24px;border-bottom:1px solid var(--border)}h1{margin:0;font-size:19px;font-weight:700;letter-spacing:-.015em;font-family:var(--font-mono)}.sub{color:var(--mut);font-size:13px;margin-top:5px}
+.dash{display:flex;gap:10px;flex-wrap:wrap;padding:16px 24px;border-bottom:1px solid var(--border)}
+.cd{border:1px solid var(--border);border-top:3px solid var(--border);border-radius:10px;padding:11px 18px;min-width:96px;background:var(--bg-raised)}
+.cd.pass{border-top-color:var(--pass)}.cd.fail{border-top-color:var(--fail)}.cd.warn{border-top-color:var(--warn)}
+.cd .n{font-size:25px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--text);font-family:var(--font-mono)}
+.cd .l{font-size:11.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.05em;margin-top:4px;font-weight:600}
+.tabs{display:flex;gap:2px;padding:10px 24px 0;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.tab{padding:9px 16px;border:1px solid transparent;border-bottom:none;border-radius:8px 8px 0 0;cursor:pointer;color:var(--mut);font-size:13.5px;font-weight:600}
+.tab.on{background:var(--bg-raised);color:var(--text);border-color:var(--border)}.tab:hover{color:var(--text)}
+.wrap{display:flex;height:calc(100vh - 212px)}
+.list{width:44%;overflow:auto;border-right:1px solid var(--border)}.detail{flex:1;overflow:auto;padding:24px}
+.filters{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;background:var(--bg-raised)}
+.filters input{background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:7px;font:inherit;font-size:13px;width:110px}
+.filters input:focus{outline:none;border-color:var(--accent)}
+.row{padding:13px 16px;border-bottom:1px solid var(--border-soft);cursor:pointer;border-left:3px solid transparent}.row:hover{background:var(--bg-hover)}
+.ghead{padding:10px 16px;background:var(--bg-raised);border-bottom:1px solid var(--border);position:sticky;top:0;font-weight:700;font-size:12.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
+.ghead b{color:var(--text);text-transform:none;letter-spacing:normal;font-size:14.5px;font-family:var(--font-mono)}
+.pass{color:var(--pass)}.fail{color:var(--fail)}.warn{color:var(--warn)}.mut{color:var(--mut)}
+.k{display:inline-block;min-width:140px;color:var(--mut)}.chk{display:grid;grid-template-columns:140px 1fr;gap:7px 10px;margin:10px 0 6px 4px;font-family:var(--font-mono);font-size:13.5px}
+.card{border:1px solid var(--border);border-radius:10px;padding:18px;margin-bottom:14px;background:var(--bg-raised)}
+.rz{margin:8px 0;border-left:3px solid var(--fail);padding:7px 0 7px 12px;background:var(--fail-bg);border-radius:0 8px 8px 0}
+.lnk{cursor:pointer;color:var(--accent);font-weight:600}.lnk:hover{text-decoration:underline}
+code{color:#7a3d00;background:#eceef1;padding:1px 6px;border-radius:5px;font-size:.9em;font-family:var(--font-mono)}.big{font-size:17px;font-weight:700}
+.badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;vertical-align:1px;font-family:var(--font-mono)}
+.badge.rep{background:var(--warn-bg);color:var(--warn)}
 </style></head><body>
-<header><h1>Evidence Browser</h1><div class="sub">Dashboard → Failures(Reason·Evidence) → Affected Claims → 주장 이력(1클릭) → Receipt(맨 마지막 drill-down) · 정적·서버 0 · 무결성=생성 시점 replay 스냅샷</div></header>
+<header><h1>Evidence Browser</h1><div class="sub">요약 → 실패(이유·증거) → 영향받은 주장 → 이력(1클릭) → 영수증(맨 마지막) · 정적 파일·서버 없음 · 무결성=생성 시점 스냅샷</div></header>
 <div class="dash" id="dash"></div>
 <div class="tabs" id="tabs"></div>
 <div class="wrap"><div><div class="filters" id="filters">
@@ -640,10 +655,10 @@ const el=id=>document.getElementById(id);
 const esc=x=>String(x==null?'':x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function ok(b){return b===true?'<span class="pass">✅</span>':b===false?'<span class="fail">❌</span>':'<span class="warn">⚠ n/a</span>'}
 function st(s){return s==='verified'||s==='valid'?'<span class="pass">✅ '+esc(s)+'</span>':s==='not-found'||s==='mismatch'||s==='invalid'?'<span class="fail">❌ '+esc(s)+'</span>':'<span class="mut">· '+esc(s||'-')+'</span>'}
-function cd(l,n,c){return '<div class="cd"><div class="n '+(c||'')+'">'+n+'</div><div class="l">'+l+'</div></div>'}
-el('dash').innerHTML=cd('Total',S.total||0)+(S.fileCount&&S.fileCount!==S.total?cd('Files',S.fileCount,'mut'):'')+cd('PASS',S.pass||0,'pass')+cd('FAIL',S.fail||0,'fail')+
-cd('Most Failed',S.mostFailedCheck||'-')+cd('Drift',S.driftCount||0,(S.driftCount?'warn':''))+cd('Tampered',S.tamperedCount||0,(S.tamperedCount?'fail':''));
-const TABS=[['subjects','Subjects(상태판)'],['byCheck','Check별 실패'],['byModel','Model별'],['bySubject','Subject별'],['byCommit','Commit별'],['byReason','Reason별'],['receipts','Receipts']];
+function cd(l,n,c){return '<div class="cd '+(c==='mut'?'':(c||''))+'"><div class="n">'+n+'</div><div class="l">'+l+'</div></div>'}
+el('dash').innerHTML=cd('전체',S.total||0)+(S.fileCount&&S.fileCount!==S.total?cd('파일',S.fileCount,'mut'):'')+cd('통과',S.pass||0,'pass')+cd('실패',S.fail||0,'fail')+
+cd('최다 실패',S.mostFailedCheck||'-')+cd('드리프트',S.driftCount||0,(S.driftCount?'warn':''))+cd('봉인확인실패',S.tamperedCount||0,(S.tamperedCount?'fail':''));
+const TABS=[['subjects','상태판(Subjects)'],['byCheck','Check별 실패'],['byModel','Model별'],['bySubject','Subject별'],['byCommit','Commit별'],['byReason','Reason별'],['receipts','전체 영수증']];
 let cur=Object.keys(IX.byCheck||{}).length?'byCheck':'receipts';
 function tabs(){el('tabs').innerHTML=TABS.map(t=>{const n=t[0]==='receipts'?FOLDED.length:t[0]==='subjects'?SUBS.length:Object.keys(IX[t[0]]||{}).length;
 return '<span class="tab'+(t[0]===cur?' on':'')+'" data-t="'+t[0]+'">'+t[1]+' ('+n+')</span>'}).join('');
@@ -661,7 +676,7 @@ if(!keys.length){L.innerHTML='<div class="row mut">실패 없음 — 전부 PASS
 keys.forEach(k=>{const h=document.createElement('div');h.className='ghead';h.innerHTML='<b>'+esc(k)+'</b> <span class="mut">'+g[k].length+'건</span>';L.appendChild(h);
 g[k].forEach(e=>{const r=document.createElement('div');r.className='row';
 r.innerHTML='<span class="fail">❌ '+esc(e.check)+'</span> <span class="mut">'+esc(e.status)+'</span> · claim #'+e.claimIndex+' '+esc((e.statement||'').slice(0,42))+
-(e.occurrences>1?' <span class="warn">×'+e.occurrences+'</span>':'')+
+(e.occurrences>1?' <span class="badge rep">×'+e.occurrences+'</span>':'')+
 '<div class="mut">'+esc(e.reason)+' · '+esc(e.verifiedAt||'-')+' · <code>'+esc((e.receiptId||'').slice(0,10))+'…</code></div>';
 r.onclick=()=>failureDetail(e);L.appendChild(r)})})}
 function wire(){el('detail').querySelectorAll('[data-r]').forEach(x=>x.onclick=()=>{const d=FOLDED.find(y=>y.file===x.dataset.r||(y.allFiles||[]).includes(x.dataset.r));if(d)detail(d)});
@@ -701,10 +716,10 @@ function failureDetail(e){const d=DATA.find(x=>x.file===e.file)||{};const c=(d.c
 const f=(c.failures||[]).find(x=>x.check===e.check&&x.status===e.status)||{};
 let h='<div class="card"><div class="big fail">❌ '+esc(e.check)+' — '+esc(e.status)+'</div>';
 h+='<div class="mut">최근 '+esc(e.verifiedAt||'-')+' (자가보고)'+(e.occurrences>1?' · <b class="warn">'+e.occurrences+'개 파일로 반복</b>':'')+'</div>';
-h+='<div style="margin-top:6px">Reason: '+esc(f.reason||e.reason)+'</div>';
-if(f.evidence)h+='<div>Evidence — expected: <code>'+esc(f.evidence.expected)+'</code> ↔ actual: <code>'+esc(f.evidence.actual)+'</code></div>';
-if(f.hint)h+='<div class="mut">Hint (mechanical · 표시만): '+esc(f.hint)+'</div>';h+='</div>';
-h+='<div class="card"><b>Affected Claim #'+e.claimIndex+'</b><div style="margin:4px 0">'+esc(c.statement||e.statement)+'</div><div class="chk">';
+h+='<div style="margin-top:8px">이유: '+esc(f.reason||e.reason)+'</div>';
+if(f.evidence)h+='<div>증거 — 기대값: <code>'+esc(f.evidence.expected)+'</code> ↔ 실제값: <code>'+esc(f.evidence.actual)+'</code></div>';
+if(f.hint)h+='<div class="mut">조치(기계적·표시만): '+esc(f.hint)+'</div>';h+='</div>';
+h+='<div class="card"><b>영향받은 주장 #'+e.claimIndex+'</b><div style="margin:4px 0">'+esc(c.statement||e.statement)+'</div><div class="chk">';
 ['citation','number','date','hash','signature','link'].forEach(k=>{const ch=c.checks||{};if(ch[k]!=null){h+='<span class="k">'+k+'</span>'+st(ch[k])}});h+='</div></div>';
 h+='<div class="card">주장 지문 <code>'+esc(e.fingerprint||(c.fingerprint||''))+'</code> · <span class="lnk" data-h="'+esc(e.fingerprint||(c.fingerprint||''))+'">이 주장의 이력 보기 →</span></div>';
 h+='<div class="card mut">Receipt <code>'+esc((e.receiptId||'').slice(0,16))+'…</code> · <span class="lnk" data-r="'+esc(e.file||'')+'">Receipt 전체 보기(맨 마지막 drill-down) →</span></div>';
@@ -712,28 +727,29 @@ el('detail').innerHTML=h;wire()}
 function render(list){const L=el('list');L.innerHTML='';el('count').textContent=list.length+' / '+FOLDED.length;
 list.slice().sort((a,b)=>(a.verdict==='fail'?0:1)-(b.verdict==='fail'?0:1)||(b.verifiedAt||'').localeCompare(a.verifiedAt||'')).forEach(d=>{const v=d.verdict==='pass';const div=document.createElement('div');div.className='row';
 const nf=(d.claims||[]).reduce((s,c)=>s+((c.failures||[]).length?1:0),0);
-div.innerHTML='<span class="'+(v?'pass':'fail')+'">'+(v?'✅ PASS':'❌ FAIL')+'</span> <b>'+esc(d.verifiedAt||'-')+'</b>'+(d.occurrences>1?' <span class="warn">×'+d.occurrences+'</span>':'')+' ['+esc(d.surface)+'] '+esc((d.subject||'').slice(0,38))+
-'<div class="mut">'+(nf?nf+' claim(s) failed · ':'')+'model='+esc(d.model||'-')+' · commit='+esc(((d.commit||'-')).slice(0,8))+' · <code>'+esc((d.receiptId||'').slice(0,10))+'…</code></div>';
+div.innerHTML='<span class="'+(v?'pass':'fail')+'">'+(v?'✅ 통과':'❌ 실패')+'</span> <b>'+esc(d.verifiedAt||'-')+'</b>'+(d.occurrences>1?' <span class="badge rep">×'+d.occurrences+'</span>':'')+' ['+esc(d.surface)+'] '+esc((d.subject||'').slice(0,38))+
+'<div class="mut">'+(nf?nf+'개 주장 실패 · ':'')+'model='+esc(d.model||'-')+' · commit='+esc(((d.commit||'-')).slice(0,8))+' · <code>'+esc((d.receiptId||'').slice(0,10))+'…</code></div>';
 div.onclick=()=>detail(d);L.appendChild(div)})}
-function detail(d){const ig=d.integrity||{};let h='<div class="card"><div class="big">'+(d.verdict==='fail'?'<span class="fail">❌ FAILED</span>':'<span class="pass">✅ PASSED</span>')+
+function detail(d){const ig=d.integrity||{};let h='<div class="card"><div class="big">'+(d.verdict==='fail'?'<span class="fail">❌ 실패</span>':'<span class="pass">✅ 통과</span>')+
 ' <span class="mut">'+esc(d.verifiedAt||'-')+' (자가보고)</span></div>';
 if(d.occurrences>1)h+='<div class="mut">이 결과는 <b class="warn">'+d.occurrences+'개 파일</b>로 반복 기록됨(같은 입력 재검증 등) — 시각: '+(d.verifiedAtAll||[]).map(esc).join(' · ')+'</div>';
-h+='<div class="chk"><span class="k">Receipt Integrity</span>'+ok(ig.contentHashOk&&ig.receiptIdOk)+
-'<span class="k">Content Hash</span>'+ok(ig.contentHashOk)+'<span class="k">Receipt ID</span>'+ok(ig.receiptIdOk)+
-'<span class="k">Commit Exists</span>'+ok(ig.commitRecheck)+'<span class="k">Input Unchanged</span>'+ok(ig.inputMatch)+'</div>';
+h+='<div class="chk"><span class="k">영수증 무결성</span>'+ok(ig.contentHashOk&&ig.receiptIdOk)+
+'<span class="k">내용 해시</span>'+ok(ig.contentHashOk)+'<span class="k">영수증 ID</span>'+ok(ig.receiptIdOk)+
+'<span class="k">커밋 존재</span>'+ok(ig.commitRecheck)+'<span class="k">입력 불변</span>'+ok(ig.inputMatch)+'</div>';
 h+='<div class="mut">receiptId <code>'+esc(d.receiptId||'')+'</code></div></div>';
+const VLABEL={failed:'실패',verified:'검증됨',advisory:'참고'};
 (d.claims||[]).forEach((c,i)=>{const ch=c.checks||{};const v=c.verdict;const failed=(c.failures||[]).length;
-h+='<div class="card"><div><b>Claim #'+(i+1)+'</b> — '+esc((c.statement||'').slice(0,80))+' → <b class="'+(v==='failed'?'fail':v==='verified'?'pass':'mut')+'">'+esc((v||'').toUpperCase())+'</b></div><div class="chk">';
+h+='<div class="card"><div><b>주장 #'+(i+1)+'</b> — '+esc((c.statement||'').slice(0,80))+' → <b class="'+(v==='failed'?'fail':v==='verified'?'pass':'mut')+'">'+esc(VLABEL[v]||v||'')+'</b></div><div class="chk">';
 ['citation','number','date','hash','signature','link'].forEach(k=>{if(ch[k]!=null){h+='<span class="k">'+k+'</span>'+st(ch[k])}});h+='</div>';
-if(failed){h+='<div style="margin-top:6px">Failures:</div>';(c.failures||[]).forEach(f=>{
-h+='<div class="rz"><b class="fail">'+esc(f.check)+'</b> — '+esc(f.status)+'<div class="mut">Reason: '+esc(f.reason)+'</div>'+
-(f.evidence?'<div>Evidence — expected: <code>'+esc(f.evidence.expected)+'</code> · actual: <code>'+esc(f.evidence.actual)+'</code></div>':'')+
-'<div class="mut">Hint (mechanical · 표시만): '+esc(f.hint)+'</div></div>'})}
+if(failed){h+='<div style="margin-top:8px;font-weight:600">실패 목록</div>';(c.failures||[]).forEach(f=>{
+h+='<div class="rz"><b class="fail">'+esc(f.check)+'</b> — '+esc(f.status)+'<div class="mut">이유: '+esc(f.reason)+'</div>'+
+(f.evidence?'<div>증거 — 기대값: <code>'+esc(f.evidence.expected)+'</code> · 실제값: <code>'+esc(f.evidence.actual)+'</code></div>':'')+
+'<div class="mut">조치(기계적·표시만): '+esc(f.hint)+'</div></div>'})}
 if(c.fingerprint)h+='<div class="mut">지문 <code>'+esc((c.fingerprint||'').slice(0,21))+'…</code> · <span class="lnk" data-h="'+esc(c.fingerprint)+'">이력 →</span></div>';
 h+='</div>'});
 const rel=FOLDED.filter(x=>x.file!==d.file&&x.inputSha&&x.inputSha===d.inputSha&&!(x.receiptId&&d.receiptId&&x.receiptId===d.receiptId));
 if(rel.length){h+='<div class="card"><b>같은 입력(same_input) 영수증 '+rel.length+'건(고유)</b>'+
-rel.map(x=>'<div class="lnk" data-r="'+esc(x.file||'')+'"><code>'+esc((x.receiptId||'').slice(0,12))+'…</code> '+(x.verdict==='pass'?'✅':'❌')+(x.occurrences>1?' <span class="warn">×'+x.occurrences+'</span>':'')+' <span class="mut">'+esc(x.verifiedAt||'')+'</span></div>').join('')+'</div>'}
+rel.map(x=>'<div class="lnk" data-r="'+esc(x.file||'')+'"><code>'+esc((x.receiptId||'').slice(0,12))+'…</code> '+(x.verdict==='pass'?'✅':'❌')+(x.occurrences>1?' <span class="badge rep">×'+x.occurrences+'</span>':'')+' <span class="mut">'+esc(x.verifiedAt||'')+'</span></div>').join('')+'</div>'}
 el('detail').innerHTML=h;wire()}
 function apply(){const c=el('fc').value.trim(),i=el('fi').value.trim(),m=el('fm').value.trim();
 render(FOLDED.filter(d=>(!c||(d.commit||'').startsWith(c))&&(!i||(d.inputSha||'').startsWith(i))&&(!m||(d.model||'')===m)))}
