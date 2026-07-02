@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>agent-receipt — Receipts for AI work</title>
+<meta name="description" content="Two receipts for AI work: what the agent actually did to your git repo, and whether what it said is actually true — 14 deterministic checks, no LLM judging LLMs. Local-first, no account, no server.">
+<style>
+:root{
+  --bg:#f1f2f4;--bg-raised:#f8f9fa;--border:#dadde2;--border-soft:#e6e8eb;
+  --text:#24292f;--mut:#57606a;--pass:#1a7f37;--fail:#d03b3b;--warn:#9a6700;--accent:#0969da;
+  --fail-bg:#d03b3b14;--accent-bg:#0969da14;
+  --font-ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Pretendard,Roboto,"Helvetica Neue",Arial,sans-serif;
+  --font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-ui);font-size:16px;line-height:1.65;-webkit-font-smoothing:antialiased}
+.wrap{max-width:880px;margin:0 auto;padding:0 24px}
+header{padding:64px 0 40px;text-align:center}
+h1{margin:0;font-size:40px;letter-spacing:-.02em;font-family:var(--font-mono)}
+.tag{color:var(--mut);font-size:19px;margin-top:10px}
+.tag-ko{color:var(--mut);font-size:15px;margin-top:6px}
+.btns{margin-top:26px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.btn{display:inline-block;padding:11px 22px;border-radius:10px;font-weight:600;text-decoration:none;font-size:15px}
+.btn.primary{background:var(--accent);color:#fff}
+.btn.ghost{border:1.5px solid var(--border);color:var(--text);background:var(--bg-raised)}
+.btn:hover{filter:brightness(1.05)}
+.install{margin:18px auto 0;display:inline-block;background:#24292f;color:#e6edf3;font-family:var(--font-mono);font-size:14px;padding:10px 18px;border-radius:9px}
+section{padding:34px 0;border-top:1px solid var(--border)}
+h2{font-size:22px;margin:0 0 6px;letter-spacing:-.01em}
+.sub{color:var(--mut);font-size:14px;margin:0 0 18px}
+table{width:100%;border-collapse:collapse;background:var(--bg-raised);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+th,td{padding:13px 16px;text-align:left;border-bottom:1px solid var(--border-soft);vertical-align:top;font-size:15px}
+th{background:var(--bg-raised);color:var(--mut);font-size:12.5px;text-transform:uppercase;letter-spacing:.05em}
+tr:last-child td{border-bottom:none}
+td b{font-family:var(--font-mono)}
+pre{background:#24292f;color:#e6edf3;padding:18px 20px;border-radius:12px;overflow-x:auto;font-family:var(--font-mono);font-size:13.5px;line-height:1.6;margin:14px 0}
+pre .c{color:#8b949e}pre .g{color:#3fb950}pre .r{color:#f85149}
+.kinds{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.kind{background:var(--bg-raised);border:1px solid var(--border);border-radius:999px;padding:5px 14px;font-family:var(--font-mono);font-size:13px}
+.limits li{margin:7px 0;color:var(--mut);font-size:15px}
+.limits li b{color:var(--text)}
+footer{padding:38px 0 56px;border-top:1px solid var(--border);color:var(--mut);font-size:13.5px;text-align:center}
+footer a{color:var(--accent);text-decoration:none}
+.note{background:var(--accent-bg);border:1px solid var(--border);border-radius:10px;padding:12px 16px;font-size:14px;color:var(--mut);margin-top:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>agent-receipt</h1>
+  <div class="tag"><b>Receipts for AI work.</b> What your agent <i>did</i> — and whether what it <i>said</i> is true.</div>
+  <div class="tag-ko">AI 작업 영수증 — 에이전트가 <b>실제로 한 일</b>과, 에이전트가 <b>말한 근거가 진짜인지</b>를 기계로 검증합니다.</div>
+  <div class="btns">
+    <a class="btn primary" href="demo.html">Live demo — Evidence Browser →</a>
+    <a class="btn ghost" href="https://github.com/koscom2023-beep/agent-receipt">GitHub</a>
+    <a class="btn ghost" href="https://www.npmjs.com/package/@promptia-labs/agent-receipt">npm</a>
+  </div>
+  <div style="margin-top:20px"><span class="install">npm install -g @promptia-labs/agent-receipt</span></div>
+</header>
+
+<section>
+  <h2>Two independent tracks · 두 개의 독립 트랙</h2>
+  <p class="sub">Each produces its own tamper-evident receipt. 각 트랙이 서로 다른 종류의 변조-감지 영수증을 만듭니다.</p>
+  <table>
+    <tr><th>Track</th><th>Question it answers</th></tr>
+    <tr><td><b>Work Receipt</b></td><td><b>What did the AI actually do to my git repo?</b> Contract-scoped diff evidence, hash-chained ledger, third-party Rekor anchoring, action capture beyond git (secret-file reads, network calls, failed attempts).<br><span style="color:var(--mut);font-size:13.5px">AI가 저장소에서 실제로 뭘 했나 — 계약 범위 대조·해시체인 원장·제3자 봉인·git 너머 행위 기록.</span></td></tr>
+    <tr><td><b>Verification Engine</b></td><td><b>Is what the AI <i>said</i> actually true?</b> 14 deterministic check kinds — no LLM judging LLMs. Same input, same verdict, every time. Exit 1 on fabrication: a real CI gate.<br><span style="color:var(--mut);font-size:13.5px">AI가 말한 근거가 진짜인가 — 14종 결정론 검사·LLM이 LLM을 심사하지 않음·날조 시 exit 1(진짜 CI 게이트).</span></td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>60-second catch · 60초 데모</h2>
+  <p class="sub">The classic quiet upgrade — "Type I completed" becomes "Type II passed". Real output below (verbatim). 실제 실행 출력 그대로입니다.</p>
+<pre>
+$ agent-receipt research verify --file report.md --out vr/r1.json
+
+[1] Acme completed a SOC 2 Type I audit in March 2026
+    인용 : completed a SOC 2 Type I audit in March 2026  <span class="g">→ verified</span>
+[2] Acme has passed a SOC 2 Type II audit
+    인용 : has passed a SOC 2 Type II audit  <span class="r">→ not-found</span>
+    <span class="r">✗ FAIL — 근거가 출처와 불일치(날조/수치·날짜오류)</span>
+결과: verified 1 · FAIL 1 · advisory 0
+
+$ echo $?
+<span class="r">1</span>   <span class="c"># a real CI gate — not a report you must remember to read</span>
+</pre>
+  <div class="note">Claims go far beyond quotes: <i>"commit X changed file Y"</i> is checked against actual git history; versions against semver ranges; cited receipts are replay-verified. Accumulated receipts become a browsable <a href="demo.html">Evidence Browser</a> with failure triage, regression diff, and claim timelines.</div>
+</section>
+
+<section>
+  <h2>14 deterministic checks · 14종 결정론 검사</h2>
+  <p class="sub">Registered in one kernel registry — the code is the spec (<code>agent-receipt spec --format json</code>).</p>
+  <div class="kinds">
+    <span class="kind">citation</span><span class="kind">number</span><span class="kind">date</span><span class="kind">hash</span><span class="kind">signature</span><span class="kind">link</span><span class="kind">commit</span><span class="kind">fileChanged</span><span class="kind">diffContains</span><span class="kind">schema</span><span class="kind">version</span><span class="kind">file</span><span class="kind">receipt</span><span class="kind">artifact</span>
+  </div>
+</section>
+
+<section>
+  <h2>Honest limits · 정직한 한계</h2>
+  <ul class="limits">
+    <li><b>Faithfulness, not truth.</b> If the source itself is wrong and the citation matches it, that's a pass — it verifies claims against sources, not sources against reality. <span>출처 자체가 틀리면 잡지 못합니다(충실성 검증이지 진위 판정이 아님).</span></li>
+    <li><b>Local-first, evidence-only.</b> No account, no server, nothing leaves your machine unless you opt into the public Rekor anchor. It provides <b>git-based evidence for review — not a compliance guarantee</b>. <span>계정·서버 없음 — 증거 제공이지 컴플라이언스 보장이 아닙니다.</span></li>
+    <li><b>No LLM in the loop.</b> Every verdict is recomputable arithmetic/string/crypto — which is why the same input always gives the same answer. <span>판정에 모델이 없어 같은 입력이면 언제나 같은 결과.</span></li>
+  </ul>
+</section>
+
+<footer>
+  <div><b>agent-receipt</b> · MIT · a <a href="https://github.com/koscom2023-beep">Promptia Labs</a> project</div>
+  <div style="margin-top:6px"><a href="https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/EVIDENCE_SPEC.md">Evidence Spec</a> · <a href="https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/SDK.md">SDK</a> · <a href="https://www.npmjs.com/package/@promptia-labs/agent-receipt">@promptia-labs/agent-receipt</a></div>
+</footer>
+
+</div>
+</body>
+</html>

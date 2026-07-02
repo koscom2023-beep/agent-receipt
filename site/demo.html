@@ -1,0 +1,167 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Evidence Browser — Verification Receipts</title><style>
+:root{
+  --bg:#f1f2f4;--bg-raised:#f8f9fa;--bg-hover:#e9ebee;--border:#dadde2;--border-soft:#e6e8eb;
+  --text:#24292f;--mut:#57606a;--pass:#1a7f37;--fail:#d03b3b;--warn:#9a6700;--accent:#0969da;
+  --pass-bg:#1a7f3717;--fail-bg:#d03b3b14;--warn-bg:#9a670014;--accent-bg:#0969da14;
+  --font-ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Pretendard,Roboto,"Helvetica Neue",Arial,sans-serif;
+  --font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-ui);font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+header{padding:18px 24px;border-bottom:1px solid var(--border)}h1{margin:0;font-size:19px;font-weight:700;letter-spacing:-.015em;font-family:var(--font-mono)}.sub{color:var(--mut);font-size:13px;margin-top:5px}
+.dash{display:flex;gap:10px;flex-wrap:wrap;padding:16px 24px;border-bottom:1px solid var(--border)}
+.cd{border:1px solid var(--border);border-top:3px solid var(--border);border-radius:10px;padding:11px 18px;min-width:96px;background:var(--bg-raised)}
+.cd.pass{border-top-color:var(--pass)}.cd.fail{border-top-color:var(--fail)}.cd.warn{border-top-color:var(--warn)}
+.cd .n{font-size:25px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--text);font-family:var(--font-mono)}
+.cd .l{font-size:11.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.05em;margin-top:4px;font-weight:600}
+.tabs{display:flex;gap:2px;padding:10px 24px 0;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.tab{padding:9px 16px;border:1px solid transparent;border-bottom:none;border-radius:8px 8px 0 0;cursor:pointer;color:var(--mut);font-size:13.5px;font-weight:600}
+.tab.on{background:var(--bg-raised);color:var(--text);border-color:var(--border)}.tab:hover{color:var(--text)}
+.wrap{display:flex;height:calc(100vh - 212px)}
+.list{width:44%;overflow:auto;border-right:1px solid var(--border)}.detail{flex:1;overflow:auto;padding:24px}
+.filters{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;background:var(--bg-raised)}
+.filters input{background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:7px;font:inherit;font-size:13px;width:110px}
+.filters input:focus{outline:none;border-color:var(--accent)}
+.row{padding:13px 16px;border-bottom:1px solid var(--border-soft);cursor:pointer;border-left:3px solid transparent}.row:hover{background:var(--bg-hover)}
+.ghead{padding:10px 16px;background:var(--bg-raised);border-bottom:1px solid var(--border);position:sticky;top:0;font-weight:700;font-size:12.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
+.ghead b{color:var(--text);text-transform:none;letter-spacing:normal;font-size:14.5px;font-family:var(--font-mono)}
+.pass{color:var(--pass)}.fail{color:var(--fail)}.warn{color:var(--warn)}.mut{color:var(--mut)}
+.k{display:inline-block;min-width:140px;color:var(--mut)}.chk{display:grid;grid-template-columns:140px 1fr;gap:7px 10px;margin:10px 0 6px 4px;font-family:var(--font-mono);font-size:13.5px}
+.card{border:1px solid var(--border);border-radius:10px;padding:18px;margin-bottom:14px;background:var(--bg-raised)}
+.rz{margin:8px 0;border-left:3px solid var(--fail);padding:7px 0 7px 12px;background:var(--fail-bg);border-radius:0 8px 8px 0}
+.lnk{cursor:pointer;color:var(--accent);font-weight:600}.lnk:hover{text-decoration:underline}
+code{color:#7a3d00;background:#eceef1;padding:1px 6px;border-radius:5px;font-size:.9em;font-family:var(--font-mono)}.big{font-size:17px;font-weight:700}
+.badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;vertical-align:1px;font-family:var(--font-mono)}
+.badge.rep{background:var(--warn-bg);color:var(--warn)}
+.badge.new{background:var(--fail-bg);color:var(--fail)}
+</style></head><body>
+<header><h1>Evidence Browser</h1><div class="sub">요약 → 실패(이유·증거) → 영향받은 주장 → 이력(1클릭) → 영수증(맨 마지막) · 정적 파일·서버 없음 · 무결성=생성 시점 스냅샷</div></header>
+<div class="dash" id="dash"></div>
+<div class="tabs" id="tabs"></div>
+<div class="wrap"><div><div class="filters" id="filters">
+<input id="fc" placeholder="commit"><input id="fi" placeholder="input sha"><input id="fm" placeholder="model">
+<span class="mut" id="count"></span></div><div class="list" id="list"></div></div>
+<div class="detail" id="detail"><div class="mut">← 왼쪽에서 실패(탭) 또는 Receipt 선택</div></div></div>
+<script id="ar-data" type="application/json">{"receipts":[{"receiptId":"cba2708787f562b7d514faa9034b65466834f5f9994a747869e52a12c4a5393f","subject":"Demo: is the vendor summary trustworthy?","verdict":"pass","surface":"research","model":null,"commit":null,"inputSha":"59353dea9b2437a02f94cc7aa77b5905dbfeb5ad074111de3661502c19dc1725","verifiedAt":"2026-07-02T13:04:55.508Z","file":"a.json","integrity":{"contentHashOk":true,"receiptIdOk":true,"inputMatch":true,"commitRecheck":null},"claims":[{"statement":"Acme completed a SOC 2 Type I audit in March 2026","verdict":"verified","fingerprint":"cfp1:e4502433409e5821bcc92a6d2f1cd567727198a26a725c013b4798e6aa8eb24a","checks":{"citation":"verified","number":null,"date":null,"hash":null,"signature":null,"link":null,"commit":null,"fileChanged":null,"diffContains":null,"schema":null,"version":null,"file":null,"receipt":null,"artifact":null},"failures":[]}],"unreachable":0},{"receiptId":"f460c7d031b58104a4ee1afa10464ee2eda626ce58cbba7376fa165e0f36e5be","subject":"Demo: is the vendor summary trustworthy?","verdict":"fail","surface":"research","model":null,"commit":null,"inputSha":"bb1548ee2c63ef2688239d193670b1a5d28630a219dde8488f0d670c6759de35","verifiedAt":"2026-07-02T13:04:55.662Z","file":"b.json","integrity":{"contentHashOk":true,"receiptIdOk":true,"inputMatch":true,"commitRecheck":null},"claims":[{"statement":"Acme has passed a SOC 2 Type II audit","verdict":"failed","fingerprint":"cfp1:9ae63d78dcdfa0523869581839e5e3af1cb3f58c8862e56982f4add1faa30773","checks":{"citation":"not-found","number":null,"date":null,"hash":null,"signature":null,"link":null,"commit":null,"fileChanged":null,"diffContains":null,"schema":null,"version":null,"file":null,"receipt":null,"artifact":null},"failures":[{"check":"citation","status":"not-found","reason":"인용문이 출처 텍스트에 없음","evidence":{"expected":"has passed a SOC 2 Type II audit","actual":"출처 텍스트에 없음 (not present in source)"},"hint":"인용문을 출처의 정확한 문장으로 맞추거나 출처를 확인"}]}],"unreachable":0},{"receiptId":"4e6e60bad60f10030bb56d49a0211437f7a1075ee8499b45c855107029e5dc1a","subject":"Demo: tech facts (schema · semver-range · file existence)","verdict":"pass","surface":"research","model":null,"commit":null,"inputSha":"39976f1edaa7e36dacb987db964b93f77ca53efa822c397e7b2c61e983f17efa","verifiedAt":"2026-07-02T13:04:55.815Z","file":"c.json","integrity":{"contentHashOk":true,"receiptIdOk":true,"inputMatch":true,"commitRecheck":null},"claims":[{"statement":"config satisfies the declared schema","verdict":"verified","fingerprint":"cfp1:8d437c6453f2d2967dfd04f9bc15e3a62c952388f161f0208f5e9bff1b896cf2","checks":{"citation":null,"number":null,"date":null,"hash":null,"signature":null,"link":null,"commit":null,"fileChanged":null,"diffContains":null,"schema":"verified","version":null,"file":null,"receipt":null,"artifact":null},"failures":[]},{"statement":"zod 3.24.0 satisfies the declared range ^3.23.8","verdict":"verified","fingerprint":"cfp1:a37422d92673fbe2641a14783fe0cfb6e9076e50e8bd24e0ee340b31495d97b4","checks":{"citation":null,"number":null,"date":null,"hash":null,"signature":null,"link":null,"commit":null,"fileChanged":null,"diffContains":null,"schema":null,"version":"verified","file":null,"receipt":null,"artifact":null},"failures":[]},{"statement":"the dependency file exists on disk","verdict":"verified","fingerprint":"cfp1:b276c6afaa1c4e0613ab2b548e9596813df1da23d666f870f58bff090c92a4a7","checks":{"citation":null,"number":null,"date":null,"hash":null,"signature":null,"link":null,"commit":null,"fileChanged":null,"diffContains":null,"schema":null,"version":null,"file":"verified","receipt":null,"artifact":null},"failures":[]}],"unreachable":0}],"folded":[{"receiptId":"cba2708787f562b7d514faa9034b65466834f5f9994a747869e52a12c4a5393f","subject":"Demo: is the vendor summary trustworthy?","verdict":"pass","surface":"research","model":null,"commit":null,"inputSha":"59353dea9b2437a02f94cc7aa77b5905dbfeb5ad074111de3661502c19dc1725","verifiedAt":"2026-07-02T13:04:55.508Z","file":"a.json","integrity":{"contentHashOk":true,"receiptIdOk":true,"inputMatch":true,"commitRecheck":null},"claims":[{"statement":"Acme completed a SOC 2 Type I audit in March 2026","verdict":"verified","fingerprint":"cfp1:e4502433409e5821bcc92a6d2f1cd567727198a26a725c013b4798e6aa8eb24a","checks":{"citation":"verified","number":null,"date":null,"hash":null,"signature":null,"link":null,"commit":null,"fileChanged":null,"diffContains":null,"schema":null,"version":null,"file":null,"receipt":null,"artifact":null},"failures":[]}],"unreachable":0,"foldKey":"cba2708787f562b7d514faa9034b65466834f5f9994a747869e52a12c4a5393f","occurrences":1,"verifiedAtAll":["2026-07-02T13:04:55.508Z"],"allFiles":["a.json"]},{"receiptId":"f460c7d031b58104a4ee1afa10464ee2eda626ce58cbba7376fa165e0f36e5be","subject":"Demo: is the vendor summary trustworthy?","verdict":"fail","surface":"research","model":null,"commit":null,"inputSha":"bb1548ee2c63ef2688239d193670b1a5d28630a219dde8488f0d670c6759de35","verifiedAt":"2026-07-02T13:04:55.662Z","file":"b.json","integrity":{"contentHashOk":true,"receiptIdOk":true,"inputMatch":true,"commitRecheck":null},"claims":[{"statement":"Acme has passed a SOC 2 Type II audit","verdict":"failed","fingerprint":"cfp1:9ae63d78dcdfa0523869581839e5e3af1cb3f58c8862e56982f4add1faa30773","checks":{"citation":"not-found","number":null,"date":null,"hash":null,"signature":null,"link":null,"commit":null,"fileChanged":null,"diffContains":null,"schema":null,"version":null,"file":null,"receipt":null,"artifact":null},"failures":[{"check":"citation","status":"not-found","reason":"인용문이 출처 텍스트에 없음","evidence":{"expected":"has passed a SOC 2 Type II audit","actual":"출처 텍스트에 없음 (not present in source)"},"hint":"인용문을 출처의 정확한 문장으로 맞추거나 출처를 확인"}]}],"unreachable":0,"foldKey":"f460c7d031b58104a4ee1afa10464ee2eda626ce58cbba7376fa165e0f36e5be","occurrences":1,"verifiedAtAll":["2026-07-02T13:04:55.662Z"],"allFiles":["b.json"]},{"receiptId":"4e6e60bad60f10030bb56d49a0211437f7a1075ee8499b45c855107029e5dc1a","subject":"Demo: tech facts (schema · semver-range · file existence)","verdict":"pass","surface":"research","model":null,"commit":null,"inputSha":"39976f1edaa7e36dacb987db964b93f77ca53efa822c397e7b2c61e983f17efa","verifiedAt":"2026-07-02T13:04:55.815Z","file":"c.json","integrity":{"contentHashOk":true,"receiptIdOk":true,"inputMatch":true,"commitRecheck":null},"claims":[{"statement":"config satisfies the declared schema","verdict":"verified","fingerprint":"cfp1:8d437c6453f2d2967dfd04f9bc15e3a62c952388f161f0208f5e9bff1b896cf2","checks":{"citation":null,"number":null,"date":null,"hash":null,"signature":null,"link":null,"commit":null,"fileChanged":null,"diffContains":null,"schema":"verified","version":null,"file":null,"receipt":null,"artifact":null},"failures":[]},{"statement":"zod 3.24.0 satisfies the declared range ^3.23.8","verdict":"verified","fingerprint":"cfp1:a37422d92673fbe2641a14783fe0cfb6e9076e50e8bd24e0ee340b31495d97b4","checks":{"citation":null,"number":null,"date":null,"hash":null,"signature":null,"link":null,"commit":null,"fileChanged":null,"diffContains":null,"schema":null,"version":"verified","file":null,"receipt":null,"artifact":null},"failures":[]},{"statement":"the dependency file exists on disk","verdict":"verified","fingerprint":"cfp1:b276c6afaa1c4e0613ab2b548e9596813df1da23d666f870f58bff090c92a4a7","checks":{"citation":null,"number":null,"date":null,"hash":null,"signature":null,"link":null,"commit":null,"fileChanged":null,"diffContains":null,"schema":null,"version":null,"file":"verified","receipt":null,"artifact":null},"failures":[]}],"unreachable":0,"foldKey":"4e6e60bad60f10030bb56d49a0211437f7a1075ee8499b45c855107029e5dc1a","occurrences":1,"verifiedAtAll":["2026-07-02T13:04:55.815Z"],"allFiles":["c.json"]}],"summary":{"total":3,"fileCount":3,"pass":2,"fail":1,"byModel":{"(unknown)":{"pass":2,"fail":1}},"checkFailures":{"citation":1},"mostFailedCheck":"citation","driftCount":0,"tamperedCount":0,"exceptions":{"seal_failed":0,"ungrounded_decision":0,"source_unreachable":0}},"indexes":{"byCheck":{"citation":[{"receiptId":"f460c7d031b58104a4ee1afa10464ee2eda626ce58cbba7376fa165e0f36e5be","file":"b.json","allFiles":["b.json"],"occurrences":1,"subject":"Demo: is the vendor summary trustworthy?","model":null,"commit":null,"inputSha":"bb1548ee2c63ef2688239d193670b1a5d28630a219dde8488f0d670c6759de35","verifiedAt":"2026-07-02T13:04:55.662Z","tampered":false,"claimIndex":1,"statement":"Acme has passed a SOC 2 Type II audit","fingerprint":"cfp1:9ae63d78dcdfa0523869581839e5e3af1cb3f58c8862e56982f4add1faa30773","check":"citation","status":"not-found","reason":"인용문이 출처 텍스트에 없음","isNew":true}]},"byModel":{"(none)":[{"receiptId":"f460c7d031b58104a4ee1afa10464ee2eda626ce58cbba7376fa165e0f36e5be","file":"b.json","allFiles":["b.json"],"occurrences":1,"subject":"Demo: is the vendor summary trustworthy?","model":null,"commit":null,"inputSha":"bb1548ee2c63ef2688239d193670b1a5d28630a219dde8488f0d670c6759de35","verifiedAt":"2026-07-02T13:04:55.662Z","tampered":false,"claimIndex":1,"statement":"Acme has passed a SOC 2 Type II audit","fingerprint":"cfp1:9ae63d78dcdfa0523869581839e5e3af1cb3f58c8862e56982f4add1faa30773","check":"citation","status":"not-found","reason":"인용문이 출처 텍스트에 없음","isNew":true}]},"bySubject":{"Demo: is the vendor summary trustworthy?":[{"receiptId":"f460c7d031b58104a4ee1afa10464ee2eda626ce58cbba7376fa165e0f36e5be","file":"b.json","allFiles":["b.json"],"occurrences":1,"subject":"Demo: is the vendor summary trustworthy?","model":null,"commit":null,"inputSha":"bb1548ee2c63ef2688239d193670b1a5d28630a219dde8488f0d670c6759de35","verifiedAt":"2026-07-02T13:04:55.662Z","tampered":false,"claimIndex":1,"statement":"Acme has passed a SOC 2 Type II audit","fingerprint":"cfp1:9ae63d78dcdfa0523869581839e5e3af1cb3f58c8862e56982f4add1faa30773","check":"citation","status":"not-found","reason":"인용문이 출처 텍스트에 없음","isNew":true}]},"byCommit":{"(none)":[{"receiptId":"f460c7d031b58104a4ee1afa10464ee2eda626ce58cbba7376fa165e0f36e5be","file":"b.json","allFiles":["b.json"],"occurrences":1,"subject":"Demo: is the vendor summary trustworthy?","model":null,"commit":null,"inputSha":"bb1548ee2c63ef2688239d193670b1a5d28630a219dde8488f0d670c6759de35","verifiedAt":"2026-07-02T13:04:55.662Z","tampered":false,"claimIndex":1,"statement":"Acme has passed a SOC 2 Type II audit","fingerprint":"cfp1:9ae63d78dcdfa0523869581839e5e3af1cb3f58c8862e56982f4add1faa30773","check":"citation","status":"not-found","reason":"인용문이 출처 텍스트에 없음","isNew":true}]},"byReason":{"인용문이 출처 텍스트에 없음":[{"receiptId":"f460c7d031b58104a4ee1afa10464ee2eda626ce58cbba7376fa165e0f36e5be","file":"b.json","allFiles":["b.json"],"occurrences":1,"subject":"Demo: is the vendor summary trustworthy?","model":null,"commit":null,"inputSha":"bb1548ee2c63ef2688239d193670b1a5d28630a219dde8488f0d670c6759de35","verifiedAt":"2026-07-02T13:04:55.662Z","tampered":false,"claimIndex":1,"statement":"Acme has passed a SOC 2 Type II audit","fingerprint":"cfp1:9ae63d78dcdfa0523869581839e5e3af1cb3f58c8862e56982f4add1faa30773","check":"citation","status":"not-found","reason":"인용문이 출처 텍스트에 없음","isNew":true}]}},"failures":[{"receiptId":"f460c7d031b58104a4ee1afa10464ee2eda626ce58cbba7376fa165e0f36e5be","subject":"Demo: is the vendor summary trustworthy?","reasons":["citation: 인용문이 출처 텍스트에 없음"],"affectedClaims":[1],"occurrences":1}],"histories":{"cfp1:8d437c6453f2d2967dfd04f9bc15e3a62c952388f161f0208f5e9bff1b896cf2":[{"receiptId":"4e6e60bad60f10030bb56d49a0211437f7a1075ee8499b45c855107029e5dc1a","file":"c.json","subject":"Demo: tech facts (schema · semver-range · file existence)","model":null,"commit":null,"verifiedAt":"2026-07-02T13:04:55.815Z","verdict":"pass","tampered":false,"failedChecks":[],"changes":null}],"cfp1:9ae63d78dcdfa0523869581839e5e3af1cb3f58c8862e56982f4add1faa30773":[{"receiptId":"f460c7d031b58104a4ee1afa10464ee2eda626ce58cbba7376fa165e0f36e5be","file":"b.json","subject":"Demo: is the vendor summary trustworthy?","model":null,"commit":null,"verifiedAt":"2026-07-02T13:04:55.662Z","verdict":"fail","tampered":false,"failedChecks":[{"fingerprint":"cfp1:9ae63d78dcdfa0523869581839e5e3af1cb3f58c8862e56982f4add1faa30773","check":"citation","status":"not-found"}],"changes":null}],"cfp1:a37422d92673fbe2641a14783fe0cfb6e9076e50e8bd24e0ee340b31495d97b4":[{"receiptId":"4e6e60bad60f10030bb56d49a0211437f7a1075ee8499b45c855107029e5dc1a","file":"c.json","subject":"Demo: tech facts (schema · semver-range · file existence)","model":null,"commit":null,"verifiedAt":"2026-07-02T13:04:55.815Z","verdict":"pass","tampered":false,"failedChecks":[],"changes":null}],"cfp1:b276c6afaa1c4e0613ab2b548e9596813df1da23d666f870f58bff090c92a4a7":[{"receiptId":"4e6e60bad60f10030bb56d49a0211437f7a1075ee8499b45c855107029e5dc1a","file":"c.json","subject":"Demo: tech facts (schema · semver-range · file existence)","model":null,"commit":null,"verifiedAt":"2026-07-02T13:04:55.815Z","verdict":"pass","tampered":false,"failedChecks":[],"changes":null}],"cfp1:e4502433409e5821bcc92a6d2f1cd567727198a26a725c013b4798e6aa8eb24a":[{"receiptId":"cba2708787f562b7d514faa9034b65466834f5f9994a747869e52a12c4a5393f","file":"a.json","subject":"Demo: is the vendor summary trustworthy?","model":null,"commit":null,"verifiedAt":"2026-07-02T13:04:55.508Z","verdict":"pass","tampered":false,"failedChecks":[],"changes":null}]},"newFailureCount":1,"subjects":[{"subject":"Demo: is the vendor summary trustworthy?","receipts":2,"pass":1,"fail":1,"failureEvents":1,"tamperedReceipts":0,"byCheck":{"citation":1},"firstVerifiedAt":"2026-07-02T13:04:55.508Z","lastVerifiedAt":"2026-07-02T13:04:55.662Z"},{"subject":"Demo: tech facts (schema · semver-range · file existence)","receipts":1,"pass":1,"fail":0,"failureEvents":0,"tamperedReceipts":0,"byCheck":{},"firstVerifiedAt":"2026-07-02T13:04:55.815Z","lastVerifiedAt":"2026-07-02T13:04:55.815Z"}]}</script>
+<script>const P=JSON.parse(document.getElementById('ar-data').textContent);const DATA=P.receipts||[],FOLDED=P.folded||DATA,S=P.summary||{},IX=P.indexes||{},HIST=P.histories||{},SUBS=P.subjects||[],HTRUNC=P.historiesTruncated||null,NEWCNT=(typeof P.newFailureCount==='number'?P.newFailureCount:null);
+const el=id=>document.getElementById(id);
+const esc=x=>String(x==null?'':x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function ok(b){return b===true?'<span class="pass">✅</span>':b===false?'<span class="fail">❌</span>':'<span class="warn">⚠ n/a</span>'}
+function st(s){return s==='verified'||s==='valid'?'<span class="pass">✅ '+esc(s)+'</span>':s==='not-found'||s==='mismatch'||s==='invalid'?'<span class="fail">❌ '+esc(s)+'</span>':'<span class="mut">· '+esc(s||'-')+'</span>'}
+function cd(l,n,c){return '<div class="cd '+(c==='mut'?'':(c||''))+'"><div class="n">'+n+'</div><div class="l">'+l+'</div></div>'}
+const EXC=S.exceptions||{};const excTotal=Object.values(EXC).reduce((a,b)=>a+(b||0),0);
+const EXC_INFO={seal_failed:['봉인확인실패','영수증 봉인 재계산이 안 맞음 — 저장 후 내용이 바뀌었을 수 있음(변조 의심). 화면의 ⚠ 표시와 같은 건을 분류한 것.'],ungrounded_decision:['날조근거 결정','회의 검증에서 근거가 출처에 없다고 판정된 결정(council 영수증 실패). 결정이 지어낸 근거 위에 서 있었다는 뜻.'],source_unreachable:['출처 도달실패','라이브 재대조(--fetch)에서 인용한 출처에 접속하지 못함(링크 소멸/차단). 영수증 자체 기록에서 집계.']};
+const EXC_ROWS={seal_failed:r=>!(r.integrity&&r.integrity.contentHashOk&&r.integrity.receiptIdOk),ungrounded_decision:r=>r.surface==='council'&&r.verdict==='fail',source_unreachable:r=>(r.unreachable||0)>0};
+function excDetail(){let h='<div class="card"><div class="big warn">예외 '+excTotal+'건 — 분류</div><div class="mut" style="margin-top:2px">이미 기록된 사실의 재분류(접힘 후 집계)일 뿐 — 상태/처리흐름 없음. 없어지는 조건도 각 원인이 사라지는 것뿐.</div></div>';
+for(const k of Object.keys(EXC_INFO)){const n=EXC[k]||0;const info=EXC_INFO[k];const rows=FOLDED.filter(EXC_ROWS[k]);
+h+='<div class="card'+(n?' accent-fail':'')+'"><b>'+esc(info[0])+' <span class="'+(n?'fail':'mut')+'">'+n+'건</span></b> <span class="mut">('+esc(k)+')'+(k==='source_unreachable'&&n?' · 영수증 '+rows.length+'개에서 합계':'')+'</span><div class="mut" style="margin-top:4px">'+esc(info[1])+'</div>';
+if(rows.length){h+='<div style="margin-top:8px">';
+rows.forEach(r=>{h+='<div class="lnk" data-r="'+esc(r.file||'')+'">→ '+esc(r.verifiedAt||'-')+' · '+esc((r.subject||'').slice(0,40))+(r.occurrences>1?' <span class="badge rep">×'+r.occurrences+'</span>':'')+'</div>'});
+h+='</div>'}
+h+='</div>'}
+h+='<div class="card mut">gate 우회(작업영수증 트랙)는 여기 없음 — 이 화면은 검증 영수증만 읽는 구조라서(스펙 명시).</div>';
+el('detail').innerHTML=h;wire()}
+el('dash').innerHTML=cd('전체',S.total||0)+(S.fileCount&&S.fileCount!==S.total?cd('파일',S.fileCount,'mut'):'')+cd('통과',S.pass||0,'pass')+cd('실패',S.fail||0,'fail')+
+(NEWCNT!==null?cd('신규 실패',NEWCNT,(NEWCNT?'fail':'pass')):'')+
+cd('최다 실패',S.mostFailedCheck||'-')+cd('드리프트',S.driftCount||0,(S.driftCount?'warn':''))+cd('봉인확인실패',S.tamperedCount||0,(S.tamperedCount?'fail':''))+
+(excTotal?'<div class="cd warn" id="exc-chip" style="cursor:pointer" title="클릭하면 분류가 열립니다"><div class="n">'+excTotal+'</div><div class="l">예외 · 분류보기</div></div>':'');
+if(excTotal)el('exc-chip').onclick=excDetail;
+if(HTRUNC){const n=document.createElement('div');n.className='mut';n.style.cssText='padding:4px 24px;font-size:12px';n.textContent='이력 사전계산 '+HTRUNC.shown+'/'+HTRUNC.total+'건 — 나머지는 CLI: graph history --claim <지문>';el('dash').after(n)}
+const TABS=[['subjects','상태판(Subjects)'],['byCheck','Check별 실패'],['byModel','Model별'],['bySubject','Subject별'],['byCommit','Commit별'],['byReason','Reason별'],['receipts','전체 영수증']];
+let cur=Object.keys(IX.byCheck||{}).length?'byCheck':'receipts';
+function tabs(){el('tabs').innerHTML=TABS.map(t=>{const n=t[0]==='receipts'?FOLDED.length:t[0]==='subjects'?SUBS.length:Object.keys(IX[t[0]]||{}).length;
+return '<span class="tab'+(t[0]===cur?' on':'')+'" data-t="'+t[0]+'">'+t[1]+' ('+n+')</span>'}).join('');
+el('tabs').querySelectorAll('.tab').forEach(x=>x.onclick=()=>{cur=x.dataset.t;tabs();renderTab()})}
+function renderTab(){if(cur==='receipts'){el('filters').style.display='flex';apply();return}
+el('filters').style.display='none';const L=el('list');L.innerHTML='';
+if(cur==='subjects'){el('count').textContent='';
+if(!SUBS.length){L.innerHTML='<div class="row mut">영수증 없음</div>';return}
+SUBS.forEach(s=>{const r=document.createElement('div');r.className='row';
+r.innerHTML='<b>'+esc((s.subject||'').slice(0,40))+'</b> '+(s.fail?'<span class="fail">fail '+s.fail+'</span>':'<span class="pass">all pass</span>')+
+'<div class="mut">영수증 '+s.receipts+' · pass '+s.pass+' · 실패 이벤트 '+s.failureEvents+(s.tamperedReceipts?' · ⚠ 봉인확인실패 '+s.tamperedReceipts:'')+'</div>';
+r.onclick=()=>subjectDetail(s);L.appendChild(r)});return}
+const g=IX[cur]||{};const keys=Object.keys(g).sort((a,b)=>g[b].length-g[a].length);
+if(!keys.length){L.innerHTML='<div class="row mut">실패 없음 — 전부 PASS</div>';return}
+keys.forEach(k=>{const h=document.createElement('div');h.className='ghead';h.innerHTML='<b>'+esc(k)+'</b> <span class="mut">'+g[k].length+'건</span>';L.appendChild(h);
+g[k].forEach(e=>{const r=document.createElement('div');r.className='row';
+r.innerHTML='<span class="fail">❌ '+esc(e.check)+'</span> <span class="mut">'+esc(e.status)+'</span> · claim #'+e.claimIndex+' '+esc((e.statement||'').slice(0,42))+
+(e.isNew?' <span class="badge new">신규</span>':'')+
+(e.occurrences>1?' <span class="badge rep">×'+e.occurrences+'</span>':'')+
+'<div class="mut">'+esc(e.reason)+' · '+esc(e.verifiedAt||'-')+' · <code>'+esc((e.receiptId||'').slice(0,10))+'…</code></div>';
+r.onclick=()=>failureDetail(e);L.appendChild(r)})})}
+function wire(){el('detail').querySelectorAll('[data-r]').forEach(x=>x.onclick=()=>{const d=FOLDED.find(y=>y.file===x.dataset.r||(y.allFiles||[]).includes(x.dataset.r));if(d)detail(d)});
+el('detail').querySelectorAll('[data-h]').forEach(x=>x.onclick=()=>historyDetail(x.dataset.h))}
+function subjectDetail(s){
+let h='<div class="card"><div class="big">'+esc(s.subject)+'</div><div class="mut">subject 상태판 — 카운트 롤업(판단 아님)</div>';
+h+='<div class="chk"><span class="k">영수증</span>'+s.receipts+'<span class="k">PASS</span><span class="pass">'+s.pass+'</span><span class="k">FAIL</span><span class="'+(s.fail?'fail':'mut')+'">'+s.fail+'</span>'+
+'<span class="k">실패 이벤트</span>'+s.failureEvents+'<span class="k">봉인확인실패</span>'+(s.tamperedReceipts?'<span class="fail">'+s.tamperedReceipts+'</span>':'0')+
+'<span class="k">기간(자가보고)</span><span class="mut">'+esc(s.firstVerifiedAt||'-')+' ~ '+esc(s.lastVerifiedAt||'-')+'</span></div>';
+const ck=Object.entries(s.byCheck||{}).sort((a,b)=>b[1]-a[1]);
+if(ck.length)h+='<div class="mut">실패 check: '+ck.map(x=>esc(x[0])+' '+x[1]).join(' · ')+'</div>';
+h+='</div>';
+const ev=(IX.bySubject||{})[s.subject]||[];
+if(ev.length){h+='<div class="card"><b>이 subject 의 실패 '+ev.length+'건</b>';
+ev.forEach((e,i)=>{h+='<div class="rz" style="cursor:pointer" data-f="'+i+'"><b class="fail">'+esc(e.check)+'</b> '+esc(e.status)+' · claim#'+e.claimIndex+' '+esc((e.statement||'').slice(0,44))+'</div>'});
+h+='</div>'}
+h+='<div class="card mut">증감(신규/해소)은 graph diff 의 bySubject · 이 subject 시간축은 CLI: graph history --subject</div>';
+el('detail').innerHTML=h;
+el('detail').querySelectorAll('[data-f]').forEach(x=>x.onclick=()=>failureDetail(ev[Number(x.dataset.f)]));wire()}
+function historyDetail(fp){const tl=HIST[fp]||[];
+let h='<div class="card"><div class="big">주장 이력</div><div class="mut">지문 <code>'+esc(fp)+'</code> · 영수증 '+tl.length+'건</div></div>';
+if(!tl.length)h+='<div class="card mut">이력 없음</div>';
+tl.forEach((t,i)=>{h+='<div class="card"><div><b>['+(i+1)+']</b> '+esc(t.verifiedAt||'-')+' <span class="mut">(자가보고)</span> · '+
+(t.verdict==='pass'?'<span class="pass">✓ pass</span>':'<span class="fail">✗ '+esc(t.verdict)+'</span>')+
+(t.tampered?' · <span class="fail">⚠ 봉인확인실패</span>':'')+(i===0?' · <span class="mut">첫 등장</span>':'')+'</div>';
+if((t.failedChecks||[]).length)h+='<div class="mut">실패: '+t.failedChecks.map(f=>esc(f.check)+'('+esc(f.status)+')').join(' · ')+'</div>';
+if(t.changes){const c=t.changes;
+if(c.newFailures.length)h+='<div class="fail">+ 새 실패: '+c.newFailures.map(esc).join(' · ')+'</div>';
+if(c.resolvedFailures.length)h+='<div class="pass">− 해소: '+c.resolvedFailures.map(esc).join(' · ')+'</div>';
+c.statusChanged.forEach(s=>{h+='<div class="warn">~ 상태: '+esc(s.check)+' '+esc(s.base)+' → '+esc(s.head)+'</div>'});
+if(c.evidenceChanged.length)h+='<div class="warn">Δ 증거 변화: '+c.evidenceChanged.map(esc).join(' · ')+'</div>';
+if(!c.newFailures.length&&!c.resolvedFailures.length&&!c.statusChanged.length&&!c.evidenceChanged.length)h+='<div class="mut">(직전 대비 변화 없음)</div>'}
+h+='<div class="mut"><span class="lnk" data-r="'+esc(t.file||'')+'">Receipt 보기(맨 마지막 drill-down) →</span></div></div>'});
+h+='<div class="card mut">참고: 시간축=verifiedAt(자가보고) · 해소=그 시점 실패 없음(고침의 증명 아님) · 지문 v1=텍스트 기반(문구 변경=다른 주장 취급)</div>';
+el('detail').innerHTML=h;wire()}
+function failureDetail(e){const d=DATA.find(x=>x.file===e.file)||{};const c=(d.claims||[])[e.claimIndex-1]||{};
+const f=(c.failures||[]).find(x=>x.check===e.check&&x.status===e.status)||{};
+let h='<div class="card"><div class="big fail">❌ '+esc(e.check)+' — '+esc(e.status)+'</div>';
+h+='<div class="mut">최근 '+esc(e.verifiedAt||'-')+' (자가보고)'+(e.occurrences>1?' · <b class="warn">'+e.occurrences+'개 파일로 반복</b>':'')+'</div>';
+h+='<div style="margin-top:8px">이유: '+esc(f.reason||e.reason)+'</div>';
+if(f.evidence)h+='<div>증거 — 기대값: <code>'+esc(f.evidence.expected)+'</code> ↔ 실제값: <code>'+esc(f.evidence.actual)+'</code></div>';
+if(f.hint)h+='<div class="mut">조치(기계적·표시만): '+esc(f.hint)+'</div>';h+='</div>';
+h+='<div class="card"><b>영향받은 주장 #'+e.claimIndex+'</b><div style="margin:4px 0">'+esc(c.statement||e.statement)+'</div><div class="chk">';
+(["citation","number","date","hash","signature","link","commit","fileChanged","diffContains","schema","version","file","receipt","artifact"]).forEach(k=>{const ch=c.checks||{};if(ch[k]!=null){h+='<span class="k">'+k+'</span>'+st(ch[k])}});h+='</div></div>';
+h+='<div class="card">주장 지문 <code>'+esc(e.fingerprint||(c.fingerprint||''))+'</code> · <span class="lnk" data-h="'+esc(e.fingerprint||(c.fingerprint||''))+'">이 주장의 이력 보기 →</span></div>';
+h+='<div class="card mut">Receipt <code>'+esc((e.receiptId||'').slice(0,16))+'…</code> · <span class="lnk" data-r="'+esc(e.file||'')+'">Receipt 전체 보기(맨 마지막 drill-down) →</span></div>';
+el('detail').innerHTML=h;wire()}
+function render(list){const L=el('list');L.innerHTML='';el('count').textContent=list.length+' / '+FOLDED.length;
+list.slice().sort((a,b)=>(a.verdict==='fail'?0:1)-(b.verdict==='fail'?0:1)||(b.verifiedAt||'').localeCompare(a.verifiedAt||'')).forEach(d=>{const v=d.verdict==='pass';const div=document.createElement('div');div.className='row';
+const nf=(d.claims||[]).reduce((s,c)=>s+((c.failures||[]).length?1:0),0);
+div.innerHTML='<span class="'+(v?'pass':'fail')+'">'+(v?'✅ 통과':'❌ 실패')+'</span> <b>'+esc(d.verifiedAt||'-')+'</b>'+(d.occurrences>1?' <span class="badge rep">×'+d.occurrences+'</span>':'')+' ['+esc(d.surface)+'] '+esc((d.subject||'').slice(0,38))+
+'<div class="mut">'+(nf?nf+'개 주장 실패 · ':'')+'model='+esc(d.model||'-')+' · commit='+esc(((d.commit||'-')).slice(0,8))+' · <code>'+esc((d.receiptId||'').slice(0,10))+'…</code></div>';
+div.onclick=()=>detail(d);L.appendChild(div)})}
+function detail(d){const ig=d.integrity||{};let h='<div class="card"><div class="big">'+(d.verdict==='fail'?'<span class="fail">❌ 실패</span>':'<span class="pass">✅ 통과</span>')+
+' <span class="mut">'+esc(d.verifiedAt||'-')+' (자가보고)</span></div>';
+if(d.occurrences>1)h+='<div class="mut">이 결과는 <b class="warn">'+d.occurrences+'개 파일</b>로 반복 기록됨(같은 입력 재검증 등) — 시각: '+(d.verifiedAtAll||[]).map(esc).join(' · ')+'</div>';
+h+='<div class="chk"><span class="k">영수증 무결성</span>'+ok(ig.contentHashOk&&ig.receiptIdOk)+
+'<span class="k">내용 해시</span>'+ok(ig.contentHashOk)+'<span class="k">영수증 ID</span>'+ok(ig.receiptIdOk)+
+'<span class="k">커밋 존재</span>'+ok(ig.commitRecheck)+'<span class="k">입력 불변</span>'+ok(ig.inputMatch)+'</div>';
+h+='<div class="mut">receiptId <code>'+esc(d.receiptId||'')+'</code></div></div>';
+const VLABEL={failed:'실패',verified:'검증됨',advisory:'참고'};
+(d.claims||[]).forEach((c,i)=>{const ch=c.checks||{};const v=c.verdict;const failed=(c.failures||[]).length;
+h+='<div class="card"><div><b>주장 #'+(i+1)+'</b> — '+esc((c.statement||'').slice(0,80))+' → <b class="'+(v==='failed'?'fail':v==='verified'?'pass':'mut')+'">'+esc(VLABEL[v]||v||'')+'</b></div><div class="chk">';
+(["citation","number","date","hash","signature","link","commit","fileChanged","diffContains","schema","version","file","receipt","artifact"]).forEach(k=>{if(ch[k]!=null){h+='<span class="k">'+k+'</span>'+st(ch[k])}});h+='</div>';
+if(failed){h+='<div style="margin-top:8px;font-weight:600">실패 목록</div>';(c.failures||[]).forEach(f=>{
+h+='<div class="rz"><b class="fail">'+esc(f.check)+'</b> — '+esc(f.status)+'<div class="mut">이유: '+esc(f.reason)+'</div>'+
+(f.evidence?'<div>증거 — 기대값: <code>'+esc(f.evidence.expected)+'</code> · 실제값: <code>'+esc(f.evidence.actual)+'</code></div>':'')+
+'<div class="mut">조치(기계적·표시만): '+esc(f.hint)+'</div></div>'})}
+if(c.fingerprint)h+='<div class="mut">지문 <code>'+esc((c.fingerprint||'').slice(0,21))+'…</code> · <span class="lnk" data-h="'+esc(c.fingerprint)+'">이력 →</span></div>';
+h+='</div>'});
+const rel=FOLDED.filter(x=>x.file!==d.file&&x.inputSha&&x.inputSha===d.inputSha&&!(x.receiptId&&d.receiptId&&x.receiptId===d.receiptId));
+if(rel.length){h+='<div class="card"><b>같은 입력(same_input) 영수증 '+rel.length+'건(고유)</b>'+
+rel.map(x=>'<div class="lnk" data-r="'+esc(x.file||'')+'"><code>'+esc((x.receiptId||'').slice(0,12))+'…</code> '+(x.verdict==='pass'?'✅':'❌')+(x.occurrences>1?' <span class="badge rep">×'+x.occurrences+'</span>':'')+' <span class="mut">'+esc(x.verifiedAt||'')+'</span></div>').join('')+'</div>'}
+el('detail').innerHTML=h;wire()}
+function apply(){const c=el('fc').value.trim(),i=el('fi').value.trim(),m=el('fm').value.trim();
+render(FOLDED.filter(d=>(!c||(d.commit||'').startsWith(c))&&(!i||(d.inputSha||'').startsWith(i))&&(!m||(d.model||'')===m)))}
+['fc','fi','fm'].forEach(id=>el(id).addEventListener('input',apply));tabs();renderTab();</script></body></html>
