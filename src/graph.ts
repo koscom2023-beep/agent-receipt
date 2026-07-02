@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
+import { claimFingerprintV1 } from "./evidencekernel.js";
 import { replayVerificationReceipt } from "./vreceipt.js";
 
 const line = "─".repeat(56);
@@ -154,6 +155,7 @@ export interface FailureReason {
 interface EnrichedClaim {
   statement: string;
   verdict: string;
+  fingerprint: string; // cfp1: 시간축 동일성 키 — 영수증 임베드 우선·없으면 같은 커널 함수로 재계산(신구 일관)
   checks: Record<string, string | null>;
   failures: FailureReason[]; // Reason 객체(check→reason→evidence→hint)
 }
@@ -163,6 +165,14 @@ function enrichClaims(results: unknown): EnrichedClaim[] {
     const o = (c && typeof c === "object" ? c : {}) as Record<string, unknown>;
     const checks = (o.checks && typeof o.checks === "object" ? o.checks : {}) as Record<string, string | null>;
     const evMap = (o.evidence && typeof o.evidence === "object" ? o.evidence : {}) as Record<string, { expected?: unknown; actual?: unknown }>;
+    const statement = typeof o.statement === "string" ? o.statement : "";
+    const fingerprint = typeof o.fingerprint === "string" && o.fingerprint.startsWith("cfp")
+      ? o.fingerprint // 영수증이 임베드한 값(같은 커널 함수 산출)
+      : claimFingerprintV1({
+          statement,
+          sourceUrl: typeof o.sourceUrl === "string" ? o.sourceUrl : null,
+          checkKinds: Object.entries(checks).filter(([, v]) => v != null).map(([k]) => k),
+        });
     const failures: FailureReason[] = [];
     for (const [kind, st] of Object.entries(checks)) {
       if (typeof st === "string" && FAILED.has(st)) {
@@ -177,8 +187,9 @@ function enrichClaims(results: unknown): EnrichedClaim[] {
       }
     }
     return {
-      statement: typeof o.statement === "string" ? o.statement : "",
+      statement,
       verdict: typeof o.verdict === "string" ? o.verdict : "",
+      fingerprint,
       checks,
       failures,
     };
@@ -252,6 +263,7 @@ export interface FailureEvent {
   tampered: boolean; // 영수증 봉인 재검증 실패(contentHash/receiptId)
   claimIndex: number;
   statement: string;
+  fingerprint: string; // cfp1: — triage→history 를 잇는 키
   check: string;
   status: string;
   reason: string;
@@ -265,7 +277,7 @@ export function buildFailureEvents(rows: ViewRow[]): FailureEvent[] {
         out.push({
           receiptId: r.receiptId, file: r.file, subject: r.subject, model: r.model, commit: r.commit,
           inputSha: r.inputSha, verifiedAt: r.verifiedAt, tampered,
-          claimIndex: i + 1, statement: c.statement, check: f.check, status: f.status, reason: f.reason,
+          claimIndex: i + 1, statement: c.statement, fingerprint: c.fingerprint, check: f.check, status: f.status, reason: f.reason,
         });
       });
     });
@@ -387,7 +399,7 @@ export function buildGraph(rows: ViewRow[]): { nodes: GraphNode[]; edges: GraphE
     nodes.push(node);
     r.claims.forEach((c, i) => {
       const cid = `${e.rid}/claim/${i + 1}`;
-      nodes.push({ id: cid, type: "claim", statement: c.statement, verdict: c.verdict });
+      nodes.push({ id: cid, type: "claim", statement: c.statement, verdict: c.verdict, fingerprint: c.fingerprint });
       edges.push(edge("asserts", e.rid, cid, "receipt-structure", "영수증 파일에서 직접 읽은 포함관계(구조 사실)", "verified"));
       for (const [kind, stt] of Object.entries(c.checks)) {
         if (stt == null) continue;
@@ -719,8 +731,15 @@ function printFailureLine(e: FailureEvent): void {
 // "해소" = head 에 같은 키의 실패가 없다는 사실이지 고쳐졌다는 증명이 아님.
 // 신규 실패 > 0 → exit 1 (집합 비교 사실 — CI 게이트로 쓸 수 있음).
 const normWs = (s: string): string => s.replace(/\s+/g, " ").trim();
-const failureKey = (e: FailureEvent): string => [e.inputSha ?? `subject:${e.subject}`, normWs(e.statement), e.check].join("\u0000"); // NUL 구분자(필드 충돌 방지)
+export type DiffMatchMode = "statement" | "fingerprint";
+// statement 모드=(입력sha∥subject)+정규화 statement+check / fingerprint 모드=cfp+check.
+// 정직: v1 fingerprint 도 텍스트 기반 — 어느 모드든 문구 변경은 "해소+신규" 로 갈라진다(의미 매칭 아님).
+const failureKey = (e: FailureEvent, match: DiffMatchMode): string =>
+  match === "fingerprint"
+    ? [e.fingerprint, e.check].join("\u0000")
+    : [e.inputSha ?? `subject:${e.subject}`, normWs(e.statement), e.check].join("\u0000"); // NUL 구분자(필드 충돌 방지)
 export interface GraphDiffResult {
+  match: DiffMatchMode; // 어떤 기준으로 매칭했는지 자기기술
   newFailures: FailureEvent[];
   resolvedFailures: FailureEvent[];
   statusChanged: { check: string; subject: string; statement: string; baseStatus: string; headStatus: string; file: string }[];
@@ -736,7 +755,8 @@ function latestVerdictByInput(rows: ViewRow[]): Map<string, string> {
   for (const r of sorted) if (r.inputSha) m.set(r.inputSha, r.verdict); // 뒤(=최신)가 덮어씀
   return m;
 }
-export function buildGraphDiff(baseRows: ViewRow[], headRows: ViewRow[], opts: { sealed?: boolean } = {}): GraphDiffResult {
+export function buildGraphDiff(baseRows: ViewRow[], headRows: ViewRow[], opts: { sealed?: boolean; match?: DiffMatchMode } = {}): GraphDiffResult {
+  const match: DiffMatchMode = opts.match ?? "statement";
   let be = buildFailureEvents(baseRows);
   let he = buildFailureEvents(headRows);
   const tamperedBase = be.filter((e) => e.tampered).length;
@@ -745,8 +765,8 @@ export function buildGraphDiff(baseRows: ViewRow[], headRows: ViewRow[], opts: {
     be = be.filter((e) => !e.tampered);
     he = he.filter((e) => !e.tampered);
   }
-  const bm = new Map(be.map((e) => [failureKey(e), e] as const));
-  const hm = new Map(he.map((e) => [failureKey(e), e] as const));
+  const bm = new Map(be.map((e) => [failureKey(e, match), e] as const));
+  const hm = new Map(he.map((e) => [failureKey(e, match), e] as const));
   const byKeySort = (a: FailureEvent, b: FailureEvent): number => cmpStr(a.check, b.check) || cmpStr(a.subject, b.subject) || cmpStr(a.statement, b.statement);
   const newFailures = [...hm.entries()].filter(([k]) => !bm.has(k)).map(([, e]) => e).sort(byKeySort);
   const resolvedFailures = [...bm.entries()].filter(([k]) => !hm.has(k)).map(([, e]) => e).sort(byKeySort);
@@ -762,15 +782,19 @@ export function buildGraphDiff(baseRows: ViewRow[], headRows: ViewRow[], opts: {
     const head = hv.get(sha);
     if (head !== undefined && head !== base) inputVerdictChanges.push({ inputSha: sha, baseVerdict: base, headVerdict: head });
   }
-  return { newFailures, resolvedFailures, statusChanged, persistingCount, inputVerdictChanges, tamperedBase, tamperedHead };
+  return { match, newFailures, resolvedFailures, statusChanged, persistingCount, inputVerdictChanges, tamperedBase, tamperedHead };
 }
 /**
  * `agent-receipt graph diff (--base-dir <d1> --head-dir <d2> | --dir <d> --base-commit <c1> --head-commit <c2>) [--sealed] [--format json]`
  *  회귀 비교: 신규/해소/상태변화/입력 verdict 변화. 신규 실패>0 → exit 1.
  */
 export function runGraphDiff(
-  o: { dir?: string; baseDir?: string; headDir?: string; baseCommit?: string; headCommit?: string; sealed?: boolean; format?: string },
+  o: { dir?: string; baseDir?: string; headDir?: string; baseCommit?: string; headCommit?: string; sealed?: boolean; match?: string; format?: string },
 ): never {
+  if (o.match && o.match !== "statement" && o.match !== "fingerprint") {
+    console.error(`graph diff: --match 는 statement|fingerprint 중 하나 (받음: ${o.match})`);
+    process.exit(2);
+  }
   let baseRows: ViewRow[];
   let headRows: ViewRow[];
   let baseLabel: string;
@@ -790,7 +814,7 @@ export function runGraphDiff(
     console.error("graph diff: (--base-dir <d1> --head-dir <d2>) 또는 (--dir <d> --base-commit <c1> --head-commit <c2>) 가 필요합니다.");
     process.exit(2);
   }
-  const d = buildGraphDiff(baseRows, headRows, { sealed: o.sealed });
+  const d = buildGraphDiff(baseRows, headRows, { sealed: o.sealed, match: o.match as DiffMatchMode | undefined });
 
   if (o.format === "json") {
     console.log(JSON.stringify({
@@ -805,7 +829,7 @@ export function runGraphDiff(
 
   console.log("");
   console.log(line);
-  console.log(`Evidence Graph diff: base=${baseLabel}(${baseRows.length}건) → head=${headLabel}(${headRows.length}건)${o.sealed ? " · 봉인 확인분만" : ""}`);
+  console.log(`Evidence Graph diff: base=${baseLabel}(${baseRows.length}건) → head=${headLabel}(${headRows.length}건) · 매칭=${d.match}${o.sealed ? " · 봉인 확인분만" : ""}`);
   console.log(line);
   console.log(`  신규 실패 ${d.newFailures.length} · 해소 ${d.resolvedFailures.length} · 상태변화 ${d.statusChanged.length} · 지속 ${d.persistingCount} · 입력 verdict 변화 ${d.inputVerdictChanges.length}`);
   if (d.tamperedBase || d.tamperedHead) console.log(`  ⚠ 봉인확인실패 실패이벤트: base ${d.tamperedBase} · head ${d.tamperedHead}${o.sealed ? " (제외됨)" : " (포함됨 — --sealed 로 제외 가능)"}`);
@@ -818,4 +842,160 @@ export function runGraphDiff(
   console.log(line);
   console.log("");
   process.exit(d.newFailures.length ? 1 : 0);
+}
+
+// ── graph history — 같은 주장(fingerprint)/같은 입력(sha256)의 시간축 이력(읽기전용·결정론) ──
+// 시간축=verifiedAt(자가보고·라벨)+file tie-break. "변화"=인접 이전 항목 대비(첫 항목=기준점·변화 없음).
+// 상태 = 실패 check 만의 맵((fingerprint,check)→{status,evidence}) — verified 로 돌아오면 "해소"로 나타남.
+// 키 구분자=공백: fingerprint(cfp1:<hex>)·check(kind 단어)에는 공백이 없어 충돌-안전.
+// 정직: 해소=그 시점 영수증에 같은 키 실패가 없다는 사실이지 고침의 증명 아님. fp v1=텍스트 기반.
+export interface HistoryChange {
+  newFailures: string[]; // "check(status)" 목록
+  resolvedFailures: string[];
+  statusChanged: { check: string; base: string; head: string }[];
+  evidenceChanged: string[]; // 같은 check·같은 status 인데 expected/actual 이 달라진 것
+}
+export interface HistoryItem {
+  receiptId: string;
+  file: string;
+  subject: string;
+  model: string | null;
+  commit: string | null; // 자가보고
+  verifiedAt: string | null; // 자가보고
+  verdict: string;
+  tampered: boolean;
+  failedChecks: { fingerprint: string; check: string; status: string }[];
+  changes: HistoryChange | null; // 첫 항목 null(기준점)
+}
+type FailState = Map<string, { status: string; evidence: string }>; // key = `${fingerprint} ${check}`
+function failState(r: ViewRow, claimFp: string | null): FailState {
+  const m: FailState = new Map();
+  for (const c of r.claims) {
+    if (claimFp && c.fingerprint !== claimFp) continue;
+    for (const f of c.failures) {
+      m.set(`${c.fingerprint} ${f.check}`, { status: f.status, evidence: JSON.stringify(f.evidence ?? null) });
+    }
+  }
+  return m;
+}
+export function buildHistory(rows: ViewRow[], sel: { claim?: string; input?: string }): { mode: "claim" | "input"; key: string; timeline: HistoryItem[] } {
+  const mode = sel.claim ? ("claim" as const) : ("input" as const);
+  const key = sel.claim ?? sel.input ?? "";
+  const involved = rows.filter((r) =>
+    mode === "claim" ? r.claims.some((c) => c.fingerprint === sel.claim) : r.inputSha === sel.input,
+  );
+  const sorted = involved.slice().sort((a, b) => cmpStr(canonTime(a.verifiedAt) ?? "", canonTime(b.verifiedAt) ?? "") || cmpStr(a.file, b.file));
+  const timeline: HistoryItem[] = [];
+  let prev: FailState | null = null;
+  for (const r of sorted) {
+    const cur = failState(r, mode === "claim" ? (sel.claim as string) : null);
+    const tampered = !r.integrity.contentHashOk || !r.integrity.receiptIdOk;
+    let changes: HistoryChange | null = null;
+    if (prev !== null) {
+      const label = (k: string, st: string): string => {
+        const [fp, check] = k.split(" ");
+        return mode === "claim" ? `${check}(${st})` : `${(fp ?? "").slice(0, 12)}… ${check}(${st})`;
+      };
+      changes = { newFailures: [], resolvedFailures: [], statusChanged: [], evidenceChanged: [] };
+      for (const [k, v] of cur) {
+        const p = prev.get(k);
+        if (!p) changes.newFailures.push(label(k, v.status));
+        else if (p.status !== v.status) changes.statusChanged.push({ check: k.split(" ")[1] ?? "", base: p.status, head: v.status });
+        else if (p.evidence !== v.evidence) changes.evidenceChanged.push(label(k, v.status));
+      }
+      for (const [k, v] of prev) if (!cur.has(k)) changes.resolvedFailures.push(label(k, v.status));
+      changes.newFailures.sort(cmpStr);
+      changes.resolvedFailures.sort(cmpStr);
+      changes.evidenceChanged.sort(cmpStr);
+      changes.statusChanged.sort((a, b) => cmpStr(a.check, b.check));
+    }
+    const failedChecks = [...cur.entries()]
+      .map(([k, v]) => {
+        const [fp, check] = k.split(" ");
+        return { fingerprint: fp ?? "", check: check ?? "", status: v.status };
+      })
+      .sort((a, b) => cmpStr(a.fingerprint, b.fingerprint) || cmpStr(a.check, b.check));
+    timeline.push({
+      receiptId: r.receiptId, file: r.file, subject: r.subject, model: r.model, commit: r.commit,
+      verifiedAt: r.verifiedAt, verdict: r.verdict, tampered, failedChecks, changes,
+    });
+    prev = cur;
+  }
+  return { mode, key, timeline };
+}
+// --claim prefix 해석: 유일하면 채택·모호하면 후보 나열(최대 10·잘림 명시) 후 명시 실패. 침묵 첫매치 금지.
+export function resolveFingerprintPrefix(rows: ViewRow[], prefix: string): { fp: string | null; candidates: string[] } {
+  const all = new Set<string>();
+  for (const r of rows) for (const c of r.claims) if (c.fingerprint.startsWith(prefix)) all.add(c.fingerprint);
+  const candidates = [...all].sort(cmpStr);
+  return { fp: candidates.length === 1 ? (candidates[0] as string) : null, candidates };
+}
+/**
+ * `agent-receipt graph history --dir <d> (--claim <cfp|접두> | --input <sha256>) [--format json]`
+ *  같은 주장/입력의 시간축 이력 + 인접 대비 변화. 읽기전용·exit 0(질의).
+ */
+export function runGraphHistory(dirArg: string | undefined, sel: { claim?: string; input?: string }, format?: string): never {
+  if ((sel.claim ? 1 : 0) + (sel.input ? 1 : 0) !== 1) {
+    console.error("graph history: --claim <cfp|접두> 또는 --input <sha256> 중 정확히 하나가 필요합니다.");
+    process.exit(2);
+  }
+  const dir = resolveDir(dirArg);
+  const rows = buildViewData(dir);
+  let claimFp = sel.claim;
+  if (claimFp) {
+    const r = resolveFingerprintPrefix(rows, claimFp);
+    if (!r.fp) {
+      if (!r.candidates.length) {
+        console.error(`graph history: fingerprint 없음: ${claimFp}`);
+      } else {
+        console.error(`graph history: 접두가 모호함(${r.candidates.length}개 일치) — 더 길게 지정하세요:`);
+        for (const c of r.candidates.slice(0, 10)) console.error(`  ${c}`);
+        if (r.candidates.length > 10) console.error(`  (외 ${r.candidates.length - 10}개)`);
+      }
+      process.exit(2);
+    }
+    claimFp = r.fp;
+  }
+  const h = buildHistory(rows, claimFp ? { claim: claimFp } : { input: sel.input });
+  // 관련 edge(이력에 등장한 영수증들 간): 조회용 — receipt 레벨 edge 만.
+  const g = buildGraph(h.timeline.length ? rows.filter((r) => h.timeline.some((t) => t.file === r.file)) : []);
+  const relEdges = g.edges.filter((e) => e.type === "same_input" || e.type === "same_commit" || e.type === "reverifies");
+
+  if (format === "json") {
+    console.log(JSON.stringify({
+      dir, mode: h.mode, key: h.key, receipts: h.timeline.length,
+      note: "시간축=verifiedAt(자가보고)·해소=그 시점 실패 없음(고침의 증명 아님)·fingerprint v1=텍스트 기반",
+      timeline: h.timeline, relatedEdges: relEdges,
+    }, null, 2));
+    process.exit(0);
+  }
+
+  console.log("");
+  console.log(line);
+  console.log(`이력: ${h.mode === "claim" ? `주장 ${h.key.slice(0, 24)}…` : `입력 ${h.key.slice(0, 16)}…`}  (영수증 ${h.timeline.length}건 · ${dir})`);
+  console.log(line);
+  if (!h.timeline.length) console.log("  (해당 이력 없음)");
+  h.timeline.forEach((t, i) => {
+    console.log(`  [${i + 1}] ${t.verifiedAt ?? "-"} · ${t.verdict === "pass" ? "✓ pass" : "✗ " + t.verdict} · ${t.file}${t.tampered ? " · ⚠ 봉인확인실패" : ""}`);
+    console.log(`      subject=${t.subject.slice(0, 30)} · model=${t.model ?? "-"} · commit=${t.commit ? t.commit.slice(0, 8) : "-"}(자가보고)`);
+    if (t.failedChecks.length) console.log(`      실패: ${t.failedChecks.map((f) => `${f.check}(${f.status})`).join(" · ")}`);
+    if (t.changes) {
+      const c = t.changes;
+      if (c.newFailures.length) console.log(`      + 새 실패: ${c.newFailures.join(" · ")}`);
+      if (c.resolvedFailures.length) console.log(`      - 해소: ${c.resolvedFailures.join(" · ")}`);
+      for (const sc of c.statusChanged) console.log(`      ~ 상태: ${sc.check} ${sc.base} → ${sc.head}`);
+      if (c.evidenceChanged.length) console.log(`      Δ 증거 변화: ${c.evidenceChanged.join(" · ")}`);
+      if (!c.newFailures.length && !c.resolvedFailures.length && !c.statusChanged.length && !c.evidenceChanged.length) console.log("      (직전 대비 변화 없음)");
+    }
+  });
+  if (relEdges.length) {
+    const cnt: Record<string, number> = {};
+    for (const e of relEdges) cnt[e.type] = (cnt[e.type] ?? 0) + 1;
+    console.log(`  관련 관계선: ${Object.entries(cnt).map(([k, v]) => `${k} ${v}`).join(" · ")}`);
+  }
+  console.log(line);
+  console.log("  참고: 시간축=verifiedAt(자가보고) · 해소=그 시점 실패 없음(고침의 증명 아님) · fingerprint v1=텍스트 기반(문구 변경=다른 주장 취급).");
+  console.log(line);
+  console.log("");
+  process.exit(0);
 }

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import {
   normalizeForCitation, verifyCitationInText, citationStatus, type CitationStatus,
-  evaluateClaim,
+  evaluateClaim, claimFingerprintV1,
 } from "./evidencekernel.js";
 import { writeVerificationReceipt, tierProvenance } from "./vreceipt.js";
 
@@ -193,7 +193,13 @@ export async function runResearchVerify(
     if (ev.failed) failed++;
     else if (ev.verified) ok++;
     else advisory++;
-    collected.push({ statement: stmt, sourceUrl: url || null, checks: ev.results, evidence: ev.evidence, verdict: ev.failed ? "failed" : ev.verified ? "verified" : "advisory" });
+    // fingerprint: 시간축 동일성 키(커널 SSOT·additive) — graph/history/diff 가 같은 함수로 재현 가능.
+    const fingerprint = claimFingerprintV1({
+      statement: stmt,
+      sourceUrl: url || null,
+      checkKinds: Object.entries(ev.results).filter(([, v]) => v != null).map(([k]) => k),
+    });
+    collected.push({ statement: stmt, sourceUrl: url || null, fingerprint, checks: ev.results, evidence: ev.evidence, verdict: ev.failed ? "failed" : ev.verified ? "verified" : "advisory" });
 
     console.log(`[${i + 1}] ${stmt}`);
     if (url) console.log(`    출처 : ${url}${fetchNote}${ev.link ? ` [link ${ev.link}]` : ""}`);

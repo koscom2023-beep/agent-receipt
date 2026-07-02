@@ -5,8 +5,8 @@ import { createHash } from "node:crypto";
 import { writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadReceipts, queryReceipts, buildViewData, buildGraphHtml, buildSummary, buildFailures, buildIndexes, buildGraph, buildFailureEvents, filterFailureEvents, buildGraphDiff } from "../dist/graph.js";
-import { evaluateClaim, SCHEMA_VERSION } from "../dist/index.js"; // SDK 배럴(L7 씨앗)
+import { loadReceipts, queryReceipts, buildViewData, buildGraphHtml, buildSummary, buildFailures, buildIndexes, buildGraph, buildFailureEvents, filterFailureEvents, buildGraphDiff, buildHistory, resolveFingerprintPrefix } from "../dist/graph.js";
+import { evaluateClaim, SCHEMA_VERSION, claimFingerprintV1 } from "../dist/index.js"; // SDK 배럴(L7 씨앗)
 
 let pass = 0;
 const fail = [];
@@ -289,6 +289,88 @@ check("buildGraphDiff: 4분면 + 입력 verdict 변화(최신 verifiedAt 기준)
   assert.ok(d.tamperedBase >= 0 && d.tamperedHead >= 0);
   rmSync(dB1, { recursive: true, force: true });
   rmSync(dB2, { recursive: true, force: true });
+});
+
+// ── Ship C: claim fingerprint v1 ──
+check("fingerprint: 결정론·cfp1 접두·공백/NFC 정규화·kinds 순서 무관", () => {
+  const a = claimFingerprintV1({ statement: "the  sky\n is blue", sourceUrl: "http://s", checkKinds: ["number", "citation"] });
+  const b = claimFingerprintV1({ statement: "the sky is blue", sourceUrl: "http://s", checkKinds: ["citation", "number"] });
+  assert.equal(a, b); // 공백 정규화 + kinds 정렬
+  assert.ok(a.startsWith("cfp1:")); // 버전 자기기술
+  const c = claimFingerprintV1({ statement: "the sky is green", sourceUrl: "http://s", checkKinds: ["citation", "number"] });
+  assert.notEqual(a, c); // 문구 변경 = 다른 주장(v1 정직 한계)
+  const d = claimFingerprintV1({ statement: "the sky is blue", sourceUrl: null, checkKinds: ["citation", "number"] });
+  assert.notEqual(a, d); // 출처 다르면 다른 fp
+});
+check("fingerprint: 영수증 임베드 == graph 폴백 재계산(SSOT 동등성)", () => {
+  const dH = mkdtempSync(join(tmpdir(), "argraphH-"));
+  const fp = claimFingerprintV1({ statement: "S1", sourceUrl: "http://u", checkKinds: ["citation"] });
+  // 임베드된 영수증
+  writeFileSync(join(dH, "a.json"), JSON.stringify({ kind: "verification-receipt", receiptId: "hA", subject: "P", verdict: "fail", surface: "research", input: { sha256: "s" }, results: [{ statement: "S1", sourceUrl: "http://u", fingerprint: fp, checks: { citation: "not-found" } , verdict: "failed" }] }));
+  // 미임베드(구 영수증) — graph 가 같은 함수로 계산해야 동일
+  writeFileSync(join(dH, "b.json"), JSON.stringify({ kind: "verification-receipt", receiptId: "hB", subject: "P", verdict: "fail", surface: "research", input: { sha256: "s" }, results: [{ statement: "S1", sourceUrl: "http://u", checks: { citation: "not-found" }, verdict: "failed" }] }));
+  const v = buildViewData(dH);
+  assert.equal(v[0].claims[0].fingerprint, fp);
+  assert.equal(v[1].claims[0].fingerprint, fp); // 폴백 == 임베드
+  const g = buildGraph(v);
+  assert.ok(g.nodes.filter((n) => n.type === "claim").every((n) => n.fingerprint === fp)); // claim 노드 노출
+  const ev = buildFailureEvents(v);
+  assert.ok(ev.every((e) => e.fingerprint === fp)); // FailureEvent 노출(triage→history 루프)
+  rmSync(dH, { recursive: true, force: true });
+});
+
+// ── Ship C: graph history ──
+check("buildHistory --claim: 시간축 + 인접 대비 변화(상태변화·해소)", () => {
+  const dI = mkdtempSync(join(tmpdir(), "argraphI-"));
+  const mk3 = (name, o) => writeFileSync(join(dI, name), JSON.stringify(o));
+  const claim = (checks, evd) => ({ statement: "CLAIM X", sourceUrl: "http://u", checks, evidence: evd, verdict: "failed" });
+  // t1: citation not-found → t2: 상태 유지·증거 변화 → t3: 해소(verified)
+  mk3("t1.json", { kind: "verification-receipt", receiptId: "r1", subject: "P", verdict: "fail", surface: "research", input: { sha256: "sX" }, verifiedAt: "2026-07-01T00:00:00Z", results: [claim({ citation: "not-found" }, { citation: { expected: "q1", actual: "없음" } })] });
+  mk3("t2.json", { kind: "verification-receipt", receiptId: "r2", subject: "P", verdict: "fail", surface: "research", input: { sha256: "sX" }, verifiedAt: "2026-07-02T00:00:00Z", results: [claim({ citation: "not-found" }, { citation: { expected: "q2", actual: "없음" } })] });
+  mk3("t3.json", { kind: "verification-receipt", receiptId: "r3", subject: "P", verdict: "pass", surface: "research", input: { sha256: "sX" }, verifiedAt: "2026-07-03T00:00:00Z", results: [claim({ citation: "verified" }, undefined)] });
+  const rows = buildViewData(dI);
+  const fp = rows[0].claims[0].fingerprint;
+  const h = buildHistory(rows, { claim: fp });
+  assert.equal(h.mode, "claim");
+  assert.equal(h.timeline.length, 3);
+  assert.equal(h.timeline[0].changes, null); // 첫 항목=기준점
+  assert.deepEqual(h.timeline[1].changes.evidenceChanged.length, 1); // 같은 상태·증거만 변화
+  assert.equal(h.timeline[2].changes.resolvedFailures.length, 1); // not-found → verified = 해소
+  assert.equal(h.timeline[2].verdict, "pass");
+  // prefix 해석: 유일 접두 → fp·빈 접두(전부 같은 fp)도 유일
+  assert.equal(resolveFingerprintPrefix(rows, fp.slice(0, 12)).fp, fp);
+  assert.equal(resolveFingerprintPrefix(rows, "cfp9:").fp, null); // 없음
+  rmSync(dI, { recursive: true, force: true });
+});
+check("buildHistory --input: 입력 기준 타임라인 + 새 실패 감지", () => {
+  const dJ = mkdtempSync(join(tmpdir(), "argraphJ-"));
+  const mk4 = (name, o) => writeFileSync(join(dJ, name), JSON.stringify(o));
+  mk4("a.json", { kind: "verification-receipt", receiptId: "i1", subject: "P", verdict: "pass", surface: "research", input: { sha256: "sIN" }, verifiedAt: "2026-07-01T00:00:00Z", results: [{ statement: "A", checks: { citation: "verified" }, verdict: "verified" }] });
+  mk4("b.json", { kind: "verification-receipt", receiptId: "i2", subject: "P", verdict: "fail", surface: "research", input: { sha256: "sIN" }, verifiedAt: "2026-07-02T00:00:00Z", results: [{ statement: "A", checks: { citation: "not-found" }, verdict: "failed" }] });
+  const h = buildHistory(buildViewData(dJ), { input: "sIN" });
+  assert.equal(h.mode, "input");
+  assert.equal(h.timeline.length, 2);
+  assert.equal(h.timeline[1].changes.newFailures.length, 1); // verified → not-found = 새 실패
+  rmSync(dJ, { recursive: true, force: true });
+});
+
+// ── Ship C: diff --match fingerprint ──
+check("buildGraphDiff --match fingerprint: 모드 자기기술 + fp 기준 매칭", () => {
+  const dK1 = mkdtempSync(join(tmpdir(), "argraphK1-"));
+  const dK2 = mkdtempSync(join(tmpdir(), "argraphK2-"));
+  // 같은 fp(같은 statement·출처·kinds)가 다른 subject 로 나타나도 fp 모드에선 같은 키
+  writeFileSync(join(dK1, "a.json"), JSON.stringify({ kind: "verification-receipt", receiptId: "k1", subject: "SUBJ-1", verdict: "fail", surface: "research", input: { sha256: "s1" }, results: [{ statement: "SAME", sourceUrl: "http://u", checks: { citation: "not-found" }, verdict: "failed" }] }));
+  writeFileSync(join(dK2, "a.json"), JSON.stringify({ kind: "verification-receipt", receiptId: "k2", subject: "SUBJ-2", verdict: "fail", surface: "research", input: { sha256: "s2" }, results: [{ statement: "SAME", sourceUrl: "http://u", checks: { citation: "not-found" }, verdict: "failed" }] }));
+  const base = buildViewData(dK1), head = buildViewData(dK2);
+  const dStmt = buildGraphDiff(base, head, {});
+  assert.equal(dStmt.match, "statement");
+  assert.equal(dStmt.newFailures.length, 1); // statement 모드: 입력sha 다름 → 다른 키(신규+해소)
+  const dFp = buildGraphDiff(base, head, { match: "fingerprint" });
+  assert.equal(dFp.match, "fingerprint");
+  assert.equal(dFp.newFailures.length, 0); // fp 모드: 같은 주장 → 지속
+  assert.equal(dFp.persistingCount, 1);
+  rmSync(dK1, { recursive: true, force: true });
+  rmSync(dK2, { recursive: true, force: true });
 });
 
 // ── L7 SDK 배럴: 외부 import 가능 ──

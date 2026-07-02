@@ -5,6 +5,8 @@
 
 export {
   SCHEMA_VERSION,
+  CLAIM_FINGERPRINT_VERSION,
+  claimFingerprintV1,
   CHECK_REGISTRY,
   CHECK_KINDS,
   claimSchema,
@@ -39,9 +41,10 @@ export type { VReceiptInput } from "./vreceipt.js";
 export {
   loadReceipts, queryReceipts, buildViewData, buildGraph,
   buildSummary, buildFailures, buildFailureEvents, buildIndexes,
-  filterFailureEvents, buildGraphDiff,
+  filterFailureEvents, buildGraphDiff, buildHistory, resolveFingerprintPrefix,
 } from "./graph.js";
 export type {
   VRRow, GraphFilters, GraphNode, GraphEdge, GraphEdgeType, EdgeBasis,
-  GraphSummary, FailureEntry, FailureEvent, GraphIndexes, FailureFilters, GraphDiffResult,
+  GraphSummary, FailureEntry, FailureEvent, GraphIndexes, FailureFilters,
+  GraphDiffResult, DiffMatchMode, HistoryItem, HistoryChange,
 } from "./graph.js";

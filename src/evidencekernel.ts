@@ -9,6 +9,20 @@ export const SCHEMA_VERSION = "evidence/1";
 //   순수 커널을 여기 모은다. research verify·council verify·(향후) eval verify 가 전부 이걸 재사용.
 // 불변식: LLM 판단 0·순수 함수·surface(research/council 등) 를 import 하지 않는다(core ↛ surface).
 
+// ── Claim fingerprint v1 (시간축 동일성 키 · 결정론) ──
+// "같은 주장"을 시간축으로 묶는 식별키 — 증명이 아니라 파생 계산값(tier 개념 비적용).
+// 구성: NFC+공백정규화 statement + NUL + sourceUrl(없으면 "") + NUL + 정렬된 checkKinds.
+// 표기: `cfp1:<sha256hex>` — 값 자체가 버전을 자기기술(v2 가 나오면 cfp2: 병기·기존 의미 변경 금지).
+// 정직 한계(v1): 텍스트 기반 — 문구가 바뀌면 다른 주장으로 취급(의미적 동일성 보장 아님).
+//   check 종류 집합이 포함되므로 도구가 검사 종류를 확장하면 같은 주장의 fp 가 갈라질 수 있음(스펙 명시).
+export const CLAIM_FINGERPRINT_VERSION = 1;
+export function claimFingerprintV1(o: { statement: string; sourceUrl?: string | null; checkKinds: string[] }): string {
+  const norm = o.statement.normalize("NFC").replace(/\s+/g, " ").trim();
+  const kinds = [...o.checkKinds].sort().join(",");
+  const h = createHash("sha256").update([norm, o.sourceUrl ?? "", kinds].join("\u0000")).digest("hex"); // NUL 구분자(필드 충돌 방지)
+  return `cfp1:${h}`;
+}
+
 export type CitationStatus = "verified" | "not-found" | "no-source";
 
 // 공백 정규화(비교 전) — LLM 의견이 아니라 문자열 연산.

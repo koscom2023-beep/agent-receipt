@@ -55,7 +55,7 @@ import { runResearchVerify } from "./research.js";
 import { runCouncilVerify } from "./council.js";
 import { runSpec } from "./spec.js";
 import { runReplayReceipt } from "./vreceipt.js";
-import { runGraphQuery, runGraphView, runGraphFailures, runGraphDiff } from "./graph.js";
+import { runGraphQuery, runGraphView, runGraphFailures, runGraphDiff, runGraphHistory } from "./graph.js";
 
 function getArg(flag: string): string | undefined {
   const i = process.argv.indexOf(flag);
@@ -145,7 +145,8 @@ agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
   graph query --dir <d> [--commit|--input|--model|--receipt-id] [--format json]   receipt 필터 + pass/fail 중립 카운트(edge 없음)
   graph view --dir <d> [--out <html>] [--format json]   HTML=Evidence Browser(Failure-first: Dashboard→Failures 탭[Check별/Model별/Subject별/Commit별/Reason별]→Reason·Evidence→Affected Claim→Receipt 맨끝 drill-down) / json=소비자 API(summary·indexes·graph{nodes:Receipt/Claim/Check·edges:asserts/checked_by/same_input/same_commit/reverifies·id+basis[기계 enum]+note+tier[verified=재해시/직접읽음 확인만·나머지 reported]}·failures·receipts · 같은[입력·버전·verdict] 재검증은 한 노드로 접힘[occurrences 보존])
   graph failures --dir <d> [--by check|reason|subject|model|commit] [--check <k>] [--status s1,s2] [--subject|--model|--commit|--input <v>] [--sealed] [--since <ISO>] [--limit N] [--format json]   실패 triage(읽기전용·M건 중 N건 항상 표기·verifiedAt/commit=자가보고·--sealed=봉인 확인분만)
-  graph diff (--base-dir <d1> --head-dir <d2> | --dir <d> --base-commit <c1> --head-commit <c2>) [--sealed] [--format json]   회귀 비교: 신규/해소/상태변화/입력 verdict 변화 · 신규>0=exit 1(CI 게이트) · 매칭=기록 텍스트(의미 동일성 아님)·해소=고침의 증명 아님
+  graph diff (--base-dir <d1> --head-dir <d2> | --dir <d> --base-commit <c1> --head-commit <c2>) [--match statement|fingerprint] [--sealed] [--format json]   회귀 비교: 신규/해소/상태변화/입력 verdict 변화 · 신규>0=exit 1(CI 게이트) · 매칭=기록 텍스트(어느 모드든 의미 동일성 아님)·해소=고침의 증명 아님
+  graph history --dir <d> (--claim <cfp1:…|접두> | --input <sha256>) [--format json]   같은 주장/입력의 시간축 이력(첫 등장→재검증 체인·인접 대비 새실패/해소/상태/증거 변화·관련 edge) · fingerprint=cfp1(텍스트 기반 v1·graph view json/failures 에 노출)
 
 ■ 증빙 / 감사 묶음(git 증거):
   report [--type developer|client|audit] / receipt [--format ...] [--content] [--strict-redact] [--committed] [--agent <n>] [--model <m>] / receipts [--latest|--cat|--dir]
@@ -306,9 +307,12 @@ function main(): void {
       runGraphDiff({
         dir: getArg("--dir"), baseDir: getArg("--base-dir"), headDir: getArg("--head-dir"),
         baseCommit: getArg("--base-commit"), headCommit: getArg("--head-commit"),
-        sealed: hasFlag("--sealed"), format: getArg("--format"),
+        sealed: hasFlag("--sealed"), match: getArg("--match"), format: getArg("--format"),
       });
-    console.error("graph: 사용법 — graph query [--format json] · graph view --out <html> · graph failures [--by ...] · graph diff (--base-dir/--head-dir | --dir --base-commit/--head-commit)");
+    if (process.argv[3] === "history")
+      // 같은 주장(fingerprint)/입력(sha)의 시간축 이력 — 읽기전용 질의.
+      runGraphHistory(getArg("--dir"), { claim: getArg("--claim"), input: getArg("--input") }, getArg("--format"));
+    console.error("graph: 사용법 — graph query [--format json] · graph view --out <html> · graph failures [--by ...] · graph diff (--base-dir/--head-dir | --dir --base-commit/--head-commit) [--match fingerprint] · graph history (--claim <cfp|접두> | --input <sha>)");
     process.exit(2);
   }
   if (command === "incident") {
