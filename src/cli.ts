@@ -141,9 +141,9 @@ agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
 ■ Evidence Specification(검증 포맷의 표준 표면):
   spec [--format json]   claim/check 표준 포맷을 사람요약/기계판독(JSON Schema draft-07)으로 방출 · check kinds·상태·보증범위
 
-■ Receipt Index / Evidence Browser(쌓인 Verification Receipt 활용 — 읽기전용·중립 · 아직 edge 없음=엄밀히 graph 아님):
-  graph query --dir <d> [--commit|--input|--model|--receipt-id] [--format json]   receipt 필터 + pass/fail 중립 카운트
-  graph view --dir <d> [--out <html>] [--format json]   HTML=Evidence Browser(Dashboard-first·무결성·Reason 객체 check→reason→evidence→hint) / json=소비자 API(summary·indexes[byCheck/byModel/bySubject/byCommit/byReason]·failures·receipts)
+■ Evidence Graph / Evidence Browser(쌓인 Verification Receipt 활용 — 읽기전용·중립 · edge 는 graph view --format json 에 실재):
+  graph query --dir <d> [--commit|--input|--model|--receipt-id] [--format json]   receipt 필터 + pass/fail 중립 카운트(edge 없음)
+  graph view --dir <d> [--out <html>] [--format json]   HTML=Evidence Browser(Failure-first: Dashboard→Failures 탭[Check별/Model별/Subject별/Commit별/Reason별]→Reason·Evidence→Affected Claim→Receipt 맨끝 drill-down) / json=소비자 API(summary·indexes·graph{nodes:Receipt/Claim/Check·edges:asserts/checked_by/same_input/same_commit/reverifies·basis·tier[verified=재해시/직접읽음 확인만·나머지 reported]}·failures·receipts · 같은[입력·버전·verdict] 재검증은 한 노드로 접힘[occurrences 보존])
 
 ■ 증빙 / 감사 묶음(git 증거):
   report [--type developer|client|audit] / receipt [--format ...] [--content] [--strict-redact] [--committed] [--agent <n>] [--model <m>] / receipts [--latest|--cat|--dir]

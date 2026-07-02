@@ -36,5 +36,5 @@ export type {
 export { buildVerificationReceipt, tierProvenance, replayVerificationReceipt } from "./vreceipt.js";
 export type { VReceiptInput } from "./vreceipt.js";
 
-export { loadReceipts, queryReceipts } from "./graph.js";
-export type { VRRow, GraphFilters } from "./graph.js";
+export { loadReceipts, queryReceipts, buildViewData, buildGraph } from "./graph.js";
+export type { VRRow, GraphFilters, GraphNode, GraphEdge } from "./graph.js";
