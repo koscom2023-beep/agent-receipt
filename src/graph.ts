@@ -203,7 +203,13 @@ interface ViewRow {
   file: string; // 디렉터리 내 파일명 — receiptId 결측/중복 시 안정 식별자
   integrity: { contentHashOk: boolean; receiptIdOk: boolean; inputMatch: boolean | null; commitRecheck: boolean | null };
   claims: EnrichedClaim[];
+  unreachable: number; // --fetch 시 출처 도달 실패 수(영수증 summary 자가기록·없으면 0) — 예외 집계용
 }
+
+// ── 예외(exception) 목록 — 동결 enum · 검증트랙에서 이미 기록되는 사실의 분류일 뿐(발명 0·상태/워크플로 없음) ──
+// gate_bypassed(작업영수증 트랙)는 graph 가 verification-receipt 만 로드하므로 구조적으로 여기 없음(스펙 명시).
+export const EXCEPTION_KINDS = ["seal_failed", "ungrounded_decision", "source_unreachable"] as const;
+export type ExceptionKind = (typeof EXCEPTION_KINDS)[number];
 
 // Dashboard 요약(생성시점 집계·중립 카운트). total=고유 결과 수(receiptId 접힘 후) · fileCount=파일 수(접기 전) —
 //   같은 fixture 를 반복 재검증(dogfood 등)하면 total<fileCount 로 벌어짐. 정직: 둘 다 노출(하나 숨기지 않음).
@@ -214,6 +220,7 @@ export interface GraphSummary {
   mostFailedCheck: string | null;
   driftCount: number; // inputMatch===false 또는 commitRecheck===false
   tamperedCount: number; // contentHashOk/receiptIdOk 불일치
+  exceptions: Record<ExceptionKind, number>; // 동결 3종 분류 카운트(접힘 후·상태/워크플로 없음)
 }
 export function buildSummary(rows: ViewRow[]): GraphSummary {
   const folded = foldReceipts(rows);
@@ -232,7 +239,14 @@ export function buildSummary(rows: ViewRow[]): GraphSummary {
     for (const c of r.claims) for (const f of c.failures) checkFailures[f.check] = (checkFailures[f.check] ?? 0) + 1;
   }
   const entries = Object.entries(checkFailures).sort((a, b) => b[1] - a[1]);
-  return { total: folded.length, fileCount: rows.length, pass, fail, byModel, checkFailures, mostFailedCheck: entries[0]?.[0] ?? null, driftCount, tamperedCount };
+  // 예외 분류(동결 3종·접힘 후 — 반복 재검증이 예외 수를 부풀리지 않게): 전부 이미 기록된 사실의 재분류.
+  const exceptions: Record<ExceptionKind, number> = { seal_failed: 0, ungrounded_decision: 0, source_unreachable: 0 };
+  for (const r of folded) {
+    if (!r.integrity.contentHashOk || !r.integrity.receiptIdOk) exceptions.seal_failed++;
+    if (r.surface === "council" && r.verdict === "fail") exceptions.ungrounded_decision++;
+    exceptions.source_unreachable += r.unreachable ?? 0;
+  }
+  return { total: folded.length, fileCount: rows.length, pass, fail, byModel, checkFailures, mostFailedCheck: entries[0]?.[0] ?? null, driftCount, tamperedCount, exceptions };
 }
 
 // Failure-first: 실패 receipt 별 reason + 영향받은 claim. rows 는 접힘(fold) 후 — 같은 결과 반복은 occurrences 로.
@@ -270,6 +284,7 @@ export interface FailureEvent {
   fingerprint: string; // cfp1: — triage→history 를 잇는 키
   check: string;
   status: string;
+  isNew?: boolean; // graph view --base-dir 제공 시에만 존재 — base 대비 신규 실패(미제공=필드 자체 없음·구 출력 불변)
   reason: string;
 }
 export function buildFailureEvents(rows: ViewRow[]): FailureEvent[] {
@@ -583,6 +598,7 @@ export function buildViewData(dir: string): ViewRow[] {
         file: f,
         integrity,
         claims: enrichClaims(r.results),
+        unreachable: typeof (r.summary as { unreachable?: unknown } | undefined)?.unreachable === "number" ? ((r.summary as { unreachable: number }).unreachable) : 0,
       });
     } catch {
       /* skip */
@@ -591,9 +607,23 @@ export function buildViewData(dir: string): ViewRow[] {
   return out;
 }
 
-export function buildGraphHtml(data: ViewRow[]): string {
+// histories 사전계산 상한 — 지문 수가 이걸 넘으면 정렬순 앞쪽만 계산하고 *명시적으로* 잘림을 표기(silent cap 금지).
+const HISTORY_PRECOMPUTE_LIMIT = 500;
+
+export interface GraphHtmlOpts {
+  baseData?: ViewRow[]; // --base-dir 스냅샷 — 주면 신규 실패에 isNew 마킹(안 주면 출력 불변)
+  match?: DiffMatchMode; // 신규 판정 매칭(--match 승계·기본 statement)
+}
+export function buildGraphHtml(data: ViewRow[], opts: GraphHtmlOpts = {}): string {
   // 체크종류 목록 SSOT — 커널 CHECK_KINDS 를 그대로 임베드(하드코딩 중복 금지·새 체크 추가 시 여기 안 고쳐도 됨).
   const checkKindsJs = JSON.stringify(CHECK_KINDS);
+  // base 대비 신규 실패 키 집합(제공 시에만) — 기존 buildGraphDiff 재사용(새 비교 로직 0).
+  const match: DiffMatchMode = opts.match ?? "statement";
+  const newKeys: Set<string> | null = opts.baseData
+    ? new Set(buildGraphDiff(opts.baseData, data, { match }).newFailures.map((e) => failureKey(e, match)))
+    : null;
+  const markNew = <T extends FailureEvent>(events: T[]): T[] =>
+    newKeys ? events.map((e) => (newKeys.has(failureKey(e, match)) ? { ...e, isNew: true } : e)) : events;
   // Evidence Browser: Failure-first 순서 — Dashboard → Failures(indexes 탭: Check별/Model별/…) →
   //   Reason(→Evidence) → Affected Claim → 주장 이력(1클릭) → Receipt 상세(맨 마지막 drill-down).
   // 임베드 JSON + vanilla JS. 외부 리소스 0·서버 0(share-proof 패턴·이식 리포트).
@@ -601,10 +631,20 @@ export function buildGraphHtml(data: ViewRow[]): string {
   //   브라우저 JS 로 이력 로직을 재구현하지 않는다(두 진실원 금지). 대형 볼륨 처리=L8 하드닝.
   const fps = new Set<string>();
   for (const r of data) for (const c of r.claims) fps.add(c.fingerprint);
+  const fpSorted = [...fps].sort(cmpStr);
+  const fpShown = fpSorted.slice(0, HISTORY_PRECOMPUTE_LIMIT);
+  const historiesTruncated = fpSorted.length > fpShown.length ? { shown: fpShown.length, total: fpSorted.length } : null;
   const histories: Record<string, HistoryItem[]> = {};
-  for (const fp of [...fps].sort(cmpStr)) histories[fp] = buildHistory(data, { claim: fp }).timeline;
+  for (const fp of fpShown) histories[fp] = buildHistory(data, { claim: fp }).timeline;
+  const rawIndexes = buildIndexes(data);
+  const indexes = newKeys
+    ? (Object.fromEntries(Object.entries(rawIndexes).map(([grp, m]) => [grp, Object.fromEntries(Object.entries(m as Record<string, FailureEvent[]>).map(([k, evs]) => [k, markNew(evs)]))])) as unknown as GraphIndexes)
+    : rawIndexes;
+  const newFailureCount = newKeys ? newKeys.size : null;
   const embedded = JSON.stringify({
-    receipts: data, folded: foldReceipts(data), summary: buildSummary(data), indexes: buildIndexes(data), failures: buildFailures(data), histories,
+    receipts: data, folded: foldReceipts(data), summary: buildSummary(data), indexes, failures: buildFailures(data), histories,
+    ...(historiesTruncated ? { historiesTruncated } : {}),
+    ...(newFailureCount !== null ? { newFailureCount } : {}),
     subjects: buildSubjects(data),
   }).replace(/</g, "\\u003c");
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -643,6 +683,7 @@ header{padding:18px 24px;border-bottom:1px solid var(--border)}h1{margin:0;font-
 code{color:#7a3d00;background:#eceef1;padding:1px 6px;border-radius:5px;font-size:.9em;font-family:var(--font-mono)}.big{font-size:17px;font-weight:700}
 .badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;vertical-align:1px;font-family:var(--font-mono)}
 .badge.rep{background:var(--warn-bg);color:var(--warn)}
+.badge.new{background:var(--fail-bg);color:var(--fail)}
 </style></head><body>
 <header><h1>Evidence Browser</h1><div class="sub">요약 → 실패(이유·증거) → 영향받은 주장 → 이력(1클릭) → 영수증(맨 마지막) · 정적 파일·서버 없음 · 무결성=생성 시점 스냅샷</div></header>
 <div class="dash" id="dash"></div>
@@ -652,14 +693,18 @@ code{color:#7a3d00;background:#eceef1;padding:1px 6px;border-radius:5px;font-siz
 <span class="mut" id="count"></span></div><div class="list" id="list"></div></div>
 <div class="detail" id="detail"><div class="mut">← 왼쪽에서 실패(탭) 또는 Receipt 선택</div></div></div>
 <script id="ar-data" type="application/json">${embedded}</script>
-<script>const P=JSON.parse(document.getElementById('ar-data').textContent);const DATA=P.receipts||[],FOLDED=P.folded||DATA,S=P.summary||{},IX=P.indexes||{},HIST=P.histories||{},SUBS=P.subjects||[];
+<script>const P=JSON.parse(document.getElementById('ar-data').textContent);const DATA=P.receipts||[],FOLDED=P.folded||DATA,S=P.summary||{},IX=P.indexes||{},HIST=P.histories||{},SUBS=P.subjects||[],HTRUNC=P.historiesTruncated||null,NEWCNT=(typeof P.newFailureCount==='number'?P.newFailureCount:null);
 const el=id=>document.getElementById(id);
 const esc=x=>String(x==null?'':x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function ok(b){return b===true?'<span class="pass">✅</span>':b===false?'<span class="fail">❌</span>':'<span class="warn">⚠ n/a</span>'}
 function st(s){return s==='verified'||s==='valid'?'<span class="pass">✅ '+esc(s)+'</span>':s==='not-found'||s==='mismatch'||s==='invalid'?'<span class="fail">❌ '+esc(s)+'</span>':'<span class="mut">· '+esc(s||'-')+'</span>'}
 function cd(l,n,c){return '<div class="cd '+(c==='mut'?'':(c||''))+'"><div class="n">'+n+'</div><div class="l">'+l+'</div></div>'}
+const EXC=S.exceptions||{};const excTotal=Object.values(EXC).reduce((a,b)=>a+(b||0),0);
 el('dash').innerHTML=cd('전체',S.total||0)+(S.fileCount&&S.fileCount!==S.total?cd('파일',S.fileCount,'mut'):'')+cd('통과',S.pass||0,'pass')+cd('실패',S.fail||0,'fail')+
-cd('최다 실패',S.mostFailedCheck||'-')+cd('드리프트',S.driftCount||0,(S.driftCount?'warn':''))+cd('봉인확인실패',S.tamperedCount||0,(S.tamperedCount?'fail':''));
+(NEWCNT!==null?cd('신규 실패',NEWCNT,(NEWCNT?'fail':'pass')):'')+
+cd('최다 실패',S.mostFailedCheck||'-')+cd('드리프트',S.driftCount||0,(S.driftCount?'warn':''))+cd('봉인확인실패',S.tamperedCount||0,(S.tamperedCount?'fail':''))+
+(excTotal?cd('예외',excTotal,'warn'):'');
+if(HTRUNC){const n=document.createElement('div');n.className='mut';n.style.cssText='padding:4px 24px;font-size:12px';n.textContent='이력 사전계산 '+HTRUNC.shown+'/'+HTRUNC.total+'건 — 나머지는 CLI: graph history --claim <지문>';el('dash').after(n)}
 const TABS=[['subjects','상태판(Subjects)'],['byCheck','Check별 실패'],['byModel','Model별'],['bySubject','Subject별'],['byCommit','Commit별'],['byReason','Reason별'],['receipts','전체 영수증']];
 let cur=Object.keys(IX.byCheck||{}).length?'byCheck':'receipts';
 function tabs(){el('tabs').innerHTML=TABS.map(t=>{const n=t[0]==='receipts'?FOLDED.length:t[0]==='subjects'?SUBS.length:Object.keys(IX[t[0]]||{}).length;
@@ -678,6 +723,7 @@ if(!keys.length){L.innerHTML='<div class="row mut">실패 없음 — 전부 PASS
 keys.forEach(k=>{const h=document.createElement('div');h.className='ghead';h.innerHTML='<b>'+esc(k)+'</b> <span class="mut">'+g[k].length+'건</span>';L.appendChild(h);
 g[k].forEach(e=>{const r=document.createElement('div');r.className='row';
 r.innerHTML='<span class="fail">❌ '+esc(e.check)+'</span> <span class="mut">'+esc(e.status)+'</span> · claim #'+e.claimIndex+' '+esc((e.statement||'').slice(0,42))+
+(e.isNew?' <span class="badge new">신규</span>':'')+
 (e.occurrences>1?' <span class="badge rep">×'+e.occurrences+'</span>':'')+
 '<div class="mut">'+esc(e.reason)+' · '+esc(e.verifiedAt||'-')+' · <code>'+esc((e.receiptId||'').slice(0,10))+'…</code></div>';
 r.onclick=()=>failureDetail(e);L.appendChild(r)})})}
@@ -763,25 +809,34 @@ render(FOLDED.filter(d=>(!c||(d.commit||'').startsWith(c))&&(!i||(d.inputSha||''
  *  기본: 자체완결 정적 HTML 뷰어(서버 0·Failure-first). --format json: rich JSON = 소비자 API
  *  (summary·indexes·graph{nodes,edges}·failures·receipts — edge 실재 = Evidence Graph).
  */
-export function runGraphView(dirArg: string | undefined, outArg: string | undefined, format?: string): never {
+export function runGraphView(dirArg: string | undefined, outArg: string | undefined, format?: string, viewOpts: { baseDir?: string; match?: string } = {}): never {
   const dir = resolveDir(dirArg);
   const data = buildViewData(dir);
+  // --base-dir: 이전 스냅샷 대비 "신규 실패" 마킹(기존 buildGraphDiff 재사용) — 미제공 시 출력 불변.
+  const match: DiffMatchMode = viewOpts.match === "fingerprint" ? "fingerprint" : "statement";
+  const baseData = viewOpts.baseDir ? buildViewData(resolveDir(viewOpts.baseDir)) : undefined;
+  const baseNote = baseData ? ` · 신규(base 대비) 판정=${match}` : "";
   if (format === "json") {
-    const out = JSON.stringify({ dir, summary: buildSummary(data), indexes: buildIndexes(data), graph: buildGraph(data), failures: buildFailures(data), receipts: data }, null, 2);
+    const newKeys = baseData ? new Set(buildGraphDiff(baseData, data, { match }).newFailures.map((e) => failureKey(e, match))) : null;
+    const rawIndexes = buildIndexes(data);
+    const indexes = newKeys
+      ? (Object.fromEntries(Object.entries(rawIndexes).map(([grp, m]) => [grp, Object.fromEntries(Object.entries(m as Record<string, FailureEvent[]>).map(([k, evs]) => [k, evs.map((e) => (newKeys.has(failureKey(e, match)) ? { ...e, isNew: true } : e))]))])) as unknown as GraphIndexes)
+      : rawIndexes;
+    const out = JSON.stringify({ dir, summary: buildSummary(data), indexes, graph: buildGraph(data), failures: buildFailures(data), ...(newKeys ? { newFailureCount: newKeys.size } : {}), receipts: data }, null, 2);
     if (outArg) {
       const outP = isAbsolute(outArg) ? outArg : join(process.cwd(), outArg);
       writeFileSync(outP, out + "\n");
-      console.log(`Evidence Graph JSON: ${outArg}  (파일 ${data.length}개 중 고유 ${foldReceipts(data).length}건 · 소비자 API · summary+indexes+graph{nodes,edges}+failures+receipts)`);
+      console.log(`Evidence Graph JSON: ${outArg}  (파일 ${data.length}개 중 고유 ${foldReceipts(data).length}건${baseNote} · 소비자 API · summary+indexes+graph{nodes,edges}+failures+receipts)`);
     } else {
       console.log(out);
     }
     process.exit(0);
   }
-  const html = buildGraphHtml(data);
+  const html = buildGraphHtml(data, { baseData, match });
   if (outArg) {
     const outP = isAbsolute(outArg) ? outArg : join(process.cwd(), outArg);
     writeFileSync(outP, html);
-    console.log(`Evidence Browser: ${outArg}  (파일 ${data.length}개 중 고유 ${foldReceipts(data).length}건 · Failure-first · 자체완결 정적 HTML · 서버 0 · 브라우저로 열기)`);
+    console.log(`Evidence Browser: ${outArg}  (파일 ${data.length}개 중 고유 ${foldReceipts(data).length}건${baseNote} · Failure-first · 자체완결 정적 HTML · 서버 0 · 브라우저로 열기)`);
   } else {
     console.log(html);
   }
@@ -903,7 +958,7 @@ const normWs = (s: string): string => s.replace(/\s+/g, " ").trim();
 export type DiffMatchMode = "statement" | "fingerprint";
 // statement 모드=(입력sha∥subject)+정규화 statement+check / fingerprint 모드=cfp+check.
 // 정직: v1 fingerprint 도 텍스트 기반 — 어느 모드든 문구 변경은 "해소+신규" 로 갈라진다(의미 매칭 아님).
-const failureKey = (e: FailureEvent, match: DiffMatchMode): string =>
+export const failureKey = (e: FailureEvent, match: DiffMatchMode): string =>
   match === "fingerprint"
     ? [e.fingerprint, e.check].join("\u0000")
     : [e.inputSha ?? `subject:${e.subject}`, normWs(e.statement), e.check].join("\u0000"); // NUL 구분자(필드 충돌 방지)
@@ -1136,8 +1191,16 @@ export function runGraphHistory(dirArg: string | undefined, sel: { claim?: strin
         console.error(`graph history: fingerprint 없음: ${claimFp}`);
       } else {
         console.error(`graph history: 접두가 모호함(${r.candidates.length}개 일치) — 더 길게 지정하세요:`);
-        for (const c of r.candidates.slice(0, 10)) console.error(`  ${c}`);
+        // 후보별 컨텍스트(subject·최근 시각) — 어느 지문인지 사람이 고를 수 있게(#7 다듬기).
+        for (const c of r.candidates.slice(0, 10)) {
+          const rowsFor = rows.filter((row) => row.claims.some((cl) => cl.fingerprint === c));
+          const subj = rowsFor[0]?.subject ?? "";
+          const last = rowsFor.map((row) => row.verifiedAt).filter(Boolean).sort().pop() ?? "-";
+          console.error(`  ${c}`);
+          console.error(`    └ ${subj.slice(0, 40)} · 최근 ${last}(자가보고) · ${rowsFor.length}건`);
+        }
         if (r.candidates.length > 10) console.error(`  (외 ${r.candidates.length - 10}개)`);
+        console.error(`  → 위 전체 지문 하나를 복사해 --claim 에 그대로 넣으세요.`);
       }
       process.exit(2);
     }

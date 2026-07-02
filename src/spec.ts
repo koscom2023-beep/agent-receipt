@@ -1,4 +1,5 @@
 import { SCHEMA_VERSION, CHECK_KINDS, claimSchema } from "./evidencekernel.js";
+import { EXCEPTION_KINDS } from "./graph.js";
 
 const line = "─".repeat(56);
 
@@ -14,7 +15,8 @@ const line = "─".repeat(56);
  */
 export function runSpec(format: string | undefined): never {
   if (format === "json") {
-    console.log(JSON.stringify(claimSchema(), null, 2));
+    // exceptionKinds: graph 투영층의 동결 예외 분류(영수증에 이미 기록된 사실의 재분류·additive 필드).
+    console.log(JSON.stringify({ ...claimSchema(), exceptionKinds: [...EXCEPTION_KINDS] }, null, 2));
     process.exit(0);
   }
   console.log("");
@@ -25,6 +27,7 @@ export function runSpec(format: string | undefined): never {
   console.log("각 check 는 모델 밖 결정론(비-LLM)으로 pass/fail 판정된다.");
   console.log("");
   console.log(`검증 종류(check kinds): ${CHECK_KINDS.join(" · ")}`);
+  console.log(`예외 분류(exception kinds · graph 집계): ${EXCEPTION_KINDS.join(" · ")} — 기록된 사실의 재분류(상태/워크플로 없음)`);
   console.log("상태: verified · not-found · mismatch · invalid · no-source · no-basis · valid(advisory)");
   console.log("");
   console.log("보증 범위(정직·좁게):");

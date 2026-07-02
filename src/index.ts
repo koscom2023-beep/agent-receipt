@@ -32,11 +32,13 @@ export {
   buildGraph,
   buildSummary, buildFailures, buildFailureEvents, buildIndexes,
   filterFailureEvents,
-  buildGraphDiff,
+  buildGraphDiff, failureKey,
   buildHistory, resolveFingerprintPrefix,
   buildSubjects,
+  EXCEPTION_KINDS,
 } from "./graph.js";
 export type {
+  ExceptionKind,
   VRRow, GraphFilters,
   GraphNode, GraphEdge, GraphEdgeType, EdgeBasis,
   GraphSummary, FailureEntry, FailureEvent, GraphIndexes, FailureFilters,

@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import { writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadReceipts, queryReceipts, buildViewData, buildGraphHtml, buildSummary, buildFailures, buildIndexes, buildGraph, buildFailureEvents, filterFailureEvents, buildGraphDiff, buildHistory, resolveFingerprintPrefix, buildSubjects, foldReceipts, foldVRRows } from "../dist/graph.js";
+import { loadReceipts, queryReceipts, buildViewData, buildGraphHtml, buildSummary, buildFailures, buildIndexes, buildGraph, buildFailureEvents, filterFailureEvents, buildGraphDiff, buildHistory, resolveFingerprintPrefix, buildSubjects, foldReceipts, foldVRRows, EXCEPTION_KINDS, failureKey } from "../dist/graph.js";
 import { evaluateClaim, SCHEMA_VERSION, claimFingerprintV1 } from "../dist/index.js"; // SDK 배럴(L7 씨앗)
 
 let pass = 0;
@@ -522,6 +522,88 @@ check("HTML: 접힘 반영 — folded 임베드·반복배지(×N)·Files 카드
   assert.equal(emb.summary.fileCount, 2);
   assert.equal(emb.summary.total, 1);
   rmSync(dU, { recursive: true, force: true });
+});
+
+// ── Phase5: 예외 집계(동결 3종·접힘 후) ──
+check("exceptions: seal_failed(변조)·ungrounded_decision(council fail)·source_unreachable(summary) 집계", () => {
+  const dE = mkdtempSync(join(tmpdir(), "argraphExc-"));
+  // 정상 research pass
+  writeFileSync(join(dE, "a.json"), JSON.stringify({ kind: "verification-receipt", receiptId: "e1", subject: "S", verdict: "pass", surface: "research", input: { sha256: "s1" }, summary: { unreachable: 2 } }));
+  // council fail(=ungrounded)
+  writeFileSync(join(dE, "b.json"), JSON.stringify({ kind: "verification-receipt", receiptId: "e2", subject: "S", verdict: "fail", surface: "council", input: { sha256: "s2" } }));
+  // 변조: contentHash 불일치(임의 값)
+  writeFileSync(join(dE, "c.json"), JSON.stringify({ kind: "verification-receipt", receiptId: "e3", subject: "S", verdict: "pass", surface: "research", input: { sha256: "s3" }, contentHash: "deadbeef" }));
+  const sm = buildSummary(buildViewData(dE));
+  assert.equal(sm.exceptions.source_unreachable, 2);
+  assert.equal(sm.exceptions.ungrounded_decision, 1);
+  assert.ok(sm.exceptions.seal_failed >= 1);
+  rmSync(dE, { recursive: true, force: true });
+});
+check("exceptions: 접힘 후 계산 — 같은 결과 반복이 예외 수를 부풀리지 않음", () => {
+  const dE = mkdtempSync(join(tmpdir(), "argraphExc2-"));
+  const base = { kind: "verification-receipt", receiptId: "dupE", subject: "S", verdict: "fail", surface: "council", input: { sha256: "s" } };
+  writeFileSync(join(dE, "a.json"), JSON.stringify(base));
+  writeFileSync(join(dE, "b.json"), JSON.stringify(base));
+  writeFileSync(join(dE, "c.json"), JSON.stringify(base));
+  const sm = buildSummary(buildViewData(dE));
+  assert.equal(sm.exceptions.ungrounded_decision, 1); // 3파일 → 1건
+  rmSync(dE, { recursive: true, force: true });
+});
+check("EXCEPTION_KINDS: 동결 3종 정확히", () => assert.deepEqual([...EXCEPTION_KINDS], ["seal_failed", "ungrounded_decision", "source_unreachable"]));
+
+// ── Phase5: base-dir 신규 배지 ──
+check("buildGraphHtml(base 제공): 신규 실패만 isNew·'신규' 배지·카운트 임베드", () => {
+  const dB = mkdtempSync(join(tmpdir(), "argraphBase-"));
+  const dH = mkdtempSync(join(tmpdir(), "argraphHead-"));
+  const mkFail = (dir, name, id, stmt) => writeFileSync(join(dir, name), JSON.stringify({ kind: "verification-receipt", receiptId: id, subject: "S", verdict: "fail", surface: "research", input: { sha256: "sh" }, results: [{ statement: stmt, verdict: "failed", checks: { citation: "not-found" } }] }));
+  mkFail(dB, "old.json", "b1", "늘 있던 실패");
+  mkFail(dH, "old.json", "b1", "늘 있던 실패");
+  mkFail(dH, "new.json", "h2", "이번에 생긴 실패");
+  const baseData = buildViewData(dB);
+  const headData = buildViewData(dH);
+  const html = buildGraphHtml(headData, { baseData });
+  const emb = JSON.parse(html.match(/<script id="ar-data"[^>]*>(.*?)<\/script>/s)[1]);
+  assert.equal(emb.newFailureCount, 1);
+  const evs = emb.indexes.byCheck.citation;
+  const isNewFlags = evs.map((e) => [e.statement, e.isNew === true]);
+  assert.deepEqual(new Map(isNewFlags).get("이번에 생긴 실패"), true);
+  assert.notEqual(new Map(isNewFlags).get("늘 있던 실패"), true);
+  assert.ok(html.includes("신규")); // 배지 JS 존재
+  rmSync(dB, { recursive: true, force: true });
+  rmSync(dH, { recursive: true, force: true });
+});
+check("buildGraphHtml(base 미제공): isNew/newFailureCount 필드 자체 부재(구 출력 계약 불변)", () => {
+  const dH = mkdtempSync(join(tmpdir(), "argraphNoBase-"));
+  writeFileSync(join(dH, "f.json"), JSON.stringify({ kind: "verification-receipt", receiptId: "n1", subject: "S", verdict: "fail", surface: "research", input: { sha256: "s" }, results: [{ statement: "x", verdict: "failed", checks: { citation: "not-found" } }] }));
+  const emb = JSON.parse(buildGraphHtml(buildViewData(dH)).match(/<script id="ar-data"[^>]*>(.*?)<\/script>/s)[1]);
+  assert.ok(!("newFailureCount" in emb));
+  assert.ok(emb.indexes.byCheck.citation.every((e) => !("isNew" in e)));
+  rmSync(dH, { recursive: true, force: true });
+});
+
+// ── Phase5: histories 사전계산 상한(명시적 잘림) ──
+check("histories 상한: 지문 500 초과 → 500만 계산 + historiesTruncated 명시(silent cap 금지)", () => {
+  const dV = mkdtempSync(join(tmpdir(), "argraphVol-"));
+  const results = Array.from({ length: 510 }, (_, i) => ({ statement: `주장 ${i}`, verdict: "verified", checks: { citation: "verified" } }));
+  writeFileSync(join(dV, "big.json"), JSON.stringify({ kind: "verification-receipt", receiptId: "big1", subject: "V", verdict: "pass", surface: "research", input: { sha256: "s" }, results }));
+  const html = buildGraphHtml(buildViewData(dV));
+  const emb = JSON.parse(html.match(/<script id="ar-data"[^>]*>(.*?)<\/script>/s)[1]);
+  assert.equal(Object.keys(emb.histories).length, 500);
+  assert.deepEqual(emb.historiesTruncated, { shown: 500, total: 510 });
+  assert.ok(html.includes("이력 사전계산")); // 화면 안내 문자열
+  rmSync(dV, { recursive: true, force: true });
+});
+check("histories 상한 미달: historiesTruncated 필드 부재", () => {
+  const dV = mkdtempSync(join(tmpdir(), "argraphVol2-"));
+  writeFileSync(join(dV, "s.json"), JSON.stringify({ kind: "verification-receipt", receiptId: "sm1", subject: "V", verdict: "pass", surface: "research", input: { sha256: "s" }, results: [{ statement: "one", verdict: "verified", checks: { citation: "verified" } }] }));
+  const emb = JSON.parse(buildGraphHtml(buildViewData(dV)).match(/<script id="ar-data"[^>]*>(.*?)<\/script>/s)[1]);
+  assert.ok(!("historiesTruncated" in emb));
+  rmSync(dV, { recursive: true, force: true });
+});
+check("failureKey export: statement/fingerprint 두 모드 모두 문자열 키", () => {
+  const ev = { fingerprint: "cfp1:aa", check: "citation", inputSha: "s", subject: "S", statement: "x" };
+  assert.ok(typeof failureKey(ev, "statement") === "string" && typeof failureKey(ev, "fingerprint") === "string");
+  assert.notEqual(failureKey(ev, "statement"), failureKey(ev, "fingerprint"));
 });
 
 // ── L7 SDK 배럴: 외부 import 가능 ──
