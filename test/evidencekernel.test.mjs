@@ -2,7 +2,7 @@
 // `node test/evidencekernel.test.mjs`.
 import assert from "node:assert/strict";
 import { createHash, generateKeyPairSync, sign as edSign } from "node:crypto";
-import { normalizeForCitation, verifyCitationInText, citationStatus, parseNumbersFromText, recompute, numberStatus, canonicalizeDate, dateStatus, linkStatus, evaluateClaim, hashStatus, signatureStatus, CHECK_KINDS, claimSchema, SCHEMA_VERSION, commitStatus, fileChangedStatus, diffContainsStatus, schemaStatus, schemaMismatches, versionStatus, semverSatisfies, parseSemver, fileStatus, receiptStatus } from "../dist/evidencekernel.js";
+import { normalizeForCitation, verifyCitationInText, citationStatus, parseNumbersFromText, recompute, numberStatus, canonicalizeDate, dateStatus, linkStatus, evaluateClaim, hashStatus, signatureStatus, CHECK_KINDS, claimSchema, SCHEMA_VERSION, commitStatus, fileChangedStatus, diffContainsStatus, schemaStatus, schemaMismatches, versionStatus, semverSatisfies, parseSemver, fileStatus, receiptStatus, artifactStatus } from "../dist/evidencekernel.js";
 const sha = (s) => createHash("sha256").update(s).digest("hex");
 const kp = generateKeyPairSync("ed25519");
 const pubPem = kp.publicKey.export({ format: "pem", type: "spki" }).toString();
@@ -286,9 +286,35 @@ check("evaluateClaim: file+receipt dispatch + 실패 evidence 생성", () => {
   assert.equal(e.failed, true);
   assert.ok(e.evidence.file && e.evidence.receipt);
 });
-check("CHECK_KINDS: Phase5 2종(file/receipt) 포함 — 총 13종", () => {
-  assert.ok(CHECK_KINDS.includes("file") && CHECK_KINDS.includes("receipt"));
-  assert.equal(CHECK_KINDS.length, 13);
+check("CHECK_KINDS: Phase5 2종(file/receipt)+Phase6 artifact 포함 — 총 14종", () => {
+  assert.ok(CHECK_KINDS.includes("file") && CHECK_KINDS.includes("receipt") && CHECK_KINDS.includes("artifact"));
+  assert.equal(CHECK_KINDS.length, 14);
+});
+
+// ── Phase6: artifact 형태 검증(제약 ≥1 필수·크기 경계·sha) ──
+const artOk = { exists: true, sizeBytes: 1000, sha256: null };
+check("artifactStatus: 크기 경계 충족 → verified·미달/초과 → mismatch", () => {
+  assert.equal(artifactStatus("a.bin", { minBytes: 500 }, artOk), "verified");
+  assert.equal(artifactStatus("a.bin", { minBytes: 2000 }, artOk), "mismatch");
+  assert.equal(artifactStatus("a.bin", { maxBytes: 500 }, artOk), "mismatch");
+  assert.equal(artifactStatus("a.bin", { minBytes: 500, maxBytes: 1500 }, artOk), "verified");
+});
+check("artifactStatus: 부재 → not-found·제약 없음 → no-basis(file 체크와 중복 방지)", () => {
+  assert.equal(artifactStatus("a.bin", { minBytes: 1 }, { exists: false, sizeBytes: null, sha256: null }), "not-found");
+  assert.equal(artifactStatus("a.bin", {}, artOk), "no-basis");
+  assert.equal(artifactStatus(null, { minBytes: 1 }, artOk), "no-basis");
+  assert.equal(artifactStatus("a.bin", { minBytes: 1 }, null), "no-basis");
+});
+check("artifactStatus: sha 제약 일치/불일치·계산불가는 no-basis(거짓 mismatch 금지)", () => {
+  assert.equal(artifactStatus("a.bin", { sha256: "AABB" }, { exists: true, sizeBytes: 5, sha256: "aabb" }), "verified");
+  assert.equal(artifactStatus("a.bin", { sha256: "ffff" }, { exists: true, sizeBytes: 5, sha256: "aabb" }), "mismatch");
+  assert.equal(artifactStatus("a.bin", { sha256: "ffff" }, { exists: true, sizeBytes: 5, sha256: null }), "no-basis");
+});
+check("evaluateClaim: artifact dispatch + 실패 evidence(제약·실측 병기)", () => {
+  const e = evaluateClaim({ statedArtifact: "dist/out.js", artifactMinBytes: 100, artifactFacts: { exists: true, sizeBytes: 3, sha256: null } }, null);
+  assert.equal(e.artifact, "mismatch");
+  assert.equal(e.failed, true);
+  assert.ok(e.evidence.artifact && e.evidence.artifact.expected.includes("min 100B") && e.evidence.artifact.actual.includes("3B"));
 });
 
 if (fail.length) { console.error(`evidencekernel: ${pass} pass, ${fail.length} FAIL`); for (const f of fail) console.error("  ✗ " + f); process.exit(1); }

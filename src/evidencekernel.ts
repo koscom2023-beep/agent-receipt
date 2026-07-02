@@ -367,6 +367,36 @@ export function receiptStatus(statedReceiptId: string | null, facts: ReceiptFact
   return "verified";
 }
 
+// ── 산출물(artifact) 형태 검증 커널 (Phase6 · 스펙 Planned 'artifact' 이행) ──
+// 빌드/테스트 산출물이 주장한 *형태 제약*(크기 경계·sha256)과 정합한가 — 빈/절단 산출물 검출용.
+// 보증 정직(DA① 완화): "형태가 제약과 정합"이지 "산출물이 옳다/완전하다" 아님. 강한 보증이 필요하면 sha 제약 병용.
+// file(실재만)·hash(내용만)와의 중복 방지: 제약(min/max/sha) ≥1 없으면 no-basis — 경로만으론 판정 안 함.
+export interface ArtifactFacts {
+  exists: boolean;
+  sizeBytes: number | null;
+  sha256: string | null; // sha 제약이 있을 때만 surface 가 계산(대용량 기본 회피)
+}
+export interface ArtifactConstraints {
+  minBytes?: number;
+  maxBytes?: number;
+  sha256?: string;
+}
+export type ArtifactStatus = "verified" | "not-found" | "mismatch" | "no-basis";
+export function artifactStatus(statedArtifact: string | null, c: ArtifactConstraints, facts: ArtifactFacts | null): ArtifactStatus {
+  if (!statedArtifact) return "no-basis";
+  const hasConstraint = typeof c.minBytes === "number" || typeof c.maxBytes === "number" || (typeof c.sha256 === "string" && c.sha256.length > 0);
+  if (!hasConstraint) return "no-basis"; // 경로만=file 체크의 일 — 여긴 형태 제약이 있어야 의미
+  if (facts === null) return "no-basis";
+  if (!facts.exists) return "not-found";
+  if (typeof c.minBytes === "number" && (facts.sizeBytes === null || facts.sizeBytes < c.minBytes)) return "mismatch";
+  if (typeof c.maxBytes === "number" && (facts.sizeBytes === null || facts.sizeBytes > c.maxBytes)) return "mismatch";
+  if (typeof c.sha256 === "string" && c.sha256) {
+    if (typeof facts.sha256 !== "string") return "no-basis"; // 계산 불가 → 무판정(거짓 mismatch 금지)
+    if (facts.sha256.toLowerCase() !== c.sha256.trim().toLowerCase()) return "mismatch";
+  }
+  return "verified";
+}
+
 // ── 통합 claim 평가 (표준 포맷의 단일 의미론 — research·council 이 공유) ──
 // 코드가 곧 포맷 스펙: 한 주장이 담은 각 typed 근거(인용/수치/날짜/링크)를 한 곳에서 결정론 판정.
 export interface EvalClaimInput {
@@ -397,6 +427,11 @@ export interface EvalClaimInput {
   fileExists?: unknown; // surface 사전조회 사실(불리언). undefined/null=조회 불가
   statedReceiptId?: unknown; // receipt: 인용한 영수증 id(접두 ≥8자)
   receiptFacts?: unknown; // surface 사전조회: ReceiptFacts(기존 replay 재계산 결과)
+  statedArtifact?: unknown; // artifact: 산출물 경로 — 아래 제약 ≥1 필수(없으면 no-basis)
+  artifactMinBytes?: unknown; // 형태 제약: 최소 크기
+  artifactMaxBytes?: unknown; // 형태 제약: 최대 크기
+  artifactSha256?: unknown; // 형태 제약: 내용 해시
+  artifactFacts?: unknown; // surface 사전조회: ArtifactFacts(exists·sizeBytes·sha256[요구 시만])
 }
 // Evidence = 실패 check 의 *증명*(expected↔actual). reason 은 설명, evidence 는 결정론 비교 근거.
 export interface CheckEvidence {
@@ -417,6 +452,7 @@ export interface ClaimEvaluation {
   version: VersionStatus | null;
   file: FileStatus | null;
   receipt: ReceiptStatus | null;
+  artifact: ArtifactStatus | null;
   results: Record<string, string | null>; // 레지스트리 전체 결과(확장 검증기 포함)
   evidence: Record<string, CheckEvidence>; // 실패 check 별 expected/actual(결정론·증명)
   failed: boolean; // 어느 근거든 불일치(not-found/mismatch/invalid)
@@ -455,6 +491,7 @@ export const CHECK_REGISTRY: CheckDescriptor[] = [
   { kind: "version", positive: true, run: (c) => (typeof c.statedPackage === "string" ? versionStatus(c.statedPackage, typeof c.statedPackageVersion === "string" ? c.statedPackageVersion : null, c.dependencyMap && typeof c.dependencyMap === "object" ? (c.dependencyMap as Record<string, unknown>) : null) : null) },
   { kind: "file", positive: true, run: (c) => (typeof c.statedFile === "string" ? fileStatus(c.statedFile, typeof c.fileExists === "boolean" ? c.fileExists : null) : null) },
   { kind: "receipt", positive: true, run: (c) => (typeof c.statedReceiptId === "string" ? receiptStatus(c.statedReceiptId, c.receiptFacts && typeof c.receiptFacts === "object" ? (c.receiptFacts as ReceiptFacts) : null) : null) },
+  { kind: "artifact", positive: true, run: (c) => (typeof c.statedArtifact === "string" ? artifactStatus(c.statedArtifact, { minBytes: typeof c.artifactMinBytes === "number" ? c.artifactMinBytes : undefined, maxBytes: typeof c.artifactMaxBytes === "number" ? c.artifactMaxBytes : undefined, sha256: typeof c.artifactSha256 === "string" ? c.artifactSha256 : undefined }, c.artifactFacts && typeof c.artifactFacts === "object" ? (c.artifactFacts as ArtifactFacts) : null) : null) },
 ];
 export const CHECK_KINDS: string[] = CHECK_REGISTRY.map((d) => d.kind);
 const FAILED_STATUSES = new Set(["not-found", "mismatch", "invalid"]);
@@ -519,6 +556,17 @@ function evidenceFor(c: EvalClaimInput, source: string | null, results: Record<s
   if (results.file === "not-found" && typeof c.statedFile === "string") {
     ev.file = { expected: c.statedFile, actual: "디스크에 없음 (file does not exist)" };
   }
+  if ((results.artifact === "mismatch" || results.artifact === "not-found") && typeof c.statedArtifact === "string") {
+    const f = c.artifactFacts as ArtifactFacts | null | undefined;
+    const constraints: string[] = [];
+    if (typeof c.artifactMinBytes === "number") constraints.push(`min ${c.artifactMinBytes}B`);
+    if (typeof c.artifactMaxBytes === "number") constraints.push(`max ${c.artifactMaxBytes}B`);
+    if (typeof c.artifactSha256 === "string") constraints.push(`sha256 ${c.artifactSha256.slice(0, 12)}…`);
+    ev.artifact = {
+      expected: `${c.statedArtifact} (${constraints.join(" · ")})`,
+      actual: !f?.exists ? "산출물 없음 (artifact does not exist)" : `크기 ${f.sizeBytes ?? "?"}B${f.sha256 ? ` · sha256 ${f.sha256.slice(0, 12)}…` : ""}`,
+    };
+  }
   if (results.receipt === "mismatch" && typeof c.statedReceiptId === "string") {
     const f = c.receiptFacts as ReceiptFacts | null | undefined;
     let actual = "인용한 영수증 파일 없음 (cited receipt not found)";
@@ -556,6 +604,7 @@ export function evaluateClaim(c: EvalClaimInput, source: string | null): ClaimEv
     version: (results.version as VersionStatus) ?? null,
     file: (results.file as FileStatus) ?? null,
     receipt: (results.receipt as ReceiptStatus) ?? null,
+    artifact: (results.artifact as ArtifactStatus) ?? null,
     results,
     evidence: evidenceFor(c, source, results),
     failed,
@@ -598,6 +647,10 @@ export function claimSchema(): Record<string, unknown> {
       statedPackageVersion: { type: "string", description: "이 버전인가(단일 비교자 ^ ~ >= > <= < 범위충족 판정 · prerelease/복합범위=no-basis)" },
       statedFile: { type: "string", description: "file: 이 파일이 디스크에 실재하나(존재만 — 내용 대조는 citation/hash)" },
       statedReceiptId: { type: "string", description: "receipt: 인용한 Verification Receipt 의 id 접두(≥8자) — 실재+봉인 재계산 일치 판정(Work Receipt 는 v1 미지원=no-basis)" },
+      statedArtifact: { type: "string", description: "artifact: 산출물 경로 — 형태 제약(artifactMinBytes/MaxBytes/Sha256) ≥1 필수(제약 정합이지 산출물 정당성 보증 아님)" },
+      artifactMinBytes: { type: "number" },
+      artifactMaxBytes: { type: "number" },
+      artifactSha256: { type: "string" },
     },
   };
 }

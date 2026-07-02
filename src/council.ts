@@ -3,8 +3,8 @@ import { isAbsolute, join } from "node:path";
 import { createHash } from "node:crypto";
 import { evaluateClaim, claimFingerprintV1 } from "./evidencekernel.js";
 import { writeVerificationReceipt, tierProvenance } from "./vreceipt.js";
-import { resolveCommitExists, resolveChangedFiles, resolveDiffText, resolveDependencyMap, resolveFileExists, resolveReceiptFacts } from "./gitfacts.js";
-import type { ReceiptFacts } from "./evidencekernel.js";
+import { resolveCommitExists, resolveChangedFiles, resolveDiffText, resolveDependencyMap, resolveFileExists, resolveReceiptFacts, resolveArtifactFacts } from "./gitfacts.js";
+import type { ReceiptFacts, ArtifactFacts } from "./evidencekernel.js";
 
 const line = "─".repeat(56);
 
@@ -46,6 +46,10 @@ interface SupportingClaim {
   statedFile?: unknown;
   statedReceiptId?: unknown;
   receiptFile?: unknown;
+  statedArtifact?: unknown;
+  artifactMinBytes?: unknown;
+  artifactMaxBytes?: unknown;
+  artifactSha256?: unknown;
 }
 interface Decision {
   id?: unknown;
@@ -84,6 +88,7 @@ interface ResolvedFacts {
   dependencyMap?: Record<string, string> | null;
   fileExists?: boolean | null;
   receiptFacts?: ReceiptFacts | null;
+  artifactFacts?: ArtifactFacts | null;
 }
 function resolveFacts(c: SupportingClaim): ResolvedFacts {
   const facts: ResolvedFacts = {};
@@ -104,6 +109,10 @@ function resolveFacts(c: SupportingClaim): ResolvedFacts {
   if (typeof c.receiptFile === "string" && c.receiptFile) {
     const p = isAbsolute(c.receiptFile) ? c.receiptFile : join(process.cwd(), c.receiptFile);
     facts.receiptFacts = resolveReceiptFacts(p);
+  }
+  if (typeof c.statedArtifact === "string" && c.statedArtifact) {
+    const p = isAbsolute(c.statedArtifact) ? c.statedArtifact : join(process.cwd(), c.statedArtifact);
+    facts.artifactFacts = resolveArtifactFacts(p, typeof c.artifactSha256 === "string" && c.artifactSha256.length > 0);
   }
   return facts;
 }
@@ -157,6 +166,7 @@ export function gradeDecision(dec: Decision): {
         statedPackage: c.statedPackage, statedPackageVersion: c.statedPackageVersion, dependencyMap: facts.dependencyMap ?? null,
         statedFile: c.statedFile, fileExists: facts.fileExists ?? null,
         statedReceiptId: c.statedReceiptId, receiptFacts: facts.receiptFacts ?? null,
+        statedArtifact: c.statedArtifact, artifactMinBytes: c.artifactMinBytes, artifactMaxBytes: c.artifactMaxBytes, artifactSha256: c.artifactSha256, artifactFacts: facts.artifactFacts ?? null,
       },
       resolveSource(c),
     );

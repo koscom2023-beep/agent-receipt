@@ -73,6 +73,7 @@ export {
   parseSemver,
   fileStatus,
   receiptStatus,
+  artifactStatus,
 } from "./evidencekernel.js";
 export type {
   CitationStatus,
@@ -90,5 +91,8 @@ export type {
   FileStatus,
   ReceiptStatus,
   ReceiptFacts,
+  ArtifactStatus,
+  ArtifactFacts,
+  ArtifactConstraints,
   CheckDescriptor,
 } from "./evidencekernel.js";

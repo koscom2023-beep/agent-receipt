@@ -5,8 +5,8 @@ import {
   evaluateClaim, claimFingerprintV1,
 } from "./evidencekernel.js";
 import { writeVerificationReceipt, tierProvenance } from "./vreceipt.js";
-import { resolveCommitExists, resolveChangedFiles, resolveDiffText, resolveDependencyMap, resolveFileExists, resolveReceiptFacts } from "./gitfacts.js";
-import type { ReceiptFacts } from "./evidencekernel.js";
+import { resolveCommitExists, resolveChangedFiles, resolveDiffText, resolveDependencyMap, resolveFileExists, resolveReceiptFacts, resolveArtifactFacts } from "./gitfacts.js";
+import type { ReceiptFacts, ArtifactFacts } from "./evidencekernel.js";
 
 // 인용/수치 검증 커널은 공유 Evidence Kernel(evidencekernel.ts)에 있다(research·council 이 같은 코어 재사용).
 // 여기선 그 커널을 파일 IO(출처 스냅샷)·라이브 fetch·CLI 출력에 엮는 surface 만 담당한다.
@@ -58,6 +58,10 @@ interface ResearchClaim {
   statedFile?: unknown; // file 검증(선택, Phase5) — 이 파일이 실재하나(존재만)
   statedReceiptId?: unknown; // receipt 검증(선택, Phase5) — 인용한 영수증 id 접두(≥8자)
   receiptFile?: unknown; // 인용한 영수증 파일 경로(surface 가 읽어 replay 재계산)
+  statedArtifact?: unknown; // artifact 검증(선택, Phase6) — 산출물 경로+형태 제약 ≥1
+  artifactMinBytes?: unknown;
+  artifactMaxBytes?: unknown;
+  artifactSha256?: unknown;
 }
 interface ResearchReport {
   schemaVersion?: unknown;
@@ -108,6 +112,7 @@ interface ResolvedFacts {
   dependencyMap?: Record<string, string> | null;
   fileExists?: boolean | null;
   receiptFacts?: ReceiptFacts | null;
+  artifactFacts?: ArtifactFacts | null;
 }
 function resolveFacts(claim: ResearchClaim): ResolvedFacts {
   const facts: ResolvedFacts = {};
@@ -128,6 +133,10 @@ function resolveFacts(claim: ResearchClaim): ResolvedFacts {
   if (typeof claim.receiptFile === "string" && claim.receiptFile) {
     const p = isAbsolute(claim.receiptFile) ? claim.receiptFile : join(process.cwd(), claim.receiptFile);
     facts.receiptFacts = resolveReceiptFacts(p);
+  }
+  if (typeof claim.statedArtifact === "string" && claim.statedArtifact) {
+    const p = isAbsolute(claim.statedArtifact) ? claim.statedArtifact : join(process.cwd(), claim.statedArtifact);
+    facts.artifactFacts = resolveArtifactFacts(p, typeof claim.artifactSha256 === "string" && claim.artifactSha256.length > 0);
   }
   return facts;
 }
@@ -297,6 +306,7 @@ export async function runResearchVerify(
         statedPackage: claim.statedPackage, statedPackageVersion: claim.statedPackageVersion, dependencyMap: facts.dependencyMap ?? null,
         statedFile: claim.statedFile, fileExists: facts.fileExists ?? null,
         statedReceiptId: claim.statedReceiptId, receiptFacts: facts.receiptFacts ?? null,
+        statedArtifact: claim.statedArtifact, artifactMinBytes: claim.artifactMinBytes, artifactMaxBytes: claim.artifactMaxBytes, artifactSha256: claim.artifactSha256, artifactFacts: facts.artifactFacts ?? null,
       },
       source,
     );
@@ -325,6 +335,7 @@ export async function runResearchVerify(
     if (typeof claim.statedPackage === "string") console.log(`    버전 : ${claim.statedPackage}@${String(claim.statedPackageVersion)}  → ${ev.version}`);
     if (typeof claim.statedFile === "string") console.log(`    파일 : ${claim.statedFile}  → ${ev.file}`);
     if (typeof claim.statedReceiptId === "string") console.log(`    영수증 : ${String(claim.statedReceiptId).slice(0, 12)}…  → ${ev.receipt}`);
+    if (typeof claim.statedArtifact === "string") console.log(`    산출물 : ${claim.statedArtifact}  → ${ev.artifact}`);
     console.log(
       ev.failed
         ? "    ✗ FAIL — 근거가 출처와 불일치(날조/수치·날짜오류)"

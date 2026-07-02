@@ -174,6 +174,19 @@ check("stripHtml: 엔티티 디코드", () => assert.ok(stripHtml("a &amp; b &lt
     writeFileSync(badReport, JSON.stringify({ query: "f", claims: [{ statement: "부재", statedFile: join(dir, "ghost.txt") }] }));
     assert.equal(runCli(badReport, join(dir, "fb.json")).code, 1);
   });
+  check("artifact 체크 e2e: 크기 제약 충족 exit 0·미달 exit 1(빈/절단 산출물 검출)", () => {
+    const artPath = join(dir, "bundle.js");
+    writeFileSync(artPath, "x".repeat(300)); // 300B 산출물
+    const okR = join(dir, "art-ok.json");
+    writeFileSync(okR, JSON.stringify({ query: "a", claims: [{ statement: "번들 정상 크기", statedArtifact: artPath, artifactMinBytes: 100 }] }));
+    assert.equal(runCli(okR, join(dir, "ao.json")).code, 0);
+    const badR = join(dir, "art-bad.json");
+    writeFileSync(badR, JSON.stringify({ query: "a", claims: [{ statement: "번들이 최소 1KB 라는 주장", statedArtifact: artPath, artifactMinBytes: 1024 }] }));
+    assert.equal(runCli(badR, join(dir, "ab.json")).code, 1);
+    const nbR = join(dir, "art-nb.json");
+    writeFileSync(nbR, JSON.stringify({ query: "a", claims: [{ statement: "제약 없는 경로만(no-basis→advisory)", statedArtifact: artPath }] }));
+    assert.equal(runCli(nbR, join(dir, "an.json")).code, 0); // no-basis=advisory·게이트 아님
+  });
   check("receipt 체크 e2e: 진짜 영수증 인용 verified·변조본 인용 exit 1", () => {
     // out-js.json 은 위에서 CLI 가 실제 봉인한 영수증 — 그 id 를 읽어 인용.
     const vr = JSON.parse(readFileSync(join(dir, "out-js.json"), "utf8"));

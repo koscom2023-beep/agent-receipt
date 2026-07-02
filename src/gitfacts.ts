@@ -1,7 +1,8 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { replayVerificationReceipt } from "./vreceipt.js";
-import type { ReceiptFacts } from "./evidencekernel.js";
+import type { ReceiptFacts, ArtifactFacts } from "./evidencekernel.js";
 
 // ── git/의존성 사실 조회 surface (Phase4) ──
 // 커널(evidencekernel.ts)은 이 모듈을 모른다(core ↛ surface 불변식 유지) — 여기서 IO(git 프로세스 실행·
@@ -89,6 +90,19 @@ export function resolveReceiptFacts(receiptFile: string): ReceiptFacts {
     receiptIdOk: replay.receiptIdOk,
     actualReceiptId: typeof r.receiptId === "string" ? r.receiptId : null,
   };
+}
+
+// 산출물 형태 사실(exists·크기·sha[요구 시만 계산 — 대용량 기본 회피]). 접근 예외 → null(no-basis).
+export function resolveArtifactFacts(path: string, needSha: boolean): ArtifactFacts | null {
+  try {
+    if (!existsSync(path)) return { exists: false, sizeBytes: null, sha256: null };
+    const st = statSync(path);
+    let sha: string | null = null;
+    if (needSha) sha = createHash("sha256").update(readFileSync(path)).digest("hex");
+    return { exists: true, sizeBytes: st.size, sha256: sha };
+  } catch {
+    return null;
+  }
 }
 
 // package.json(류)을 읽어 dependencies+devDependencies+peer+optional 을 이름→버전 맵으로 병합.
