@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "decision/1",
+  "question": "dogfood: council decision sample (stable bytes — do not edit)",
+  "provenance": { "model": "dogfood-fixture" },
+  "decisions": [
+    {
+      "id": "D1",
+      "statement": "Adopt the retry budget because measured error rate is 3 percent.",
+      "supportingClaims": [
+        {
+          "quotedText": "measured error rate is 3 percent",
+          "sourceText": "After the fix, the measured error rate is 3 percent over 10k calls."
+        }
+      ],
+      "dissent": "One member argued the sample window is too short."
+    }
+  ]
+}

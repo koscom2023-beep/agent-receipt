@@ -1,0 +1,13 @@
+{
+  "query": "dogfood: passing research sample (stable bytes — do not edit; input.sha256 identity depends on this file)",
+  "provenance": { "model": "dogfood-fixture" },
+  "claims": [
+    {
+      "statement": "The report states that the cache hit rate was 52 percent.",
+      "quotedText": "the cache hit rate was 52 percent",
+      "sourceText": "In the March run, the cache hit rate was 52 percent across all lanes.",
+      "statedValue": 52,
+      "eps": 0
+    }
+  ]
+}

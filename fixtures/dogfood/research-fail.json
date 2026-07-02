@@ -1,0 +1,11 @@
+{
+  "query": "dogfood: failing research sample (fabricated quote — stable bytes, do not edit)",
+  "provenance": { "model": "dogfood-fixture" },
+  "claims": [
+    {
+      "statement": "The report claims latency dropped to 10 ms.",
+      "quotedText": "latency dropped to 10 ms",
+      "sourceText": "Median latency stayed flat at 42 ms throughout the quarter."
+    }
+  ]
+}
