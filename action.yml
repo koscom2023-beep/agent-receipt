@@ -1,0 +1,40 @@
+# agent-receipt verify action (repo-local · composite)
+# PR 에서 AI 보고서의 근거를 기계 검증하고, 날조(failed check)가 있으면 잡을 잡는다(exit 1 전파).
+# 회의 결정(D5): 마켓플레이스 등록은 하지 않음(리포 내 사용 우선) — uses 로 직접 참조:
+#   - uses: koscom2023-beep/agent-receipt@v0.1-verify-check-split
+#     with: { report: docs/research-claims.json }
+# 선택 base-dir 을 주면 graph diff 회귀 게이트까지(신규 실패>0 → 실패).
+name: "agent-receipt verify"
+description: "Deterministically verify an AI report's claims (citations, numbers, git facts, versions…) — exit 1 on fabrication. Optional regression gate vs a base receipt dir."
+branding:
+  icon: "check-circle"
+  color: "blue"
+inputs:
+  report:
+    description: "Path to the claims report (.json or frozen-grammar .md)"
+    required: true
+  out:
+    description: "Where to write the sealed Verification Receipt"
+    required: false
+    default: ".agent-guard/vreceipts/ci-receipt.json"
+  base-dir:
+    description: "Optional: previous receipts dir — enables the graph diff regression gate (exit 1 on NEW failures)"
+    required: false
+    default: ""
+  version:
+    description: "agent-receipt version to run (pinned for reproducibility)"
+    required: false
+    default: "0.13.0"
+runs:
+  using: "composite"
+  steps:
+    - name: Verify claims (exit 1 on any fabricated/failed check)
+      shell: bash
+      run: |
+        mkdir -p "$(dirname "${{ inputs.out }}")"
+        npx -y @promptia-labs/agent-receipt@${{ inputs.version }} research verify --file "${{ inputs.report }}" --out "${{ inputs.out }}"
+    - name: Regression gate (only when base-dir given — exit 1 on NEW failures vs base)
+      if: ${{ inputs.base-dir != '' }}
+      shell: bash
+      run: |
+        npx -y @promptia-labs/agent-receipt@${{ inputs.version }} graph diff --base-dir "${{ inputs.base-dir }}" --head-dir "$(dirname "${{ inputs.out }}")"

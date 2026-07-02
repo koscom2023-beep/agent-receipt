@@ -59,15 +59,36 @@ footer a{color:var(--accent);text-decoration:none}
   <div class="sub">진짜 커널을 브라우저에서 직접 실행합니다 — CLI가 쓰는 바로 그 코드(기계 변환·동등성 테스트로 잠금). 아무것도 서버로 가지 않습니다.</div>
   <div class="honest"><b>Honest scope:</b> this page runs the <b>pure</b> kinds — citation · number · date · link · schema · version(semver). Crypto kinds (hash · signature · receipt) and git-fact kinds (commit · fileChanged · diffContains · file · artifact) need your machine's crypto/git/filesystem — they run in the CLI. <span style="color:var(--mut)">암호·git 계열은 CLI 몫(브라우저가 재현하면 그게 거짓이라서).</span></div>
 
-  <div class="presets">
-    <button class="preset" data-p="soc2">📋 SOC2 quiet upgrade (citation)</button>
-    <button class="preset" data-p="sum">🧮 sum recompute (number)</button>
-    <button class="preset" data-p="semver">📦 semver range (version)</button>
-    <button class="preset" data-p="schema">🧩 required field (schema)</button>
-    <button class="preset" data-p="date">📅 format-agnostic date</button>
+  <div class="presets" id="presets">
+    <button class="preset" data-p="soc2">📋 SOC2 quiet upgrade</button>
+    <button class="preset" data-p="numdrift">🔢 number drift (52%→58%)</button>
+    <button class="preset" data-p="datedrift">📅 date drift</button>
+    <button class="preset" data-p="verdrift">📦 version drift (^1 vs 2.0)</button>
+    <button class="preset" data-p="sum">🧮 sum recompute</button>
+    <button class="preset" data-p="semver">✅ semver satisfied</button>
+    <button class="preset" data-p="schema">🧩 missing required field</button>
+    <button class="preset" data-p="date">🗓 format-agnostic date</button>
   </div>
 
-  <div class="cols">
+  <div class="modes" style="display:flex;gap:8px;margin:0 0 12px">
+    <button class="preset" id="mode-simple" style="border-color:var(--accent);color:var(--accent)">붙여넣기 모드 (simple)</button>
+    <button class="preset" id="mode-json">JSON 모드 (full)</button>
+  </div>
+
+  <div id="simple-ui">
+    <div class="cols">
+      <div>
+        <label>AI가 말한 문장 · what the AI claimed (as a quote)</label>
+        <textarea id="s-quote" style="min-height:90px" spellcheck="false" placeholder='예: "has passed a SOC 2 Type II audit"'></textarea>
+      </div>
+      <div>
+        <label>출처 붙여넣기 · paste the source it cited</label>
+        <textarea id="s-source" style="min-height:90px" spellcheck="false" placeholder="출처 문서 원문을 그대로 붙여넣으세요"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <div class="cols" id="json-ui" style="display:none">
     <div>
       <label>Claim (JSON — same fields as the CLI · <a href="https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/EVIDENCE_SPEC.md" style="color:var(--accent)">spec</a>)</label>
       <textarea id="claim" spellcheck="false"></textarea>
@@ -79,7 +100,8 @@ footer a{color:var(--accent);text-decoration:none}
   </div>
   <div class="run">
     <button class="go" id="go">Verify ▸</button>
-    <span class="mut" style="font-size:13px">runs <code style="font-family:var(--font-mono)">evaluateClaim(claim, source)</code> locally</span>
+    <button class="preset" id="share" title="URL 해시(#)에만 담김 — 서버로 전송되지 않음">🔗 판정 공유 링크 복사</button>
+    <span class="mut" style="font-size:13px" id="sharenote">runs locally · 공유 링크도 # 해시라 서버로 안 감</span>
   </div>
   <div class="out" id="out"><span class="mut">Pick a preset or write a claim, then Verify.</span></div>
 
@@ -96,23 +118,87 @@ const PRESETS = {
     claim: { statement: "Acme has passed a SOC 2 Type II audit", quotedText: "has passed a SOC 2 Type II audit" },
     source: "Vendor security review — Acme Cloud\n\nAcme Cloud completed a SOC 2 Type I audit in March 2026. A Type II audit is scheduled for Q1 2027 but has not started."
   },
+  numdrift: {
+    claim: { statement: "the cache hit rate was 58%", statedValue: 58 },
+    source: "Perf report: across all lanes the cache hit rate was 52 percent (52%) in June."
+  },
+  datedrift: {
+    claim: { statement: "the audit finished on 2026-04-01", statedDate: "2026-04-01" },
+    source: "The audit was completed on Mar 1, 2026 by the external assessor."
+  },
+  verdrift: {
+    claim: { statement: "we run zod 2.0.0 within the declared range", statedPackage: "zod", statedPackageVersion: "2.0.0", dependencyMap: { zod: "^1.4.0" } },
+    source: ""
+  },
   sum: { claim: { statement: "the three lanes total 42", statedValue: 42, op: "sum", operands: [11, 14, 16] }, source: "" },
   semver: { claim: { statement: "installed zod 3.24.0 satisfies the declared range", statedPackage: "zod", statedPackageVersion: "3.24.0", dependencyMap: { zod: "^3.23.8" } }, source: "" },
   schema: { claim: { statement: "config matches the required shape", schemaData: { enabled: true }, schemaDef: { type: "object", required: ["enabled", "retries"] } }, source: "" },
   date: { claim: { statement: "the audit date matches", statedDate: "2026-03-01" }, source: "The audit was completed on Mar 1, 2026 by the assessor." },
 };
-document.querySelectorAll(".preset").forEach(b => b.onclick = () => {
-  const p = PRESETS[b.dataset.p];
+let mode = "simple";
+function setMode(m) {
+  mode = m;
+  $("simple-ui").style.display = m === "simple" ? "" : "none";
+  $("json-ui").style.display = m === "json" ? "grid" : "none";
+  $("mode-simple").style.borderColor = m === "simple" ? "var(--accent)" : "var(--border)";
+  $("mode-simple").style.color = m === "simple" ? "var(--accent)" : "var(--text)";
+  $("mode-json").style.borderColor = m === "json" ? "var(--accent)" : "var(--border)";
+  $("mode-json").style.color = m === "json" ? "var(--accent)" : "var(--text)";
+}
+$("mode-simple").onclick = () => setMode("simple");
+$("mode-json").onclick = () => setMode("json");
+
+function loadPreset(key) {
+  const p = PRESETS[key];
+  if (!p) return;
+  setMode("json"); // 프리셋은 필드가 다양해 JSON 모드로 정확히 노출(간단 모드는 붙여넣기 전용)
   $("claim").value = JSON.stringify(p.claim, null, 2);
   $("source").value = p.source;
   run();
-});
+}
+document.querySelectorAll("#presets .preset").forEach(b => b.onclick = () => loadPreset(b.dataset.p));
+
+// 공유 링크: URL 해시(#s=base64url) — fragment 는 서버로 전송되지 않음. 8KB 초과=거부(침묵 잘림 금지).
+const b64u = (str) => btoa(unescape(encodeURIComponent(str))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const unb64u = (str) => decodeURIComponent(escape(atob(str.replace(/-/g, "+").replace(/_/g, "/"))));
+function currentPayload() {
+  if (mode === "simple") return { m: "s", q: $("s-quote").value, s: $("s-source").value };
+  return { m: "j", c: $("claim").value, s: $("source").value };
+}
+$("share").onclick = async () => {
+  const enc = b64u(JSON.stringify(currentPayload()));
+  if (enc.length > 8192) { $("sharenote").textContent = "⚠ 내용이 8KB를 넘어 링크에 못 담습니다(잘라서 보내지 않음 — 출처를 줄여주세요)"; return; }
+  const link = location.origin + location.pathname + "#s=" + enc;
+  try { await navigator.clipboard.writeText(link); $("sharenote").textContent = "✓ 복사됨 — 받은 사람 브라우저에서 같은 판정이 재현됩니다(서버 전송 0)"; }
+  catch { $("sharenote").textContent = link; }
+};
+function restoreFromHash() {
+  const m1 = location.hash.match(/^#s=(.+)$/);
+  if (m1) {
+    try {
+      const p = JSON.parse(unb64u(m1[1]));
+      if (p.m === "s") { setMode("simple"); $("s-quote").value = p.q || ""; $("s-source").value = p.s || ""; }
+      else { setMode("json"); $("claim").value = p.c || ""; $("source").value = p.s || ""; }
+      run(); return true;
+    } catch { /* 손상 해시 무시 */ }
+  }
+  const m2 = location.hash.match(/^#p=([a-z]+)$/) || location.search.match(/[?&]p=([a-z]+)/);
+  if (m2) { loadPreset(m2[1]); return true; }
+  return false;
+}
 
 function run() {
-  let claim;
-  try { claim = JSON.parse($("claim").value); }
-  catch (e) { $("out").innerHTML = '<div class="err">claim JSON 파싱 실패: ' + esc(e.message) + "</div>"; return; }
-  const source = $("source").value.trim() === "" ? null : $("source").value;
+  let claim, source;
+  if (mode === "simple") {
+    const q = $("s-quote").value.trim();
+    if (!q) { $("out").innerHTML = '<div class="err">인용 문장을 넣어주세요</div>'; return; }
+    claim = { statement: q, quotedText: q };
+    source = $("s-source").value.trim() === "" ? null : $("s-source").value;
+  } else {
+    try { claim = JSON.parse($("claim").value); }
+    catch (e) { $("out").innerHTML = '<div class="err">claim JSON 파싱 실패: ' + esc(e.message) + "</div>"; return; }
+    source = $("source").value.trim() === "" ? null : $("source").value;
+  }
   let ev;
   try { ev = evaluateClaim(claim, source); }
   catch (e) { $("out").innerHTML = '<div class="err">' + esc(e.message) + "</div>"; return; }
@@ -133,6 +219,7 @@ function run() {
   $("out").innerHTML = h;
 }
 $("go").onclick = run;
+if (!restoreFromHash()) setMode("simple");
 </script>
 </body>
 </html>

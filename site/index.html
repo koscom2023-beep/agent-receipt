@@ -62,6 +62,20 @@ details p{color:var(--mut);font-size:14.5px;margin:8px 0 2px}
 footer{padding:36px 0 54px;border-top:1px solid var(--border);color:var(--mut);font-size:13.5px;text-align:center}
 footer a{color:var(--accent);text-decoration:none}
 .note{background:var(--accent-bg);border:1px solid var(--border);border-radius:10px;padding:12px 16px;font-size:14px;color:var(--mut);margin-top:14px}
+.hero-try{max-width:720px;margin:26px auto 0;text-align:left;background:var(--bg-raised);border:1px solid var(--border);border-radius:14px;padding:16px 18px}
+.hero-try label{display:block;font-size:11.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin:8px 0 4px}
+.hero-try input,.hero-try textarea{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 11px;font-family:var(--font-mono);font-size:13px;color:var(--text)}
+.hero-try textarea{min-height:64px;resize:vertical}
+.hero-try .go{margin-top:10px;background:var(--accent);color:#fff;border:none;border-radius:9px;padding:10px 22px;font-size:14.5px;font-weight:700;cursor:pointer}
+.hero-out{margin-top:10px;font-size:14.5px}
+.hero-out .v{font-weight:700}
+.hero-src{margin-top:8px;background:var(--bg);border:1px solid var(--border-soft);border-radius:8px;padding:9px 11px;font-family:var(--font-mono);font-size:12.5px;color:var(--mut);line-height:1.6}
+.hero-src mark{background:#fff3bf;color:var(--text);border-radius:3px;padding:0 2px}
+.gal{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-top:14px}
+.gal a{background:var(--bg-raised);border:1px solid var(--border);border-radius:10px;padding:11px 13px;text-decoration:none;color:var(--text);font-size:13.5px}
+.gal a:hover{border-color:var(--accent)}
+.gal b{display:block;font-size:14px}
+.gal span{color:var(--mut);font-size:12.5px}
 </style>
 </head>
 <body>
@@ -84,6 +98,16 @@ footer a{color:var(--accent);text-decoration:none}
     <a class="btn ghost" href="demo.html">Live Evidence Browser</a>
   </div>
   <div style="margin-top:20px"><span class="install">npm install -g @promptia-labs/agent-receipt</span></div>
+
+  <div class="hero-try">
+    <div style="font-weight:700;font-size:15px">Catch a fabrication right now — 지금 바로 날조 잡아보기 <span style="color:var(--mut);font-weight:400;font-size:12.5px">(runs in your browser · 서버 전송 0)</span></div>
+    <label>AI's claim (quote) · AI가 인용이라며 한 말</label>
+    <input id="h-quote" value="has passed a SOC 2 Type II audit" spellcheck="false">
+    <label>The source it cited · 그 출처 원문</label>
+    <textarea id="h-source" spellcheck="false">Acme Cloud completed a SOC 2 Type I audit in March 2026. A Type II audit is scheduled for Q1 2027 but has not started.</textarea>
+    <button class="go" id="h-go">Verify ▸</button>
+    <div class="hero-out" id="h-out"></div>
+  </div>
 </header>
 
 <section id="tracks">
@@ -153,6 +177,19 @@ agent-receipt capture (alpha) — git 너머 행위 2건 (주목 2)
   </table>
 </section>
 
+<section id="gallery">
+  <h2>Gallery of fabrications · 날조 패턴 모음</h2>
+  <p class="sub">Each opens live in the playground — the kernel judges it in your browser. 전부 플레이그라운드에서 실시간 판정됩니다.</p>
+  <div class="gal">
+    <a href="playground.html#p=soc2"><b>📋 The quiet upgrade</b><span>"Type I completed" → "Type II passed" — citation not-found</span></a>
+    <a href="playground.html#p=numdrift"><b>🔢 Number drift</b><span>source says 52%, claim says 58% — number mismatch</span></a>
+    <a href="playground.html#p=datedrift"><b>📅 Date drift</b><span>Mar 1 becomes Apr 1 — format-agnostic mismatch</span></a>
+    <a href="playground.html#p=verdrift"><b>📦 Version drift</b><span>claimed 2.0.0 vs declared ^1.4.0 — real semver verdict</span></a>
+    <a href="playground.html#p=schema"><b>🧩 Missing required field</b><span>config lacks a required key — schema mismatch with path</span></a>
+    <a href="playground.html#p=sum"><b>🧮 Recomputed sum</b><span>11+14+16 really is 42 — verified, not trusted</span></a>
+  </div>
+</section>
+
 <section id="quickstart">
   <h2>Quick start · 바로 시작</h2>
 <pre>
@@ -202,5 +239,27 @@ agent-receipt graph diff --base-dir vr-old --head-dir vr   <span class="c"># exi
 </footer>
 
 </div>
+<script type="module">
+import { evaluateClaim } from "./kernel.js";
+const $ = (i) => document.getElementById(i);
+const esc = (x) => String(x ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function heroRun() {
+  const q = $("h-quote").value.trim();
+  const src = $("h-source").value;
+  if (!q) { $("h-out").innerHTML = '<span class="v" style="color:var(--mut)">인용 문장을 넣어주세요</span>'; return; }
+  const ev = evaluateClaim({ quotedText: q }, src.trim() === "" ? null : src);
+  let h = "";
+  if (ev.citation === "verified") h += '<span class="v" style="color:var(--pass)">✓ verified — 인용이 출처에 실재합니다</span>';
+  else if (ev.citation === "not-found") h += '<span class="v" style="color:var(--fail)">✗ FAIL · not-found — 이 문장은 출처에 없습니다 (날조/변형)</span>';
+  else h += '<span class="v" style="color:var(--mut)">· no-source — 출처가 비어 있습니다</span>';
+  // 보조 하이라이트: 원문 그대로(raw) 일치 위치만 표시 — 판정은 위 커널 결과가 전부(공백정규화 매치는 커널 몫).
+  const idx = src.indexOf(q);
+  if (idx >= 0) h += '<div class="hero-src">' + esc(src.slice(0, idx)) + "<mark>" + esc(q) + "</mark>" + esc(src.slice(idx + q.length)) + "</div>";
+  else if (src.trim()) h += '<div class="hero-src">' + esc(src) + '<div style="margin-top:6px;color:var(--fail)">↑ 이 본문 어디에도 해당 문장이 없습니다</div></div>';
+  h += '<div style="margin-top:8px;font-size:13px;color:var(--mut)">더 해보기: <a href="playground.html" style="color:var(--accent)">Playground →</a> (붙여넣기 모드·판정 공유 링크)</div>';
+  $("h-out").innerHTML = h;
+}
+$("h-go").onclick = heroRun;
+</script>
 </body>
 </html>
