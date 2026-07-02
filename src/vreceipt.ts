@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { writeFileSync, readFileSync } from "node:fs";
-import { isAbsolute, join } from "node:path";
+import { writeFileSync, readFileSync, mkdirSync } from "node:fs";
+import { isAbsolute, join, dirname } from "node:path";
 import { SCHEMA_VERSION } from "./evidencekernel.js";
 import { installedVersion } from "./version.js";
 import * as g from "./git.js";
@@ -77,6 +77,7 @@ export function buildVerificationReceipt(o: VReceiptInput): Record<string, unkno
 
 export function writeVerificationReceipt(outPath: string, o: VReceiptInput): { receiptId: string; contentHash: string } {
   const receipt = buildVerificationReceipt(o);
+  mkdirSync(dirname(outPath), { recursive: true }); // --out vr/r1.json 처럼 새 폴더 경로도 그대로 동작(퀵스타트 첫 명령 크래시 방지)
   writeFileSync(outPath, JSON.stringify(receipt, null, 2) + "\n");
   return { receiptId: receipt.receiptId as string, contentHash: receipt.contentHash as string };
 }

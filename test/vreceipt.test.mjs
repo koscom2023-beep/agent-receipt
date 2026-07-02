@@ -3,6 +3,10 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { buildVerificationReceipt, tierProvenance, replayVerificationReceipt } from "../dist/vreceipt.js";
+import { writeVerificationReceipt } from "../dist/vreceipt.js";
+import { existsSync, rmSync, mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 let pass = 0;
 const fail = [];
@@ -68,6 +72,14 @@ check("replay: 입력 재해시 일치", () => {
 });
 check("replay: 입력 변경 시 inputMatch false(드리프트)", () => {
   assert.equal(replayVerificationReceipt(r, { inputContent: '{"a":999}' }).inputMatch, false);
+});
+
+check("--out 이 없는 폴더 경로여도 크래시 없이 생성(퀵스타트 첫 명령·0.13.0 수리)", () => {
+  const d = mkdtempSync(join(tmpdir(), "arvrout-"));
+  const out = join(d, "vr", "sub", "r1.json"); // 두 단계 새 폴더
+  writeVerificationReceipt(out, { surface: "research", inputFile: "x.json", inputRaw: "{}", subject: "s", provenance: { reported: {} }, results: [], summary: {}, verdict: "pass", verifiedAt: "2026-01-01T00:00:00Z" });
+  assert.ok(existsSync(out));
+  rmSync(d, { recursive: true, force: true });
 });
 
 if (fail.length) { console.error(`vreceipt: ${pass} pass, ${fail.length} FAIL`); for (const f of fail) console.error("  ✗ " + f); process.exit(1); }
