@@ -41,10 +41,10 @@ export type { VReceiptInput } from "./vreceipt.js";
 export {
   loadReceipts, queryReceipts, buildViewData, buildGraph,
   buildSummary, buildFailures, buildFailureEvents, buildIndexes,
-  filterFailureEvents, buildGraphDiff, buildHistory, resolveFingerprintPrefix,
+  filterFailureEvents, buildGraphDiff, buildHistory, resolveFingerprintPrefix, buildSubjects,
 } from "./graph.js";
 export type {
   VRRow, GraphFilters, GraphNode, GraphEdge, GraphEdgeType, EdgeBasis,
   GraphSummary, FailureEntry, FailureEvent, GraphIndexes, FailureFilters,
-  GraphDiffResult, DiffMatchMode, HistoryItem, HistoryChange,
+  GraphDiffResult, DiffMatchMode, HistoryItem, HistoryChange, SubjectRollup,
 } from "./graph.js";

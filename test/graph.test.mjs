@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import { writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadReceipts, queryReceipts, buildViewData, buildGraphHtml, buildSummary, buildFailures, buildIndexes, buildGraph, buildFailureEvents, filterFailureEvents, buildGraphDiff, buildHistory, resolveFingerprintPrefix } from "../dist/graph.js";
+import { loadReceipts, queryReceipts, buildViewData, buildGraphHtml, buildSummary, buildFailures, buildIndexes, buildGraph, buildFailureEvents, filterFailureEvents, buildGraphDiff, buildHistory, resolveFingerprintPrefix, buildSubjects } from "../dist/graph.js";
 import { evaluateClaim, SCHEMA_VERSION, claimFingerprintV1 } from "../dist/index.js"; // SDK 배럴(L7 씨앗)
 
 let pass = 0;
@@ -388,6 +388,55 @@ check("buildGraphDiff --match fingerprint: 모드 자기기술 + fp 기준 매�
   assert.equal(dFp.persistingCount, 1);
   rmSync(dK1, { recursive: true, force: true });
   rmSync(dK2, { recursive: true, force: true });
+});
+
+// ── L6: subject 상태판(buildSubjects·history --subject·diff bySubject) ──
+check("buildSubjects: subject 별 순수 롤업(카운트만)", () => {
+  const dM = mkdtempSync(join(tmpdir(), "argraphM-"));
+  const mk5 = (name, o) => writeFileSync(join(dM, name), JSON.stringify(o));
+  mk5("a.json", { kind: "verification-receipt", receiptId: "m1", subject: "ProjA", verdict: "fail", surface: "research", input: { sha256: "s1" }, verifiedAt: "2026-07-01T00:00:00Z", results: [{ statement: "A", checks: { citation: "not-found", hash: "mismatch" }, verdict: "failed" }] });
+  mk5("b.json", { kind: "verification-receipt", receiptId: "m2", subject: "ProjA", verdict: "pass", surface: "research", input: { sha256: "s2" }, verifiedAt: "2026-07-02T00:00:00Z" });
+  mk5("c.json", { kind: "verification-receipt", receiptId: "m3", subject: "ProjB", verdict: "pass", surface: "council", input: { sha256: "s3" } });
+  const subs = buildSubjects(buildViewData(dM));
+  assert.equal(subs.length, 2);
+  assert.equal(subs[0].subject, "ProjA"); // 실패 많은 순
+  assert.deepEqual([subs[0].receipts, subs[0].pass, subs[0].fail, subs[0].failureEvents], [2, 1, 1, 2]);
+  assert.deepEqual(subs[0].byCheck, { citation: 1, hash: 1 });
+  assert.equal(subs[0].firstVerifiedAt, "2026-07-01T00:00:00Z");
+  assert.equal(subs[0].lastVerifiedAt, "2026-07-02T00:00:00Z");
+  assert.equal(subs[1].failureEvents, 0);
+  rmSync(dM, { recursive: true, force: true });
+});
+check("buildHistory --subject: 주제 단위 타임라인", () => {
+  const dN = mkdtempSync(join(tmpdir(), "argraphN-"));
+  const mk6 = (name, o) => writeFileSync(join(dN, name), JSON.stringify(o));
+  mk6("a.json", { kind: "verification-receipt", receiptId: "n1", subject: "ProjX", verdict: "fail", surface: "research", input: { sha256: "sA" }, verifiedAt: "2026-07-01T00:00:00Z", results: [{ statement: "Q", checks: { citation: "not-found" }, verdict: "failed" }] });
+  mk6("b.json", { kind: "verification-receipt", receiptId: "n2", subject: "ProjX", verdict: "pass", surface: "research", input: { sha256: "sB" }, verifiedAt: "2026-07-02T00:00:00Z", results: [{ statement: "Q", checks: { citation: "verified" }, verdict: "verified" }] });
+  mk6("z.json", { kind: "verification-receipt", receiptId: "n3", subject: "다른것", verdict: "fail", surface: "research", input: { sha256: "sC" } });
+  const h = buildHistory(buildViewData(dN), { subject: "ProjX" });
+  assert.equal(h.mode, "subject");
+  assert.equal(h.timeline.length, 2); // 다른 subject 제외
+  assert.equal(h.timeline[1].changes.resolvedFailures.length, 1); // 해소 감지(입력 달라도 지문 동일 키)
+  rmSync(dN, { recursive: true, force: true });
+});
+check("buildGraphDiff: bySubject 롤업(subject 단위 변화량)", () => {
+  const dO1 = mkdtempSync(join(tmpdir(), "argraphO1-"));
+  const dO2 = mkdtempSync(join(tmpdir(), "argraphO2-"));
+  const mk7 = (dir, name, o) => writeFileSync(join(dir, name), JSON.stringify(o));
+  mk7(dO1, "a.json", { kind: "verification-receipt", receiptId: "o1", subject: "P1", verdict: "fail", surface: "research", input: { sha256: "sP" }, results: [{ statement: "K", checks: { citation: "not-found" }, verdict: "failed" }] });
+  mk7(dO2, "a.json", { kind: "verification-receipt", receiptId: "o2", subject: "P1", verdict: "fail", surface: "research", input: { sha256: "sP" }, results: [{ statement: "K", checks: { citation: "not-found" }, verdict: "failed" }] });
+  mk7(dO2, "b.json", { kind: "verification-receipt", receiptId: "o3", subject: "P2", verdict: "fail", surface: "research", input: { sha256: "sQ" }, results: [{ statement: "L", checks: { number: "mismatch" }, verdict: "failed" }] });
+  const d = buildGraphDiff(buildViewData(dO1), buildViewData(dO2));
+  assert.deepEqual(d.bySubject.P1, { new: 0, resolved: 0, statusChanged: 0, persisting: 1 }); // 지속
+  assert.deepEqual(d.bySubject.P2, { new: 1, resolved: 0, statusChanged: 0, persisting: 0 }); // 신규
+  rmSync(dO1, { recursive: true, force: true });
+  rmSync(dO2, { recursive: true, force: true });
+});
+check("HTML: Subjects(상태판) 탭 + subjects 임베드", () => {
+  const html = buildGraphHtml([]);
+  assert.ok(html.includes("Subjects(상태판)"));
+  assert.ok(html.includes('"subjects"'));
+  assert.ok(html.includes("subject 상태판 — 카운트 롤업(판단 아님)"));
 });
 
 // ── L7 SDK 배럴: 외부 import 가능 ──

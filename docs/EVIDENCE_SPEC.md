@@ -99,7 +99,7 @@ A consumer can reconstruct all relationships from this JSON alone (no HTML neede
 ## Failure triage & diff (`graph failures`, `graph diff`)
 
 - `graph failures`: read-only query over flattened failure events (each = claim × failed check, with `file`, `verifiedAt` (self-reported), `tampered`). Filters: check/status/subject/model/commit/input/`--sealed`/`--since` (on self-reported `verifiedAt`). `--limit` always prints "N of M" — no silent truncation. Always exit 0 (a query, not a gate).
-- `graph diff` (base → head): `newFailures` / `resolvedFailures` / `statusChanged` / `persistingCount` / `inputVerdictChanges` (per shared `input.sha256`, latest-verifiedAt verdict on each side). Matching key = (`input.sha256` ∥ subject) + whitespace-normalized statement + check — **recorded-text identity, not semantic identity**: a reworded claim shows up as resolved + new. "Resolved" means *no failure with the same key in head*, not proof of a fix. Exit 1 when `newFailures` > 0 (a set-comparison fact, usable as a CI gate).
+- `graph diff` (base → head): `newFailures` / `resolvedFailures` / `statusChanged` / `persistingCount` / `inputVerdictChanges` (per shared `input.sha256`, latest-verifiedAt verdict on each side). Matching key = (`input.sha256` ∥ subject) + whitespace-normalized statement + check — **recorded-text identity, not semantic identity**: a reworded claim shows up as resolved + new. "Resolved" means *no failure with the same key in head*, not proof of a fix. Exit 1 when `newFailures` > 0 (a set-comparison fact, usable as a CI gate). The result also carries `bySubject` (per-subject new/resolved/statusChanged/persisting counts — the per-project delta board) and self-describes its `match` mode.
 
 ## Claim fingerprint v1 (`cfp1:`) & history
 
