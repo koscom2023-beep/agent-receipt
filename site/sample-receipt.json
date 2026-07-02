@@ -1,0 +1,99 @@
+{
+  "schemaVersion": "evidence/1",
+  "kind": "verification-receipt",
+  "receiptId": "4696c964584ae5aecea16a00186e010b5b632192f096ce0d456345b653450990",
+  "surface": "research",
+  "verifiedAt": "2026-07-02T14:04:01.360Z",
+  "tool": {
+    "name": "agent-receipt",
+    "version": "0.14.0"
+  },
+  "input": {
+    "file": "sample-rep.json",
+    "sha256": "95f2c42e95250098dda93082816cb3c7db6be69aae739bcea1e65f7fdfd19fa8"
+  },
+  "subject": "Sample: can you trust this receipt? (drop it on the site)",
+  "provenance": {
+    "verified": {},
+    "reported": null
+  },
+  "results": [
+    {
+      "statement": "Acme completed a SOC 2 Type I audit in March 2026",
+      "sourceUrl": null,
+      "fingerprint": "cfp1:e4502433409e5821bcc92a6d2f1cd567727198a26a725c013b4798e6aa8eb24a",
+      "checks": {
+        "citation": "verified",
+        "number": null,
+        "date": null,
+        "hash": null,
+        "signature": null,
+        "link": null,
+        "commit": null,
+        "fileChanged": null,
+        "diffContains": null,
+        "schema": null,
+        "version": null,
+        "file": null,
+        "receipt": null,
+        "artifact": null
+      },
+      "evidence": {},
+      "verdict": "verified"
+    },
+    {
+      "statement": "config satisfies the declared schema",
+      "sourceUrl": null,
+      "fingerprint": "cfp1:8d437c6453f2d2967dfd04f9bc15e3a62c952388f161f0208f5e9bff1b896cf2",
+      "checks": {
+        "citation": null,
+        "number": null,
+        "date": null,
+        "hash": null,
+        "signature": null,
+        "link": null,
+        "commit": null,
+        "fileChanged": null,
+        "diffContains": null,
+        "schema": "verified",
+        "version": null,
+        "file": null,
+        "receipt": null,
+        "artifact": null
+      },
+      "evidence": {},
+      "verdict": "verified"
+    },
+    {
+      "statement": "zod 3.24.0 satisfies ^3.23.8",
+      "sourceUrl": null,
+      "fingerprint": "cfp1:40e545423e33d8d29ffd264643020d2db6343483806a0edfff7e537a59349be5",
+      "checks": {
+        "citation": null,
+        "number": null,
+        "date": null,
+        "hash": null,
+        "signature": null,
+        "link": null,
+        "commit": null,
+        "fileChanged": null,
+        "diffContains": null,
+        "schema": null,
+        "version": "verified",
+        "file": null,
+        "receipt": null,
+        "artifact": null
+      },
+      "evidence": {},
+      "verdict": "verified"
+    }
+  ],
+  "summary": {
+    "verified": 3,
+    "failed": 0,
+    "advisory": 0
+  },
+  "verdict": "pass",
+  "means": "이 버전의 검증기가 이 입력에 대해 낸 결과의 기록(증적)이다. provenance.reported 는 자가보고이며, 모델·프롬프트 사용이나 실행 연결의 증명이 아니다.",
+  "contentHash": "515fda1f44a534b909970e54d2c94f7ae465669cf3d458fcc69792183b7023b1"
+}
