@@ -1,7 +1,7 @@
 import { readFileSync, appendFileSync, existsSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { createHash } from "node:crypto";
-import { evaluateClaim } from "./evidencekernel.js";
+import { evaluateClaim, claimFingerprintV1 } from "./evidencekernel.js";
 import { writeVerificationReceipt, tierProvenance } from "./vreceipt.js";
 
 const line = "─".repeat(56);
@@ -65,20 +65,37 @@ function resolveSource(c: SupportingClaim): string | null {
 //  - 날조 근거(not-found) 1건+ → ungrounded
 //  - 검증된 근거 1건+ 이고 날조 0 → grounded
 //  - 근거 아예 없음(또는 전부 no-source) → unsupported
+// 영수증용 근거주장 단위 결과 — research 의 results 항목과 코어 필드 동형(statement·sourceUrl·
+// fingerprint·checks·evidence·verdict) + decision 메타(additive·graph 는 무시). 이 동형성 덕에
+// graph/failures/diff/history/fingerprint 파이프라인이 council 영수증을 추가 배선 없이 그대로 먹는다.
+export interface GradedClaim {
+  statement: string;
+  sourceUrl: string | null;
+  fingerprint: string;
+  checks: Record<string, string | null>;
+  evidence: Record<string, { expected: string; actual: string }>;
+  verdict: "verified" | "failed" | "advisory";
+  decision: string; // 이 근거가 받치는 결정(메타·표시용)
+  decisionId: string | null;
+}
 export function gradeDecision(dec: Decision): {
   grounding: DecisionGrounding;
   verified: number;
   notFound: number;
   noSource: number;
+  claims: GradedClaim[]; // additive — 기존 소비자(카운트/grounding)는 불변
 } {
   const claims: SupportingClaim[] = Array.isArray(dec.supportingClaims)
     ? dec.supportingClaims.filter((c): c is SupportingClaim => !!c && typeof c === "object" && !Array.isArray(c))
     : [];
+  const decStmt = typeof dec.statement === "string" ? dec.statement : "(statement 없음)";
+  const decId = typeof dec.id === "string" ? dec.id : null;
   let verified = 0;
   let notFound = 0;
   let noSource = 0;
   let anyFailed = false;
   let anyVerified = false;
+  const graded: GradedClaim[] = [];
   for (const c of claims) {
     const url = typeof c.sourceUrl === "string" ? c.sourceUrl : undefined;
     // research 와 동일한 통합 평가(표준 포맷 공유): 인용·수치·날짜·링크를 한 곳에서.
@@ -92,9 +109,21 @@ export function gradeDecision(dec: Decision): {
     else noSource++;
     if (ev.failed) anyFailed = true;
     if (ev.verified) anyVerified = true;
+    // 근거주장 statement: 기재 statement > quotedText > 고정 표기(발명 금지).
+    const stmt = typeof c.statement === "string" && c.statement ? c.statement : typeof c.quotedText === "string" && c.quotedText ? c.quotedText : "(근거주장)";
+    graded.push({
+      statement: stmt,
+      sourceUrl: url ?? null,
+      fingerprint: claimFingerprintV1({ statement: stmt, sourceUrl: url ?? null, checkKinds: Object.entries(ev.results).filter(([, v]) => v != null).map(([k]) => k) }),
+      checks: ev.results,
+      evidence: ev.evidence,
+      verdict: ev.failed ? "failed" : ev.verified ? "verified" : "advisory",
+      decision: decStmt,
+      decisionId: decId,
+    });
   }
   const grounding: DecisionGrounding = anyFailed ? "ungrounded" : anyVerified ? "grounded" : "unsupported";
-  return { grounding, verified, notFound, noSource };
+  return { grounding, verified, notFound, noSource, claims: graded };
 }
 
 // append-only DecisionLog 한 줄(해시체인) — ledger 형. entryCore 는 호출부가 완성(타임스탬프 포함).
@@ -162,11 +191,13 @@ export function runCouncilVerify(fileArg: string | undefined, logArg: string | u
   let ungrounded = 0;
   let unsupported = 0;
   const logDecisions: Array<{ statement: string; grounding: DecisionGrounding }> = [];
+  const receiptClaims: GradedClaim[] = []; // 영수증 results — 근거주장 단위(graph 파이프라인 동형)
   let dissentTotal = 0;
 
   decisions.forEach((dec, i) => {
     const stmt = typeof dec.statement === "string" ? dec.statement : "(statement 없음)";
-    const { grounding, verified, notFound, noSource } = gradeDecision(dec);
+    const { grounding, verified, notFound, noSource, claims: graded } = gradeDecision(dec);
+    receiptClaims.push(...graded);
     const dissent: string[] = Array.isArray(dec.dissent) ? dec.dissent.filter((x): x is string => typeof x === "string") : [];
     dissentTotal += dissent.length;
     if (grounding === "grounded") grounded++;
@@ -212,7 +243,9 @@ export function runCouncilVerify(fileArg: string | undefined, logArg: string | u
       inputRaw: raw,
       subject: question,
       provenance: tierProvenance(record.provenance),
-      results: logDecisions,
+      // 근거주장 단위(research 동형: statement·sourceUrl·fingerprint·checks·evidence·verdict) —
+      // 이래야 ungrounded 실패가 graph failures/diff/history 에 실제로 잡힌다(결정 단위 체인은 DecisionLog 몫).
+      results: receiptClaims,
       summary: { grounded, ungrounded, unsupported },
       verdict: ungrounded ? "fail" : "pass",
       verifiedAt: new Date().toISOString(),

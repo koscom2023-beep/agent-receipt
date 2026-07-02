@@ -69,5 +69,28 @@ check("파일에 2줄 append됨", () => {
 });
 if (existsSync(logPath)) rmSync(logPath);
 
+// ── 감사 fix: gradeDecision 이 근거주장 단위 rich 결과를 반환(영수증→graph 파이프라인 동형) ──
+check("gradeDecision.claims: statement/sourceUrl/fingerprint/checks/evidence/verdict + decision 메타", () => {
+  const r = gradeDecision({
+    id: "D9", statement: "결정문",
+    supportingClaims: [{ quotedText: "ghost quote", sourceText: "real text only", sourceUrl: "http://u" }],
+  });
+  assert.equal(r.grounding, "ungrounded");
+  assert.equal(r.claims.length, 1);
+  const c = r.claims[0];
+  assert.equal(c.statement, "ghost quote"); // statement 부재 → quotedText 대체(발명 금지)
+  assert.equal(c.sourceUrl, "http://u");
+  assert.ok(c.fingerprint.startsWith("cfp1:")); // graph history/diff 와 같은 키
+  assert.equal(c.checks.citation, "not-found");
+  assert.ok(c.evidence.citation && c.evidence.citation.expected === "ghost quote"); // 커널 evidence 가 버려지지 않음
+  assert.equal(c.verdict, "failed");
+  assert.deepEqual([c.decision, c.decisionId], ["결정문", "D9"]);
+});
+check("gradeDecision.claims: grounded 케이스 verdict=verified·decisionId 없으면 null", () => {
+  const r = gradeDecision({ statement: "D", supportingClaims: [{ quotedText: "hello world", sourceText: "say hello world now" }] });
+  assert.equal(r.claims[0].verdict, "verified");
+  assert.equal(r.claims[0].decisionId, null);
+});
+
 if (fail.length) { console.error(`council-verify: ${pass} pass, ${fail.length} FAIL`); for (const f of fail) console.error("  ✗ " + f); process.exit(1); }
 console.log(`council-verify: ${pass} pass ✅`);

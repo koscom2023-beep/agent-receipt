@@ -606,7 +606,7 @@ code{color:#79c0ff}.big{font-size:15px;font-weight:700}
 const el=id=>document.getElementById(id);
 const esc=x=>String(x==null?'':x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function ok(b){return b===true?'<span class="pass">✅</span>':b===false?'<span class="fail">❌</span>':'<span class="warn">⚠ n/a</span>'}
-function st(s){return s==='verified'||s==='valid'?'<span class="pass">✅ '+s+'</span>':s==='not-found'||s==='mismatch'||s==='invalid'?'<span class="fail">❌ '+s+'</span>':'<span class="mut">· '+(s||'-')+'</span>'}
+function st(s){return s==='verified'||s==='valid'?'<span class="pass">✅ '+esc(s)+'</span>':s==='not-found'||s==='mismatch'||s==='invalid'?'<span class="fail">❌ '+esc(s)+'</span>':'<span class="mut">· '+esc(s||'-')+'</span>'}
 function cd(l,n,c){return '<div class="cd"><div class="n '+(c||'')+'">'+n+'</div><div class="l">'+l+'</div></div>'}
 el('dash').innerHTML=cd('Total',S.total||0)+cd('PASS',S.pass||0,'pass')+cd('FAIL',S.fail||0,'fail')+
 cd('Most Failed',S.mostFailedCheck||'-')+cd('Drift',S.driftCount||0,(S.driftCount?'warn':''))+cd('Tampered',S.tamperedCount||0,(S.tamperedCount?'fail':''));
@@ -901,8 +901,12 @@ export function buildGraphDiff(baseRows: ViewRow[], headRows: ViewRow[], opts: {
   for (const e of resolvedFailures) bump(e.subject, "resolved");
   for (const c of statusChanged) bump(c.subject, "statusChanged");
   for (const e of persisting) bump(e.subject, "persisting");
-  const bv = latestVerdictByInput(baseRows);
-  const hv = latestVerdictByInput(headRows);
+  // --sealed 일관성: 입력 verdict 변화도 봉인 확인 영수증만으로(실패 이벤트 필터와 같은 기준).
+  const rowTampered = (r: ViewRow): boolean => !r.integrity.contentHashOk || !r.integrity.receiptIdOk;
+  const bvRows = opts.sealed ? baseRows.filter((r) => !rowTampered(r)) : baseRows;
+  const hvRows = opts.sealed ? headRows.filter((r) => !rowTampered(r)) : headRows;
+  const bv = latestVerdictByInput(bvRows);
+  const hv = latestVerdictByInput(hvRows);
   const inputVerdictChanges: GraphDiffResult["inputVerdictChanges"] = [];
   for (const [sha, base] of [...bv.entries()].sort((a, b) => cmpStr(a[0], b[0]))) {
     const head = hv.get(sha);
@@ -911,8 +915,8 @@ export function buildGraphDiff(baseRows: ViewRow[], headRows: ViewRow[], opts: {
   return { match, newFailures, resolvedFailures, statusChanged, persistingCount, bySubject, inputVerdictChanges, tamperedBase, tamperedHead };
 }
 /**
- * `agent-receipt graph diff (--base-dir <d1> --head-dir <d2> | --dir <d> --base-commit <c1> --head-commit <c2>) [--sealed] [--format json]`
- *  회귀 비교: 신규/해소/상태변화/입력 verdict 변화. 신규 실패>0 → exit 1.
+ * `agent-receipt graph diff (--base-dir <d1> --head-dir <d2> | --dir <d> --base-commit <c1> --head-commit <c2>) [--match statement|fingerprint] [--sealed] [--format json]`
+ *  회귀 비교: 신규/해소/상태변화/지속/subject별/입력 verdict 변화. 신규 실패>0 → exit 1.
  */
 export function runGraphDiff(
   o: { dir?: string; baseDir?: string; headDir?: string; baseCommit?: string; headCommit?: string; sealed?: boolean; match?: string; format?: string },
@@ -1060,8 +1064,8 @@ export function resolveFingerprintPrefix(rows: ViewRow[], prefix: string): { fp:
   return { fp: candidates.length === 1 ? (candidates[0] as string) : null, candidates };
 }
 /**
- * `agent-receipt graph history --dir <d> (--claim <cfp|접두> | --input <sha256>) [--format json]`
- *  같은 주장/입력의 시간축 이력 + 인접 대비 변화. 읽기전용·exit 0(질의).
+ * `agent-receipt graph history --dir <d> (--claim <cfp|접두> | --input <sha256> | --subject <s>) [--format json]`
+ *  같은 주장/입력/주제의 시간축 이력 + 인접 대비 변화. 읽기전용·exit 0(질의).
  */
 export function runGraphHistory(dirArg: string | undefined, sel: { claim?: string; input?: string; subject?: string }, format?: string): never {
   if ((sel.claim ? 1 : 0) + (sel.input ? 1 : 0) + (sel.subject ? 1 : 0) !== 1) {

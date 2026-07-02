@@ -28,7 +28,7 @@
 
 ## Compatibility
 
-- Receipts: additive only (`fingerprint` on new research results). Old receipts work everywhere (fingerprints recomputed).
+- Receipts: additive only (`fingerprint` on new research results). Old receipts work everywhere (fingerprints recomputed). Council receipts' `results` are now per-supporting-claim (statement/sourceUrl/fingerprint/checks/evidence/verdict + decision meta) — same shape research uses, so ungrounded failures flow into failures/diff/history; the decision-level chain stays in the DecisionLog (this shape was introduced and corrected within this unpublished release).
 - JSON contracts: `graph view --format json` gained keys (`graph`, `subjects`; `indexes`/`failures` events gained fields). Nothing removed or renamed.
 - Contract freezes: edge `type`/`basis`/`tier` enums, diff `match` modes, `cfp1:` meaning — additions allowed, meaning changes forbidden (EVIDENCE_SPEC.md).
 

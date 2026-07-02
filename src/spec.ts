@@ -32,6 +32,8 @@ export function runSpec(format: string | undefined): never {
   console.log("  · 보증 안 함 — AI 판단이 옳은가(결론의 합리성·누락·대안)는 사람/다른 절차의 몫.");
   console.log("재현성: 같은 입력이면 어느 PC에서 돌려도 같은 결과(deterministic). 모델·벤더 불문.");
   console.log("");
+  console.log("결과 소비: 영수증의 각 claim 결과에 fingerprint(cfp1:·시간축 동일성 키)가 실리고,");
+  console.log("  graph view/failures/diff/history/subjects 가 그 위에서 동작(스펙: docs/EVIDENCE_SPEC.md).");
   console.log("기계판독 스키마: agent-receipt spec --format json  (JSON Schema draft-07)");
   console.log("새 검증기는 check 레지스트리에 등록만 하면 이 스펙에 자동 반영(엔진 불변).");
   console.log(line);
