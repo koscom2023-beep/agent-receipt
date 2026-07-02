@@ -36,6 +36,8 @@ claim:
   statedFile                          # surface resolves via fs existence check (no content read)
   # receipt (cited-receipt integrity)
   statedReceiptId (≥8-char prefix)  +  receiptFile   # surface re-runs the existing seal replay
+  # artifact (build/test output shape)
+  statedArtifact  +  ≥1 of { artifactMinBytes | artifactMaxBytes | artifactSha256 }
 ```
 
 ### Markdown input (frozen grammar)
@@ -70,12 +72,13 @@ First `# ` line = query · `- statement:` starts a claim · following indented `
 | `version` | statedPackageVersion **satisfies** the dependency map's declared range — real single-comparator semver (`^ ~ >= > <= <`, npm caret rule for 0.x, partial versions zero-filled); prerelease / compound ranges / wildcards → no-basis (no false verdicts), unparseable falls back to strip-prefix equality | verified / mismatch / no-basis |
 | `file` | statedFile exists on disk (existence only — content comparison stays citation/hash's job) | verified / not-found / no-basis |
 | `receipt` | the cited Verification Receipt (receiptFile) exists, its receiptId starts with statedReceiptId (≥8 chars), and its seal **replays clean** (contentHash + receiptId recomputed via the same replay used everywhere). A missing cited file is `mismatch` (same principle as citation not-found — citation accuracy is the citer's responsibility). Work Receipts (schemaVersion 1.0) → no-basis in v1 (honest unsupported) | verified / mismatch / no-basis |
+| `artifact` | the artifact at statedArtifact matches its declared **shape constraints** — size bounds and/or sha256 (sha computed only when demanded). Guarantees *shape conformity*, **not** artifact correctness/completeness (pair with sha256 for strong assurance). Path with **zero constraints → no-basis** (that's `file`'s job — no redundant kind) | verified / not-found / mismatch / no-basis |
 
 `signature` is the one check that promotes self-report toward proof: it confirms *this content was signed by this key* — it does not vouch for the key's trust (that is out of scope).
 
 `commit`/`fileChanged`/`diffContains` need git access (IO), which the kernel itself never does — a surface module (`gitfacts.ts`) resolves the git facts first (does this commit exist? what did it change? what does its diff say?) and hands the kernel only the resolved boolean/text, the same pattern `hash`/`signature` already used for file content. This keeps the kernel's "no IO" invariant intact while letting `research verify`/`council verify` check claims against actual repository history, not just static documents — e.g. catching a council decision that claims "the config already supports X" when no commit actually changed the config that way.
 
-`schema` is fully pure (both `schemaData` and `schemaDef` are inline in the claim, no file/git resolution needed) — the smallest-footprint of the thirteen kinds.
+`schema` is fully pure (both `schemaData` and `schemaDef` are inline in the claim, no file/git resolution needed) — the smallest-footprint of the fourteen kinds.
 
 A claim **fails** if any check is `not-found` / `mismatch` / `invalid`. A claim is **verified** if a positive check (any kind except `link`) is `verified` and nothing failed. `link: valid` is advisory (well-formedness ≠ evidence).
 
@@ -85,7 +88,7 @@ A claim **fails** if any check is `not-found` / `mismatch` / `invalid`. A claim 
 
 ## Extensibility (the engine, not just checkers)
 
-New verifiers register in the **check registry** (`CHECK_REGISTRY`) — one descriptor, no engine change. `spec` reflects them automatically. **Thirteen kinds ship today** (citation/number/date/hash/signature/link/commit/fileChanged/diffContains/schema/version/file/receipt). Of the previously planned three: `file` shipped as promised; `replay` shipped as the `receipt` kind (a cited receipt's own replay result as a checkable claim — same idea, honest name); `artifact` (a build/test artifact's shape) remains planned. Execution-based checks (run a test/command and check its outcome) were deliberately **not** added alongside this batch — a live-execution check is a different trust/security tier than a static file or git-history comparison (arbitrary code execution vs. read-only queries), so it stays a separate, explicitly opt-in track if it ever ships. This is what raises the copy cost: not the checkers, but the extensible engine + shared format.
+New verifiers register in the **check registry** (`CHECK_REGISTRY`) — one descriptor, no engine change. `spec` reflects them automatically. **Fourteen kinds ship today** (citation/number/date/hash/signature/link/commit/fileChanged/diffContains/schema/version/file/receipt/artifact) — every kind the spec ever listed as "planned" (`file`, `replay`→`receipt`, `artifact`) has now shipped; nothing is promised-but-missing. Execution-based checks (run a test/command and check its outcome) were deliberately **not** added alongside this batch — a live-execution check is a different trust/security tier than a static file or git-history comparison (arbitrary code execution vs. read-only queries), so it stays a separate, explicitly opt-in track if it ever ships. This is what raises the copy cost: not the checkers, but the extensible engine + shared format.
 
 This is a **plugin / registry** dispatch, **not** an "Evidence VM" — there is no DSL, opcode set, or execution state yet. That would be a later stage; today it is a clean plugin point.
 

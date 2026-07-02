@@ -32,7 +32,7 @@ check("신규 5종 커버(Phase5): schema/version/file 픽스처가 전부 verif
   assert.ok(nc, "newchecks 영수증 없음");
   assert.equal(nc.verdict, "pass");
   const kinds = new Set(nc.claims.flatMap((c) => Object.entries(c.checks).filter(([, v]) => v === "verified").map(([k]) => k)));
-  for (const k of ["schema", "version", "file"]) assert.ok(kinds.has(k), `누락: ${k}`);
+  for (const k of ["schema", "version", "file", "artifact"]) assert.ok(kinds.has(k), `누락: ${k}`);
 });
 check("생성된 영수증을 graph 가 바로 읽음(소비 가능)", () => {
   const rows = buildViewData(out);

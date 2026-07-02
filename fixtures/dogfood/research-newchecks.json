@@ -3,8 +3,25 @@
   "claims": [
     {
       "statement": "고정 설정 객체가 요구 스키마(type/required)를 만족한다",
-      "schemaData": { "enabled": true, "retries": 3 },
-      "schemaDef": { "type": "object", "required": ["enabled", "retries"], "properties": { "enabled": { "type": "boolean" }, "retries": { "type": "number" } } }
+      "schemaData": {
+        "enabled": true,
+        "retries": 3
+      },
+      "schemaDef": {
+        "type": "object",
+        "required": [
+          "enabled",
+          "retries"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "retries": {
+            "type": "number"
+          }
+        }
+      }
     },
     {
       "statement": "고정 의존성 파일의 zod 는 3.23.8 을 범위로 포함한다",
@@ -15,7 +32,15 @@
     {
       "statement": "고정 의존성 파일이 디스크에 실재한다",
       "statedFile": "fixtures/dogfood/deps-fixture.json"
+    },
+    {
+      "statement": "고정 의존성 파일이 형태 제약(10~500B)과 정합한다",
+      "statedArtifact": "fixtures/dogfood/deps-fixture.json",
+      "artifactMinBytes": 10,
+      "artifactMaxBytes": 500
     }
   ],
-  "provenance": { "note": "byte-stable dogfood fixture — git-fact checks are exercised by test/gitfacts.test.mjs with real temp repos (commit hashes are not byte-stable, so they don't belong here)" }
+  "provenance": {
+    "note": "byte-stable dogfood fixture — git-fact checks are exercised by test/gitfacts.test.mjs with real temp repos (commit hashes are not byte-stable, so they don't belong here)"
+  }
 }
