@@ -109,6 +109,8 @@ agent-receipt doctor           # shows binary path, current version, npm latest,
 
 **Dogfood principle.** Real-world verification is done against the **global install or `npx ... @latest`** — that is what your agents actually invoke. Calling a local `node dist/cli.js` directly is **developer-internal** verification only; do not report it as real-use verification. If `doctor` reports a newer `npm latest`, run `npm install -g @promptia-labs/agent-receipt@latest`.
 
+**SDK surface & stability tiers** (Stable / Provisional / internal, semver promise, examples): see [docs/SDK.md](https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/SDK.md).
+
 This repo also dogfoods its own verification engine: every `npm test` run verifies fixed fixtures (`fixtures/dogfood/`) and accumulates verification receipts locally (`npm run dogfood` to run it alone), so `graph history` / `diff` / the `tampered` flag are continuously exercised against real self-produced data (non-blocking; correctness is gated by `test/dogfood.test.mjs`).
 
 ### Recommended `.gitignore` (tool outputs)
