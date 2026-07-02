@@ -45,7 +45,10 @@ export interface CaptureChainResult {
 }
 
 // 캡처가 다루는 도구의 단일 출처(council iter1 D) — 훅 matcher·분류기 커버리지·caveat 가 공유.
-// 이 목록 밖(WebFetch·WebSearch·mcp__*·Task 등)은 훅이 호출되지 않아 capture 가 볼 수 없다(정직 한계).
+// 정확한 사실(Phase6 정정): 목록 밖 도구는 "훅이 못 오는" 게 아니라 *이 목록으로 만든 matcher 가
+//   안 매칭*해서 안 오는 것 — 그래서 여기 추가하면 잡힌다. 단 기존 설치본의 settings.json 에는
+//   옛 matcher 가 박제돼 있으므로 `capture install --write` 재실행 후부터 적용(출력에 고지).
+// 여전히 밖: Task(서브에이전트)·mcp__*(이벤트 형태가 도구마다 달라 실조사 전 편입=발명 — 정직 보류).
 export const COVERED_TOOLS: readonly string[] = [
   "Bash",
   "Read",
@@ -54,6 +57,8 @@ export const COVERED_TOOLS: readonly string[] = [
   "MultiEdit",
   "NotebookEdit",
   "NotebookRead",
+  "WebFetch",
+  "WebSearch",
 ];
 
 export interface CaptureAction {
@@ -186,7 +191,19 @@ export function classifyEvent(payload: unknown, phase: "pre" | "post" = "post", 
     }
     return [{ ...base, op: "command" }];
   }
-  return []; // 그 외 도구는 alpha 행위추적 비대상
+  if (tool === "WebFetch") {
+    // url 파라미터에서 host 만(값·경로·쿼리 미저장 — Bash network 와 같은 규칙·자격증명 strip 승계).
+    const u = String(input.url ?? "");
+    const m = u.match(URL_RE);
+    const h = m?.[1];
+    const bare = h && h.includes("@") ? h.slice(h.lastIndexOf("@") + 1) : h;
+    return [{ ...base, op: "network", host: clean(bare) ?? "(unknown-host)" }];
+  }
+  if (tool === "WebSearch") {
+    // 검색어=값이라 저장 금지 — 외부 호출 사실만 고정 표기로 남김.
+    return [{ ...base, op: "network", host: "(web-search)" }];
+  }
+  return []; // 그 외 도구(Task·mcp__* 등)는 alpha 행위추적 비대상 — COVERED_TOOLS 주석 참고
 }
 
 /** records → actions[] + 요약. gitChangedPaths(주입 가능·테스트 결정론) ∩ 행위경로 = gitVisible. */
@@ -584,9 +601,13 @@ export function mergeCaptureHooks(input: SettingsShape): { merged: SettingsShape
   for (const [key, phase] of phases) {
     const cmd = captureCommand(phase);
     const arr: HookEntry[] = Array.isArray(merged.hooks[key]) ? merged.hooks[key] : [];
-    const present = arr.some((e) => Array.isArray(e?.hooks) && e.hooks.some((h) => h?.command === cmd));
-    if (!present) {
+    const ours = arr.find((e) => Array.isArray(e?.hooks) && e.hooks.some((h) => h?.command === cmd));
+    if (!ours) {
       arr.push({ matcher: HOOK_MATCHER, hooks: [{ type: "command", command: cmd }] });
+      changed = true;
+    } else if (ours.matcher !== HOOK_MATCHER) {
+      // 커버 도구가 늘면 matcher 도 따라와야 함 — 안 고치면 옛 matcher 가 영구 박제(확장이 기존 설치본에 영원히 미적용되는 실버그·Phase6 수리).
+      ours.matcher = HOOK_MATCHER;
       changed = true;
     }
     merged.hooks[key] = arr;

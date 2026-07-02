@@ -151,6 +151,38 @@ check("입력 비변형(순수함수)", () => {
   assert.deepEqual(input, { hooks: {} }); // 원본 불변
 });
 
+// ── Phase6: WebFetch/WebSearch 편입 + matcher 갱신 수리 ──
+check("classifyEvent: WebFetch → network+host만(값·경로·쿼리 미저장·자격증명 strip)", () => {
+  const r1 = classifyEvent({ tool_name: "WebFetch", tool_input: { url: "https://user:pw@api.example.com/secret?q=1" } }, "post", "T");
+  assert.equal(r1.length, 1);
+  assert.equal(r1[0].op, "network");
+  assert.equal(r1[0].host, "api.example.com"); // userinfo 제거·경로/쿼리 없음
+});
+check("classifyEvent: WebSearch → network+고정표기(검색어=값이라 미저장)", () => {
+  const r = classifyEvent({ tool_name: "WebSearch", tool_input: { query: "매우 민감한 검색어" } }, "post", "T");
+  assert.equal(r.length, 1);
+  assert.equal(r[0].op, "network");
+  assert.equal(r[0].host, "(web-search)");
+  assert.ok(!JSON.stringify(r).includes("민감한")); // 값 미저장 단언
+});
+check("mergeCaptureHooks: 옛 matcher 박제 수리 — 우리 command 있어도 matcher 다르면 갱신+changed", () => {
+  const cmdOwner = mergeCaptureHooks({}); // 현재 기대 형태 획득
+  const cur = cmdOwner.merged.hooks.PreToolUse[0];
+  const stale = JSON.parse(JSON.stringify(cmdOwner.merged));
+  stale.hooks.PreToolUse[0].matcher = "Bash|Read|Write"; // 옛 설치본 시뮬레이션
+  stale.hooks.PostToolUse[0].matcher = "Bash|Read|Write";
+  const { merged, changed } = mergeCaptureHooks(stale);
+  assert.equal(changed, true); // 이전 코드는 false(영구 박제)였음 — 수리 핵심
+  assert.equal(merged.hooks.PreToolUse[0].matcher, cur.matcher);
+  assert.ok(merged.hooks.PreToolUse[0].matcher.includes("WebFetch"));
+  assert.equal(merged.hooks.PreToolUse.length, 1); // 중복 추가 아님 — 제자리 갱신
+});
+check("mergeCaptureHooks: 최신 matcher면 여전히 멱등(changed=false)", () => {
+  const first = mergeCaptureHooks({});
+  const again = mergeCaptureHooks(first.merged);
+  assert.equal(again.changed, false);
+});
+
 if (fail.length) {
   console.error(`capture-actions: ${fail.length} FAIL\n  ` + fail.join("\n  "));
   process.exit(1);

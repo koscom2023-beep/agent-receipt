@@ -110,11 +110,11 @@ check("체인 필드(seq/prevHash/entryHash/sessionId)는 actions 에 누출 안
 });
 
 // ── 커버리지 단일 출처 ──
-check("COVERED_TOOLS = 훅 matcher 와 동일 7종", () => {
-  assert.deepEqual([...COVERED_TOOLS], ["Bash", "Read", "Write", "Edit", "MultiEdit", "NotebookEdit", "NotebookRead"]);
+check("COVERED_TOOLS = 훅 matcher 와 동일 9종(Phase6: WebFetch/WebSearch 편입)", () => {
+  assert.deepEqual([...COVERED_TOOLS], ["Bash", "Read", "Write", "Edit", "MultiEdit", "NotebookEdit", "NotebookRead", "WebFetch", "WebSearch"]);
   // classifyEvent 가 실제로 이 도구들을 분류하는지(대표 2종)
   assert.equal(classifyEvent({ tool_name: "Read", tool_input: { file_path: "/x/.env" } }, "post", "t").length, 1);
-  assert.equal(classifyEvent({ tool_name: "WebFetch", tool_input: { url: "http://x" } }, "post", "t").length, 0); // 범위 밖
+  assert.equal(classifyEvent({ tool_name: "WebFetch", tool_input: { url: "http://x" } }, "post", "t").length, 1); // Phase6 편입 — 이제 network 로 분류
 });
 
 // ── 노이즈 필터(council5 #2) — 무서운 행위만 notable, 일반 read/command 강등(muted). 강등 케이스 직접 검증(감사 partial→done). ──
