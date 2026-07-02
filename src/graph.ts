@@ -492,10 +492,16 @@ export function buildViewData(dir: string): ViewRow[] {
 
 export function buildGraphHtml(data: ViewRow[]): string {
   // Evidence Browser: Failure-first 순서 — Dashboard → Failures(indexes 탭: Check별/Model별/…) →
-  //   Reason(→Evidence) → Affected Claim → Receipt 상세(맨 마지막 drill-down).
+  //   Reason(→Evidence) → Affected Claim → 주장 이력(1클릭) → Receipt 상세(맨 마지막 drill-down).
   // 임베드 JSON + vanilla JS. 외부 리소스 0·서버 0(share-proof 패턴·이식 리포트).
+  // histories = 지문별 이력 *사전계산*(생성 시점·TS buildHistory 단일 함수=SSOT) —
+  //   브라우저 JS 로 이력 로직을 재구현하지 않는다(두 진실원 금지). 대형 볼륨 처리=L8 하드닝.
+  const fps = new Set<string>();
+  for (const r of data) for (const c of r.claims) fps.add(c.fingerprint);
+  const histories: Record<string, HistoryItem[]> = {};
+  for (const fp of [...fps].sort(cmpStr)) histories[fp] = buildHistory(data, { claim: fp }).timeline;
   const embedded = JSON.stringify({
-    receipts: data, summary: buildSummary(data), indexes: buildIndexes(data), failures: buildFailures(data),
+    receipts: data, summary: buildSummary(data), indexes: buildIndexes(data), failures: buildFailures(data), histories,
   }).replace(/</g, "\\u003c");
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Evidence Browser — Verification Receipts</title><style>
@@ -519,7 +525,7 @@ header{padding:12px 18px;border-bottom:1px solid #21262d}h1{margin:0;font-size:1
 .lnk{cursor:pointer;color:#58a6ff}.lnk:hover{text-decoration:underline}
 code{color:#79c0ff}.big{font-size:15px;font-weight:700}
 </style></head><body>
-<header><h1>Evidence Browser</h1><div class="sub">Dashboard → Failures(Reason·Evidence) → Affected Claims → Receipt(맨 마지막 drill-down) · 정적·서버 0 · 무결성=생성 시점 replay 스냅샷</div></header>
+<header><h1>Evidence Browser</h1><div class="sub">Dashboard → Failures(Reason·Evidence) → Affected Claims → 주장 이력(1클릭) → Receipt(맨 마지막 drill-down) · 정적·서버 0 · 무결성=생성 시점 replay 스냅샷</div></header>
 <div class="dash" id="dash"></div>
 <div class="tabs" id="tabs"></div>
 <div class="wrap"><div><div class="filters" id="filters">
@@ -527,7 +533,7 @@ code{color:#79c0ff}.big{font-size:15px;font-weight:700}
 <span class="mut" id="count"></span></div><div class="list" id="list"></div></div>
 <div class="detail" id="detail"><div class="mut">← 왼쪽에서 실패(탭) 또는 Receipt 선택</div></div></div>
 <script id="ar-data" type="application/json">${embedded}</script>
-<script>const P=JSON.parse(document.getElementById('ar-data').textContent);const DATA=P.receipts||[],S=P.summary||{},IX=P.indexes||{};
+<script>const P=JSON.parse(document.getElementById('ar-data').textContent);const DATA=P.receipts||[],S=P.summary||{},IX=P.indexes||{},HIST=P.histories||{};
 const el=id=>document.getElementById(id);
 const esc=x=>String(x==null?'':x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function ok(b){return b===true?'<span class="pass">✅</span>':b===false?'<span class="fail">❌</span>':'<span class="warn">⚠ n/a</span>'}
@@ -549,7 +555,24 @@ g[k].forEach(e=>{const r=document.createElement('div');r.className='row';
 r.innerHTML='<span class="fail">❌ '+esc(e.check)+'</span> <span class="mut">'+esc(e.status)+'</span> · claim #'+e.claimIndex+' '+esc((e.statement||'').slice(0,42))+
 '<div class="mut">'+esc(e.reason)+' · <code>'+esc((e.receiptId||'').slice(0,10))+'…</code></div>';
 r.onclick=()=>failureDetail(e);L.appendChild(r)})})}
-function wire(){el('detail').querySelectorAll('[data-r]').forEach(x=>x.onclick=()=>{const d=DATA.find(y=>y.file===x.dataset.r);if(d)detail(d)})}
+function wire(){el('detail').querySelectorAll('[data-r]').forEach(x=>x.onclick=()=>{const d=DATA.find(y=>y.file===x.dataset.r);if(d)detail(d)});
+el('detail').querySelectorAll('[data-h]').forEach(x=>x.onclick=()=>historyDetail(x.dataset.h))}
+function historyDetail(fp){const tl=HIST[fp]||[];
+let h='<div class="card"><div class="big">주장 이력</div><div class="mut">지문 <code>'+esc(fp)+'</code> · 영수증 '+tl.length+'건</div></div>';
+if(!tl.length)h+='<div class="card mut">이력 없음</div>';
+tl.forEach((t,i)=>{h+='<div class="card"><div><b>['+(i+1)+']</b> '+esc(t.verifiedAt||'-')+' <span class="mut">(자가보고)</span> · '+
+(t.verdict==='pass'?'<span class="pass">✓ pass</span>':'<span class="fail">✗ '+esc(t.verdict)+'</span>')+
+(t.tampered?' · <span class="fail">⚠ 봉인확인실패</span>':'')+(i===0?' · <span class="mut">첫 등장</span>':'')+'</div>';
+if((t.failedChecks||[]).length)h+='<div class="mut">실패: '+t.failedChecks.map(f=>esc(f.check)+'('+esc(f.status)+')').join(' · ')+'</div>';
+if(t.changes){const c=t.changes;
+if(c.newFailures.length)h+='<div class="fail">+ 새 실패: '+c.newFailures.map(esc).join(' · ')+'</div>';
+if(c.resolvedFailures.length)h+='<div class="pass">− 해소: '+c.resolvedFailures.map(esc).join(' · ')+'</div>';
+c.statusChanged.forEach(s=>{h+='<div class="warn">~ 상태: '+esc(s.check)+' '+esc(s.base)+' → '+esc(s.head)+'</div>'});
+if(c.evidenceChanged.length)h+='<div class="warn">Δ 증거 변화: '+c.evidenceChanged.map(esc).join(' · ')+'</div>';
+if(!c.newFailures.length&&!c.resolvedFailures.length&&!c.statusChanged.length&&!c.evidenceChanged.length)h+='<div class="mut">(직전 대비 변화 없음)</div>'}
+h+='<div class="mut"><span class="lnk" data-r="'+esc(t.file||'')+'">Receipt 보기(맨 마지막 drill-down) →</span></div></div>'});
+h+='<div class="card mut">참고: 시간축=verifiedAt(자가보고) · 해소=그 시점 실패 없음(고침의 증명 아님) · 지문 v1=텍스트 기반(문구 변경=다른 주장 취급)</div>';
+el('detail').innerHTML=h;wire()}
 function failureDetail(e){const d=DATA.find(x=>x.file===e.file)||{};const c=(d.claims||[])[e.claimIndex-1]||{};
 const f=(c.failures||[]).find(x=>x.check===e.check&&x.status===e.status)||{};
 let h='<div class="card"><div class="big fail">❌ '+esc(e.check)+' — '+esc(e.status)+'</div>';
@@ -558,6 +581,7 @@ if(f.evidence)h+='<div>Evidence — expected: <code>'+esc(f.evidence.expected)+'
 if(f.hint)h+='<div class="mut">Hint (mechanical · 표시만): '+esc(f.hint)+'</div>';h+='</div>';
 h+='<div class="card"><b>Affected Claim #'+e.claimIndex+'</b><div style="margin:4px 0">'+esc(c.statement||e.statement)+'</div><div class="chk">';
 ['citation','number','date','hash','signature','link'].forEach(k=>{const ch=c.checks||{};if(ch[k]!=null){h+='<span class="k">'+k+'</span>'+st(ch[k])}});h+='</div></div>';
+h+='<div class="card">주장 지문 <code>'+esc(e.fingerprint||(c.fingerprint||''))+'</code> · <span class="lnk" data-h="'+esc(e.fingerprint||(c.fingerprint||''))+'">이 주장의 이력 보기 →</span></div>';
 h+='<div class="card mut">Receipt <code>'+esc((e.receiptId||'').slice(0,16))+'…</code> · <span class="lnk" data-r="'+esc(e.file||'')+'">Receipt 전체 보기(맨 마지막 drill-down) →</span></div>';
 el('detail').innerHTML=h;wire()}
 function render(list){const L=el('list');L.innerHTML='';el('count').textContent=list.length+' / '+DATA.length;
@@ -578,6 +602,7 @@ if(failed){h+='<div style="margin-top:6px">Failures:</div>';(c.failures||[]).for
 h+='<div class="rz"><b class="fail">'+esc(f.check)+'</b> — '+esc(f.status)+'<div class="mut">Reason: '+esc(f.reason)+'</div>'+
 (f.evidence?'<div>Evidence — expected: <code>'+esc(f.evidence.expected)+'</code> · actual: <code>'+esc(f.evidence.actual)+'</code></div>':'')+
 '<div class="mut">Hint (mechanical · 표시만): '+esc(f.hint)+'</div></div>'})}
+if(c.fingerprint)h+='<div class="mut">지문 <code>'+esc((c.fingerprint||'').slice(0,21))+'…</code> · <span class="lnk" data-h="'+esc(c.fingerprint)+'">이력 →</span></div>';
 h+='</div>'});
 const seenR={};const rel=DATA.filter(x=>x.file!==d.file&&x.inputSha&&x.inputSha===d.inputSha&&!(x.receiptId&&d.receiptId&&x.receiptId===d.receiptId))
 .filter(x=>{const k=x.receiptId||x.file;if(seenR[k])return 0;seenR[k]=1;return 1});
@@ -722,7 +747,7 @@ export function runGraphFailures(dirArg: string | undefined, f: FailureFilters, 
 }
 function printFailureLine(e: FailureEvent): void {
   console.log(`  ✗ [${e.check}] ${e.status} · ${e.subject.slice(0, 30)} · claim#${e.claimIndex} ${e.statement.slice(0, 40)}${e.tampered ? " · ⚠ 봉인확인실패" : ""}`);
-  console.log(`      ${e.reason} · ${e.file} · ${e.verifiedAt ?? "-"}`);
+  console.log(`      ${e.reason} · ${e.file} · ${e.verifiedAt ?? "-"} · 지문 ${e.fingerprint.slice(0, 17)}…`);
 }
 
 // ── graph diff — 두 집합(base→head) 회귀 비교(읽기전용·결정론) ──
@@ -833,12 +858,13 @@ export function runGraphDiff(
   console.log(line);
   console.log(`  신규 실패 ${d.newFailures.length} · 해소 ${d.resolvedFailures.length} · 상태변화 ${d.statusChanged.length} · 지속 ${d.persistingCount} · 입력 verdict 변화 ${d.inputVerdictChanges.length}`);
   if (d.tamperedBase || d.tamperedHead) console.log(`  ⚠ 봉인확인실패 실패이벤트: base ${d.tamperedBase} · head ${d.tamperedHead}${o.sealed ? " (제외됨)" : " (포함됨 — --sealed 로 제외 가능)"}`);
-  for (const e of d.newFailures) console.log(`  + 신규: [${e.check}] ${e.status} · ${e.subject.slice(0, 30)} · ${e.statement.slice(0, 40)}`);
+  for (const e of d.newFailures) console.log(`  + 신규: [${e.check}] ${e.status} · ${e.subject.slice(0, 30)} · ${e.statement.slice(0, 40)} · 지문 ${e.fingerprint.slice(0, 17)}…`);
   for (const e of d.resolvedFailures) console.log(`  - 해소: [${e.check}] ${e.status} · ${e.subject.slice(0, 30)} · ${e.statement.slice(0, 40)}`);
   for (const c of d.statusChanged) console.log(`  ~ 상태: [${c.check}] ${c.baseStatus} → ${c.headStatus} · ${c.subject.slice(0, 30)}`);
   for (const v of d.inputVerdictChanges) console.log(`  ⇄ 입력 ${v.inputSha.slice(0, 10)}…: ${v.baseVerdict} → ${v.headVerdict}`);
   console.log(line);
   console.log("  참고: 매칭은 기록 텍스트 기준(문구 변경=해소+신규로 보임) · 해소=고침의 증명 아님 · commit 축은 자가보고.");
+  if (d.newFailures.length) console.log("  이력 조회(고정 안내): agent-receipt graph history --dir <d> --claim <지문>");
   console.log(line);
   console.log("");
   process.exit(d.newFailures.length ? 1 : 0);

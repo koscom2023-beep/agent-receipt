@@ -207,6 +207,23 @@ check("Evidence Browser: Failure-first 탭(indexes 임베드)·Receipt=맨끝 dr
   assert.ok(!html.includes("<script src") && !html.includes("<link ")); // 자체완결 불변
   assert.ok(html.includes("&quot;")); // esc 가 따옴표 이스케이프(attribute 주입 차단)
 });
+check("L5: HTML 에 지문별 이력 사전계산 임베드 + 1클릭 이력 링크", () => {
+  const dL = mkdtempSync(join(tmpdir(), "argraphL-"));
+  writeFileSync(join(dL, "a.json"), JSON.stringify({ kind: "verification-receipt", receiptId: "l1", subject: "P", verdict: "fail", surface: "research", input: { sha256: "sL" }, verifiedAt: "2026-07-01T00:00:00Z", results: [{ statement: "HX", sourceUrl: "http://u", checks: { citation: "not-found" }, verdict: "failed" }] }));
+  writeFileSync(join(dL, "b.json"), JSON.stringify({ kind: "verification-receipt", receiptId: "l2", subject: "P", verdict: "pass", surface: "research", input: { sha256: "sL" }, verifiedAt: "2026-07-02T00:00:00Z", results: [{ statement: "HX", sourceUrl: "http://u", checks: { citation: "verified" }, verdict: "verified" }] }));
+  const rows = buildViewData(dL);
+  const fp = rows[0].claims[0].fingerprint;
+  const html = buildGraphHtml(rows);
+  assert.ok(html.includes('"histories"')); // 사전계산 임베드(SSOT=buildHistory)
+  assert.ok(html.includes(fp)); // 지문 값 실재
+  assert.ok(html.includes("이 주장의 이력 보기")); // 실패 상세 1클릭
+  assert.ok(html.includes("첫 등장") && html.includes("data-h=")); // 이력 패널·링크 배선
+  // 임베드된 이력이 buildHistory 와 동일(두 진실원 아님)
+  const emb = JSON.parse(html.match(/<script id="ar-data"[^>]*>(.*?)<\/script>/s)[1]);
+  assert.equal(emb.histories[fp].length, 2);
+  assert.equal(emb.histories[fp][1].changes.resolvedFailures.length, 1); // not-found→verified 해소가 화면 데이터에
+  rmSync(dL, { recursive: true, force: true });
+});
 check("FailureEvent: file 식별자 포함(결측/중복 receiptId 에도 정확 귀속)", () => {
   const dD = mkdtempSync(join(tmpdir(), "argraphD-"));
   writeFileSync(join(dD, "a.json"), JSON.stringify({ kind: "verification-receipt", receiptId: "x", subject: "P", verdict: "fail", surface: "research", input: { sha256: "s" }, results: [{ statement: "S", verdict: "failed", checks: { citation: "not-found" } }] }));
