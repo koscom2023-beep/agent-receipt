@@ -80,3 +80,23 @@ contentHash                    # sha256 of all the above incl. verifiedAt (full 
 - **What it does NOT verify**: whether the AI's *judgment* is right — the reasonableness of a conclusion, a missing consideration, a better alternative. That needs a human or another process.
 
 > "agent-receipt does not certify that an AI's judgment is correct. It independently and reproducibly checks the verifiable elements the AI presented — its citations, numbers, calculations, sources."
+
+## Evidence Graph contract (`graph view --format json` → `graph { nodes, edges }`)
+
+A consumer can reconstruct all relationships from this JSON alone (no HTML needed). Every edge is a deterministic restatement of recorded facts — never an inference.
+
+**Nodes** — `type`: `receipt` | `claim` | `check`. Receipt node ids are `receipt:<receiptId>` (or `receipt:file:<name>` when the receipt has no id — such rows are never folded). A same-(input·tool-version·verdict) re-run folds into one node: latest `verifiedAt` kept, all timestamps preserved in `verifiedAtAll`, count in `occurrences`. Seal-replay failures are flagged `tampered`, not hidden.
+
+**Edges** — `{ id, from, to, type, basis, note, tier }`:
+- `id`: deterministic — `` `${type}:${from}=>${to}` ``.
+- `type` (frozen enum): `asserts` (receipt→claim) · `checked_by` (claim→check) · `same_input` · `same_commit` · `reverifies` (all receipt↔receipt).
+- `basis` (frozen enum, machine-readable — *what recorded fact produced this edge*): `receipt-structure` · `input.sha256-rehashed` · `input.sha256-stated` · `reported.commit` · `verifiedAt-order`.
+- `note`: human explanation (display only, not contract).
+- `tier`: `verified` (this tool recomputed/read the fact directly) | `reported` (rests on a self-reported field). Rules: `same_input` is `verified` **only** when both input files were re-hashed and match (`inputMatch`); `same_commit` is always `reported`; `reverifies` is always `reported` (`verifiedAt` is caller-injected, no recomputation path).
+
+**Enum policy**: adding values is additive (a version bump of this section); changing the meaning of an existing value is forbidden.
+
+## Failure triage & diff (`graph failures`, `graph diff`)
+
+- `graph failures`: read-only query over flattened failure events (each = claim × failed check, with `file`, `verifiedAt` (self-reported), `tampered`). Filters: check/status/subject/model/commit/input/`--sealed`/`--since` (on self-reported `verifiedAt`). `--limit` always prints "N of M" — no silent truncation. Always exit 0 (a query, not a gate).
+- `graph diff` (base → head): `newFailures` / `resolvedFailures` / `statusChanged` / `persistingCount` / `inputVerdictChanges` (per shared `input.sha256`, latest-verifiedAt verdict on each side). Matching key = (`input.sha256` ∥ subject) + whitespace-normalized statement + check — **recorded-text identity, not semantic identity**: a reworded claim shows up as resolved + new. "Resolved" means *no failure with the same key in head*, not proof of a fix. Exit 1 when `newFailures` > 0 (a set-comparison fact, usable as a CI gate).

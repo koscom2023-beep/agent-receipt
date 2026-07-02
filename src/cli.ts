@@ -55,7 +55,7 @@ import { runResearchVerify } from "./research.js";
 import { runCouncilVerify } from "./council.js";
 import { runSpec } from "./spec.js";
 import { runReplayReceipt } from "./vreceipt.js";
-import { runGraphQuery, runGraphView } from "./graph.js";
+import { runGraphQuery, runGraphView, runGraphFailures, runGraphDiff } from "./graph.js";
 
 function getArg(flag: string): string | undefined {
   const i = process.argv.indexOf(flag);
@@ -143,7 +143,9 @@ agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
 
 ■ Evidence Graph / Evidence Browser(쌓인 Verification Receipt 활용 — 읽기전용·중립 · edge 는 graph view --format json 에 실재):
   graph query --dir <d> [--commit|--input|--model|--receipt-id] [--format json]   receipt 필터 + pass/fail 중립 카운트(edge 없음)
-  graph view --dir <d> [--out <html>] [--format json]   HTML=Evidence Browser(Failure-first: Dashboard→Failures 탭[Check별/Model별/Subject별/Commit별/Reason별]→Reason·Evidence→Affected Claim→Receipt 맨끝 drill-down) / json=소비자 API(summary·indexes·graph{nodes:Receipt/Claim/Check·edges:asserts/checked_by/same_input/same_commit/reverifies·basis·tier[verified=재해시/직접읽음 확인만·나머지 reported]}·failures·receipts · 같은[입력·버전·verdict] 재검증은 한 노드로 접힘[occurrences 보존])
+  graph view --dir <d> [--out <html>] [--format json]   HTML=Evidence Browser(Failure-first: Dashboard→Failures 탭[Check별/Model별/Subject별/Commit별/Reason별]→Reason·Evidence→Affected Claim→Receipt 맨끝 drill-down) / json=소비자 API(summary·indexes·graph{nodes:Receipt/Claim/Check·edges:asserts/checked_by/same_input/same_commit/reverifies·id+basis[기계 enum]+note+tier[verified=재해시/직접읽음 확인만·나머지 reported]}·failures·receipts · 같은[입력·버전·verdict] 재검증은 한 노드로 접힘[occurrences 보존])
+  graph failures --dir <d> [--by check|reason|subject|model|commit] [--check <k>] [--status s1,s2] [--subject|--model|--commit|--input <v>] [--sealed] [--since <ISO>] [--limit N] [--format json]   실패 triage(읽기전용·M건 중 N건 항상 표기·verifiedAt/commit=자가보고·--sealed=봉인 확인분만)
+  graph diff (--base-dir <d1> --head-dir <d2> | --dir <d> --base-commit <c1> --head-commit <c2>) [--sealed] [--format json]   회귀 비교: 신규/해소/상태변화/입력 verdict 변화 · 신규>0=exit 1(CI 게이트) · 매칭=기록 텍스트(의미 동일성 아님)·해소=고침의 증명 아님
 
 ■ 증빙 / 감사 묶음(git 증거):
   report [--type developer|client|audit] / receipt [--format ...] [--content] [--strict-redact] [--committed] [--agent <n>] [--model <m>] / receipts [--latest|--cat|--dir]
@@ -288,7 +290,25 @@ function main(): void {
     const filt = { commit: getArg("--commit"), input: getArg("--input"), model: getArg("--model"), receiptId: getArg("--receipt-id") };
     if (process.argv[3] === "query") runGraphQuery(getArg("--dir"), filt, getArg("--format"));
     if (process.argv[3] === "view") runGraphView(getArg("--dir"), getArg("--out"), getArg("--format"));
-    console.error("graph: 사용법 — graph query [--format json] · graph view --out <html>  (--dir <d> [--commit|--input|--model|--receipt-id])");
+    if (process.argv[3] === "failures")
+      // 실패 triage(읽기전용·질의) — verifiedAt/commit 은 자가보고 라벨·limit 은 M중N 항상 표기.
+      runGraphFailures(
+        getArg("--dir"),
+        {
+          check: getArg("--check"), status: getArg("--status")?.split(","), subject: getArg("--subject"),
+          model: getArg("--model"), commit: getArg("--commit"), input: getArg("--input"),
+          sealed: hasFlag("--sealed"), since: getArg("--since"),
+        },
+        getArg("--by"), getArg("--limit"), getArg("--format"),
+      );
+    if (process.argv[3] === "diff")
+      // 회귀 비교(base→head) — 신규 실패>0 이면 exit 1(CI 게이트로 사용 가능).
+      runGraphDiff({
+        dir: getArg("--dir"), baseDir: getArg("--base-dir"), headDir: getArg("--head-dir"),
+        baseCommit: getArg("--base-commit"), headCommit: getArg("--head-commit"),
+        sealed: hasFlag("--sealed"), format: getArg("--format"),
+      });
+    console.error("graph: 사용법 — graph query [--format json] · graph view --out <html> · graph failures [--by ...] · graph diff (--base-dir/--head-dir | --dir --base-commit/--head-commit)");
     process.exit(2);
   }
   if (command === "incident") {

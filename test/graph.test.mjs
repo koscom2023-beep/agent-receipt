@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import { writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadReceipts, queryReceipts, buildViewData, buildGraphHtml, buildSummary, buildFailures, buildIndexes, buildGraph } from "../dist/graph.js";
+import { loadReceipts, queryReceipts, buildViewData, buildGraphHtml, buildSummary, buildFailures, buildIndexes, buildGraph, buildFailureEvents, filterFailureEvents, buildGraphDiff } from "../dist/graph.js";
 import { evaluateClaim, SCHEMA_VERSION } from "../dist/index.js"; // SDK 배럴(L7 씨앗)
 
 let pass = 0;
@@ -213,6 +213,82 @@ check("FailureEvent: file 식별자 포함(결측/중복 receiptId 에도 정확
   const ix = buildIndexes(buildViewData(dD));
   assert.equal(ix.byCheck.citation[0].file, "a.json");
   rmSync(dD, { recursive: true, force: true });
+});
+
+// ── Ship B: edge 계약 동결(enum·id·note) ──
+check("edge 계약: type/basis/tier enum 동결 + 결정론 id + note", () => {
+  const dE = mkdtempSync(join(tmpdir(), "argraphE-"));
+  const inp = join(dE, "in.txt");
+  writeFileSync(inp, "C");
+  const sha = createHash("sha256").update("C").digest("hex");
+  writeFileSync(join(dE, "a.json"), JSON.stringify({ kind: "verification-receipt", receiptId: "e1", subject: "S", verdict: "fail", surface: "research", input: { file: inp, sha256: sha }, verifiedAt: "2026-07-01T00:00:00Z", provenance: { reported: { commit: "cc" } }, results: [{ statement: "X", verdict: "failed", checks: { citation: "not-found" } }] }));
+  writeFileSync(join(dE, "b.json"), JSON.stringify({ kind: "verification-receipt", receiptId: "e2", subject: "S", verdict: "pass", surface: "research", input: { file: inp, sha256: sha }, verifiedAt: "2026-07-02T00:00:00Z", provenance: { reported: { commit: "cc" } } }));
+  const g = buildGraph(buildViewData(dE));
+  const TYPES = new Set(["asserts", "checked_by", "same_input", "same_commit", "reverifies"]);
+  const BASIS = new Set(["receipt-structure", "input.sha256-rehashed", "input.sha256-stated", "reported.commit", "verifiedAt-order"]);
+  for (const e of g.edges) {
+    assert.ok(TYPES.has(e.type), `type enum 밖: ${e.type}`);
+    assert.ok(BASIS.has(e.basis), `basis enum 밖: ${e.basis}`);
+    assert.ok(e.tier === "verified" || e.tier === "reported");
+    assert.equal(e.id, `${e.type}:${e.from}=>${e.to}`); // 결정론 id
+    assert.ok(typeof e.note === "string" && e.note.length > 0); // 사람 설명
+  }
+  // 생성규칙 고정: 재해시 일치 → same_input=verified+rehashed basis / reverifies=verifiedAt-order+reported
+  const si = g.edges.find((e) => e.type === "same_input");
+  assert.equal(si.basis, "input.sha256-rehashed");
+  assert.equal(si.tier, "verified");
+  const rv = g.edges.find((e) => e.type === "reverifies");
+  assert.equal(rv.basis, "verifiedAt-order");
+  assert.equal(rv.tier, "reported");
+  const sc = g.edges.find((e) => e.type === "same_commit");
+  assert.equal(sc.basis, "reported.commit");
+  rmSync(dE, { recursive: true, force: true });
+});
+
+// ── Ship A: graph failures(triage) — 필터·정렬 ──
+check("filterFailureEvents: status/check/sealed/since 필터 + 최신 먼저 정렬", () => {
+  const dF = mkdtempSync(join(tmpdir(), "argraphF-"));
+  const mk2 = (name, o) => writeFileSync(join(dF, name), JSON.stringify(o));
+  mk2("a.json", { kind: "verification-receipt", receiptId: "f1", subject: "P1", verdict: "fail", surface: "research", input: { sha256: "s1" }, verifiedAt: "2026-07-01T00:00:00Z", results: [{ statement: "A", verdict: "failed", checks: { citation: "not-found" } }] });
+  mk2("b.json", { kind: "verification-receipt", receiptId: "f2", subject: "P2", verdict: "fail", surface: "research", input: { sha256: "s2" }, verifiedAt: "2026-07-03T00:00:00Z", results: [{ statement: "B", verdict: "failed", checks: { hash: "mismatch" } }] });
+  const events = buildFailureEvents(buildViewData(dF));
+  assert.equal(events.length, 2);
+  assert.ok(events.every((e) => typeof e.tampered === "boolean" && "verifiedAt" in e && "inputSha" in e && "file" in e));
+  assert.equal(filterFailureEvents(events, { status: ["mismatch"] }).length, 1);
+  assert.equal(filterFailureEvents(events, { check: "citation" })[0].subject, "P1");
+  assert.equal(filterFailureEvents(events, { sealed: true }).length, 0); // 봉인 없음 픽스처 → sealed 로 전부 제외
+  assert.equal(filterFailureEvents(events, { since: "2026-07-02T00:00:00Z" }).length, 1); // 자가보고 verifiedAt 기준
+  const sorted = filterFailureEvents(events, {});
+  assert.equal(sorted[0].check, "hash"); // 최신(7/3) 먼저
+  rmSync(dF, { recursive: true, force: true });
+});
+
+// ── Ship A: graph diff — 신규/해소/상태변화/입력 verdict 변화 ──
+check("buildGraphDiff: 4분면 + 입력 verdict 변화(최신 verifiedAt 기준)", () => {
+  const dB1 = mkdtempSync(join(tmpdir(), "argraphG1-"));
+  const dB2 = mkdtempSync(join(tmpdir(), "argraphG2-"));
+  const mkr = (dir, name, o) => writeFileSync(join(dir, name), JSON.stringify(o));
+  // base: 실패 R(citation)·실패 S(hash mismatch)·지속 T(link invalid)·입력 sX=fail
+  mkr(dB1, "r.json", { kind: "verification-receipt", receiptId: "bR", subject: "W", verdict: "fail", surface: "research", input: { sha256: "sR" }, verifiedAt: "2026-07-01T00:00:00Z", results: [{ statement: "Q1", verdict: "failed", checks: { citation: "not-found" } }] });
+  mkr(dB1, "s.json", { kind: "verification-receipt", receiptId: "bS", subject: "W", verdict: "fail", surface: "research", input: { sha256: "sS" }, verifiedAt: "2026-07-01T00:00:00Z", results: [{ statement: "Q2", verdict: "failed", checks: { hash: "mismatch" } }] });
+  mkr(dB1, "t.json", { kind: "verification-receipt", receiptId: "bT", subject: "W", verdict: "fail", surface: "research", input: { sha256: "sT" }, verifiedAt: "2026-07-01T00:00:00Z", results: [{ statement: "Q3", verdict: "failed", checks: { link: "invalid" } }] });
+  // head: R 해소(같은 키 실패 없음)·S 상태변화(mismatch→invalid)·T 지속·신규 U(number)·입력 sR=pass 로 변화
+  mkr(dB2, "r.json", { kind: "verification-receipt", receiptId: "hR", subject: "W", verdict: "pass", surface: "research", input: { sha256: "sR" }, verifiedAt: "2026-07-02T00:00:00Z" });
+  mkr(dB2, "s.json", { kind: "verification-receipt", receiptId: "hS", subject: "W", verdict: "fail", surface: "research", input: { sha256: "sS" }, verifiedAt: "2026-07-02T00:00:00Z", results: [{ statement: "Q2", verdict: "failed", checks: { hash: "invalid" } }] });
+  mkr(dB2, "t.json", { kind: "verification-receipt", receiptId: "hT", subject: "W", verdict: "fail", surface: "research", input: { sha256: "sT" }, verifiedAt: "2026-07-02T00:00:00Z", results: [{ statement: "Q3", verdict: "failed", checks: { link: "invalid" } }] });
+  mkr(dB2, "u.json", { kind: "verification-receipt", receiptId: "hU", subject: "W", verdict: "fail", surface: "research", input: { sha256: "sU" }, verifiedAt: "2026-07-02T00:00:00Z", results: [{ statement: "Q4", verdict: "failed", checks: { number: "mismatch" } }] });
+  const d = buildGraphDiff(buildViewData(dB1), buildViewData(dB2));
+  assert.equal(d.newFailures.length, 1);
+  assert.equal(d.newFailures[0].check, "number");
+  assert.equal(d.resolvedFailures.length, 1);
+  assert.equal(d.resolvedFailures[0].check, "citation");
+  assert.equal(d.statusChanged.length, 1);
+  assert.deepEqual([d.statusChanged[0].baseStatus, d.statusChanged[0].headStatus], ["mismatch", "invalid"]);
+  assert.equal(d.persistingCount, 1); // T(link invalid) 지속
+  assert.deepEqual(d.inputVerdictChanges, [{ inputSha: "sR", baseVerdict: "fail", headVerdict: "pass" }]);
+  assert.ok(d.tamperedBase >= 0 && d.tamperedHead >= 0);
+  rmSync(dB1, { recursive: true, force: true });
+  rmSync(dB2, { recursive: true, force: true });
 });
 
 // ── L7 SDK 배럴: 외부 import 가능 ──

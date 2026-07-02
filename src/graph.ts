@@ -246,7 +246,10 @@ export interface FailureEvent {
   file: string; // 안정 식별자(receiptId 결측/중복 파일에도 정확 귀속)
   subject: string;
   model: string | null;
-  commit: string | null;
+  commit: string | null; // 자가보고(provenance.reported)
+  inputSha: string | null;
+  verifiedAt: string | null; // 자가보고 타임스탬프
+  tampered: boolean; // 영수증 봉인 재검증 실패(contentHash/receiptId)
   claimIndex: number;
   statement: string;
   check: string;
@@ -256,9 +259,14 @@ export interface FailureEvent {
 export function buildFailureEvents(rows: ViewRow[]): FailureEvent[] {
   const out: FailureEvent[] = [];
   for (const r of rows) {
+    const tampered = !r.integrity.contentHashOk || !r.integrity.receiptIdOk;
     r.claims.forEach((c, i) => {
       c.failures.forEach((f) => {
-        out.push({ receiptId: r.receiptId, file: r.file, subject: r.subject, model: r.model, commit: r.commit, claimIndex: i + 1, statement: c.statement, check: f.check, status: f.status, reason: f.reason });
+        out.push({
+          receiptId: r.receiptId, file: r.file, subject: r.subject, model: r.model, commit: r.commit,
+          inputSha: r.inputSha, verifiedAt: r.verifiedAt, tampered,
+          claimIndex: i + 1, statement: c.statement, check: f.check, status: f.status, reason: f.reason,
+        });
       });
     });
   }
@@ -307,18 +315,31 @@ export function buildIndexes(rows: ViewRow[]): GraphIndexes {
 // 정직: "derived_from" 이라 부르지 않는다 — 재검증은 파생(계보)의 증명이 아니다.
 //   진짜 파생 엣지는 영수증이 명시 선언 필드를 갖게 될 때만(future).
 // pair 엣지는 그룹 내 O(n²) — 침묵 캡 없이 전부 방출(전형 볼륨 소규모).
+// ── Edge 계약(기계 판독·versioned) — 외부 소비자가 graph view --format json 만 보고 관계 복원 가능해야 함 ──
+// enum 은 동결 테스트로 고정(값 *추가*는 additive·기존 값 의미 변경은 불가).
+export type GraphEdgeType = "asserts" | "checked_by" | "same_input" | "same_commit" | "reverifies";
+export type EdgeBasis =
+  | "receipt-structure"      // 영수증 파일에서 직접 읽은 포함관계/checks 기록(구조 사실)
+  | "input.sha256-rehashed"  // 양쪽 입력 파일을 이 도구가 재해시해 기재값과 일치 확인
+  | "input.sha256-stated"    // 영수증 기재 sha256 동일(재해시 불가/미일치 — 기재값 신뢰)
+  | "reported.commit"        // provenance.reported.commit 동일(자가보고)
+  | "verifiedAt-order";      // verifiedAt(자가보고 타임스탬프) 시간순
 export interface GraphNode {
   id: string;
   type: "receipt" | "claim" | "check";
   [k: string]: unknown;
 }
 export interface GraphEdge {
+  id: string; // 결정론: `${type}:${from}=>${to}`
   from: string;
   to: string;
-  type: "asserts" | "checked_by" | "same_input" | "same_commit" | "reverifies";
-  basis: string; // 결정론 근거 자기기술(무엇으로 이 엣지를 만들었나)
+  type: GraphEdgeType;
+  basis: EdgeBasis; // 기계 판독 — 무슨 기록으로 이 엣지를 만들었나
+  note: string; // 사람 설명(표시용·계약 아님)
   tier: "verified" | "reported"; // 근거의 신뢰 계층(provenance 계층화와 같은 규율)
 }
+const edge = (type: GraphEdgeType, from: string, to: string, basis: EdgeBasis, note: string, tier: "verified" | "reported"): GraphEdge =>
+  ({ id: `${type}:${from}=>${to}`, from, to, type, basis, note, tier });
 const canonTime = (v: string | null): string | null => {
   if (!v) return null;
   const t = Date.parse(v);
@@ -367,12 +388,12 @@ export function buildGraph(rows: ViewRow[]): { nodes: GraphNode[]; edges: GraphE
     r.claims.forEach((c, i) => {
       const cid = `${e.rid}/claim/${i + 1}`;
       nodes.push({ id: cid, type: "claim", statement: c.statement, verdict: c.verdict });
-      edges.push({ from: e.rid, to: cid, type: "asserts", basis: "영수증 파일에서 직접 읽은 포함관계(구조 사실)", tier: "verified" });
+      edges.push(edge("asserts", e.rid, cid, "receipt-structure", "영수증 파일에서 직접 읽은 포함관계(구조 사실)", "verified"));
       for (const [kind, stt] of Object.entries(c.checks)) {
         if (stt == null) continue;
         const kid = `${cid}/check/${kind}`;
         nodes.push({ id: kid, type: "check", check: kind, status: stt });
-        edges.push({ from: cid, to: kid, type: "checked_by", basis: "영수증 파일에서 직접 읽은 checks 기록(구조 사실)", tier: "verified" });
+        edges.push(edge("checked_by", cid, kid, "receipt-structure", "영수증 파일에서 직접 읽은 checks 기록(구조 사실)", "verified"));
       }
     });
   }
@@ -392,31 +413,22 @@ export function buildGraph(rows: ViewRow[]): { nodes: GraphNode[]; edges: GraphE
       for (let j = i + 1; j < g.length; j++) {
         // verified 는 양쪽 입력을 우리가 실제 재해시해 기재값과 일치했을 때만(그 외=기재값 신뢰=reported).
         const rehashedBoth = inputRehashed(g[i]) && inputRehashed(g[j]);
-        edges.push({
-          from: g[j].rid, to: g[i].rid, type: "same_input",
-          basis: rehashedBoth
-            ? "input.sha256 동일 — 양쪽 입력 파일 재해시로 확인(inputMatch)"
-            : "input.sha256 동일 — 영수증 기재값 기준(입력 재해시 불가/미일치 포함)",
-          tier: rehashedBoth ? "verified" : "reported",
-        });
+        edges.push(
+          rehashedBoth
+            ? edge("same_input", g[j].rid, g[i].rid, "input.sha256-rehashed", "input.sha256 동일 — 양쪽 입력 파일 재해시로 확인(inputMatch)", "verified")
+            : edge("same_input", g[j].rid, g[i].rid, "input.sha256-stated", "input.sha256 동일 — 영수증 기재값 기준(입력 재해시 불가/미일치 포함)", "reported"),
+        );
       }
     for (let i = 0; i + 1 < g.length; i++) {
       const a = g[i], b = g[i + 1];
       if (a.ct && b.ct && b.ct > a.ct)
-        edges.push({
-          from: b.rid, to: a.rid, type: "reverifies",
-          basis: "같은 input.sha256 + verifiedAt 시간순 — verifiedAt 은 자가보고 타임스탬프(파생의 증명 아님)",
-          tier: "reported",
-        });
+        edges.push(edge("reverifies", b.rid, a.rid, "verifiedAt-order", "같은 input.sha256 + verifiedAt 시간순 — verifiedAt 은 자가보고 타임스탬프(파생의 증명 아님)", "reported"));
     }
   }
   for (const g of groupBy((r) => r.commit).values()) {
     for (let i = 0; i < g.length; i++)
       for (let j = i + 1; j < g.length; j++)
-        edges.push({
-          from: g[j].rid, to: g[i].rid,
-          type: "same_commit", basis: "provenance.reported.commit 동일(자가보고)", tier: "reported",
-        });
+        edges.push(edge("same_commit", g[j].rid, g[i].rid, "reported.commit", "provenance.reported.commit 동일(자가보고)", "reported"));
   }
   return { nodes, edges };
 }
@@ -593,4 +605,217 @@ export function runGraphView(dirArg: string | undefined, outArg: string | undefi
     console.log(html);
   }
   process.exit(0);
+}
+
+// ── graph failures — 실패 triage 전용(읽기전용·중립·네트워크 0) ──
+// 사람이 쓰는 triage 루프: "citation not-found 최근 20개"·"봉인 확인된 실패만" 을 명령 한 줄로.
+// 정직: verifiedAt/commit 은 자가보고 — 출력에 라벨. limit 은 "M건 중 N건" 항상 표기(침묵 캡 금지).
+export interface FailureFilters {
+  check?: string;
+  status?: string[]; // 콤마 목록
+  subject?: string;
+  model?: string;
+  commit?: string;
+  input?: string;
+  sealed?: boolean; // true = 봉인 재검증 통과 영수증의 실패만(tampered 제외)
+  since?: string; // ISO — verifiedAt(자가보고) 기준·결측/파싱불가는 제외
+}
+export function filterFailureEvents(events: FailureEvent[], f: FailureFilters): FailureEvent[] {
+  const sinceCt = f.since ? canonTime(f.since) : null;
+  return events
+    .filter(
+      (e) =>
+        (!f.check || e.check === f.check) &&
+        (!f.status || f.status.includes(e.status)) &&
+        (!f.subject || e.subject === f.subject) &&
+        (!f.model || e.model === f.model) &&
+        (!f.commit || e.commit === f.commit) &&
+        (!f.input || e.inputSha === f.input) &&
+        (!f.sealed || !e.tampered) &&
+        (!sinceCt || (canonTime(e.verifiedAt) ?? "") >= sinceCt),
+    )
+    .sort(
+      (a, b) =>
+        cmpStr(canonTime(b.verifiedAt) ?? "", canonTime(a.verifiedAt) ?? "") || // 최신 먼저(자가보고 기준)
+        cmpStr(a.file, b.file) || a.claimIndex - b.claimIndex || cmpStr(a.check, b.check),
+    );
+}
+const FAILURE_GROUP_KEYS: Record<string, (e: FailureEvent) => string> = {
+  check: (e) => e.check,
+  reason: (e) => e.reason,
+  subject: (e) => e.subject,
+  model: (e) => e.model ?? "(unknown)",
+  commit: (e) => e.commit ?? "(none)",
+};
+/**
+ * `agent-receipt graph failures --dir <d> [--by check|reason|subject|model|commit] [필터…] [--limit N] [--format json]`
+ *  실패만 빠르게 뽑는 triage. 읽기전용·항상 exit 0(질의이지 게이트 아님 — 게이트는 graph diff).
+ */
+export function runGraphFailures(dirArg: string | undefined, f: FailureFilters, by?: string, limitArg?: string, format?: string): never {
+  const dir = resolveDir(dirArg);
+  if (by && !FAILURE_GROUP_KEYS[by]) {
+    console.error(`graph failures: --by 는 check|reason|subject|model|commit 중 하나 (받음: ${by})`);
+    process.exit(2);
+  }
+  if (f.since && !canonTime(f.since)) {
+    // 침묵 무시 금지 — 파싱 불가한 --since 는 명시적 오류.
+    console.error(`graph failures: --since 를 시간으로 못 읽음(ISO-8601 필요): ${f.since}`);
+    process.exit(2);
+  }
+  const all = buildFailureEvents(buildViewData(dir));
+  const matched = filterFailureEvents(all, f);
+  const limit = limitArg ? Math.max(0, Number(limitArg) || 0) : undefined;
+  const shown = limit !== undefined ? matched.slice(0, limit) : matched;
+
+  if (format === "json") {
+    const body: Record<string, unknown> = {
+      dir, totalFailures: all.length, matched: matched.length, shown: shown.length,
+      note: "verifiedAt/commit 은 자가보고 · sealed=봉인 재검증 통과만 · 질의이지 판정 아님",
+    };
+    if (by) {
+      const groups: Record<string, FailureEvent[]> = {};
+      for (const e of shown) (groups[FAILURE_GROUP_KEYS[by](e)] ??= []).push(e);
+      body.by = by;
+      body.groups = groups;
+    } else {
+      body.events = shown;
+    }
+    console.log(JSON.stringify(body, null, 2));
+    process.exit(0);
+  }
+
+  console.log("");
+  console.log(line);
+  console.log(`실패 triage: ${dir}  (전체 실패 ${all.length}건 → 필터 일치 ${matched.length}건 중 ${shown.length}건 표시)`);
+  console.log(line);
+  if (!shown.length) console.log("  (일치하는 실패 없음)");
+  if (by) {
+    const groups = new Map<string, FailureEvent[]>();
+    for (const e of shown) {
+      const k = FAILURE_GROUP_KEYS[by](e);
+      (groups.get(k) ?? groups.set(k, []).get(k)!).push(e);
+    }
+    for (const [k, evs] of [...groups.entries()].sort((a, b) => b[1].length - a[1].length)) {
+      console.log(`  ■ ${by}=${k}  (${evs.length}건)`);
+      for (const e of evs) printFailureLine(e);
+    }
+  } else {
+    for (const e of shown) printFailureLine(e);
+  }
+  console.log(line);
+  console.log("  참고: verifiedAt·commit 은 자가보고 값 · 이 명령은 질의(읽기전용)이지 판정이 아님.");
+  console.log(line);
+  console.log("");
+  process.exit(0);
+}
+function printFailureLine(e: FailureEvent): void {
+  console.log(`  ✗ [${e.check}] ${e.status} · ${e.subject.slice(0, 30)} · claim#${e.claimIndex} ${e.statement.slice(0, 40)}${e.tampered ? " · ⚠ 봉인확인실패" : ""}`);
+  console.log(`      ${e.reason} · ${e.file} · ${e.verifiedAt ?? "-"}`);
+}
+
+// ── graph diff — 두 집합(base→head) 회귀 비교(읽기전용·결정론) ──
+// 매칭 키 = (input.sha256 ∥ subject) + 공백정규화 statement + check — *기록된 텍스트* 기준이지
+//   의미적 동일성 아님: 문구가 바뀐 claim 은 "해소+신규" 로 갈라져 보인다(정직 한계·fingerprint 는 후속).
+// "해소" = head 에 같은 키의 실패가 없다는 사실이지 고쳐졌다는 증명이 아님.
+// 신규 실패 > 0 → exit 1 (집합 비교 사실 — CI 게이트로 쓸 수 있음).
+const normWs = (s: string): string => s.replace(/\s+/g, " ").trim();
+const failureKey = (e: FailureEvent): string => [e.inputSha ?? `subject:${e.subject}`, normWs(e.statement), e.check].join("\u0000"); // NUL 구분자(필드 충돌 방지)
+export interface GraphDiffResult {
+  newFailures: FailureEvent[];
+  resolvedFailures: FailureEvent[];
+  statusChanged: { check: string; subject: string; statement: string; baseStatus: string; headStatus: string; file: string }[];
+  persistingCount: number;
+  inputVerdictChanges: { inputSha: string; baseVerdict: string; headVerdict: string }[];
+  tamperedBase: number;
+  tamperedHead: number;
+}
+// 같은 input 여러 영수증이면 최신 verifiedAt(자가보고)·file tie-break 의 verdict 를 그 입력의 상태로 본다.
+function latestVerdictByInput(rows: ViewRow[]): Map<string, string> {
+  const sorted = rows.slice().sort((a, b) => cmpStr(canonTime(a.verifiedAt) ?? "", canonTime(b.verifiedAt) ?? "") || cmpStr(a.file, b.file));
+  const m = new Map<string, string>();
+  for (const r of sorted) if (r.inputSha) m.set(r.inputSha, r.verdict); // 뒤(=최신)가 덮어씀
+  return m;
+}
+export function buildGraphDiff(baseRows: ViewRow[], headRows: ViewRow[], opts: { sealed?: boolean } = {}): GraphDiffResult {
+  let be = buildFailureEvents(baseRows);
+  let he = buildFailureEvents(headRows);
+  const tamperedBase = be.filter((e) => e.tampered).length;
+  const tamperedHead = he.filter((e) => e.tampered).length;
+  if (opts.sealed) {
+    be = be.filter((e) => !e.tampered);
+    he = he.filter((e) => !e.tampered);
+  }
+  const bm = new Map(be.map((e) => [failureKey(e), e] as const));
+  const hm = new Map(he.map((e) => [failureKey(e), e] as const));
+  const byKeySort = (a: FailureEvent, b: FailureEvent): number => cmpStr(a.check, b.check) || cmpStr(a.subject, b.subject) || cmpStr(a.statement, b.statement);
+  const newFailures = [...hm.entries()].filter(([k]) => !bm.has(k)).map(([, e]) => e).sort(byKeySort);
+  const resolvedFailures = [...bm.entries()].filter(([k]) => !hm.has(k)).map(([, e]) => e).sort(byKeySort);
+  const statusChanged = [...hm.entries()]
+    .filter(([k, e]) => bm.has(k) && bm.get(k)!.status !== e.status)
+    .map(([k, e]) => ({ check: e.check, subject: e.subject, statement: e.statement, baseStatus: bm.get(k)!.status, headStatus: e.status, file: e.file }))
+    .sort((a, b) => cmpStr(a.check, b.check) || cmpStr(a.subject, b.subject) || cmpStr(a.statement, b.statement));
+  const persistingCount = [...hm.entries()].filter(([k, e]) => bm.has(k) && bm.get(k)!.status === e.status).length;
+  const bv = latestVerdictByInput(baseRows);
+  const hv = latestVerdictByInput(headRows);
+  const inputVerdictChanges: GraphDiffResult["inputVerdictChanges"] = [];
+  for (const [sha, base] of [...bv.entries()].sort((a, b) => cmpStr(a[0], b[0]))) {
+    const head = hv.get(sha);
+    if (head !== undefined && head !== base) inputVerdictChanges.push({ inputSha: sha, baseVerdict: base, headVerdict: head });
+  }
+  return { newFailures, resolvedFailures, statusChanged, persistingCount, inputVerdictChanges, tamperedBase, tamperedHead };
+}
+/**
+ * `agent-receipt graph diff (--base-dir <d1> --head-dir <d2> | --dir <d> --base-commit <c1> --head-commit <c2>) [--sealed] [--format json]`
+ *  회귀 비교: 신규/해소/상태변화/입력 verdict 변화. 신규 실패>0 → exit 1.
+ */
+export function runGraphDiff(
+  o: { dir?: string; baseDir?: string; headDir?: string; baseCommit?: string; headCommit?: string; sealed?: boolean; format?: string },
+): never {
+  let baseRows: ViewRow[];
+  let headRows: ViewRow[];
+  let baseLabel: string;
+  let headLabel: string;
+  if (o.baseDir && o.headDir) {
+    baseRows = buildViewData(resolveDir(o.baseDir));
+    headRows = buildViewData(resolveDir(o.headDir));
+    baseLabel = o.baseDir;
+    headLabel = o.headDir;
+  } else if (o.baseCommit && o.headCommit) {
+    const all = buildViewData(resolveDir(o.dir));
+    baseRows = all.filter((r) => r.commit === o.baseCommit);
+    headRows = all.filter((r) => r.commit === o.headCommit);
+    baseLabel = `commit ${o.baseCommit.slice(0, 8)}(자가보고)`;
+    headLabel = `commit ${o.headCommit.slice(0, 8)}(자가보고)`;
+  } else {
+    console.error("graph diff: (--base-dir <d1> --head-dir <d2>) 또는 (--dir <d> --base-commit <c1> --head-commit <c2>) 가 필요합니다.");
+    process.exit(2);
+  }
+  const d = buildGraphDiff(baseRows, headRows, { sealed: o.sealed });
+
+  if (o.format === "json") {
+    console.log(JSON.stringify({
+      base: { label: baseLabel, receipts: baseRows.length },
+      head: { label: headLabel, receipts: headRows.length },
+      sealedOnly: !!o.sealed,
+      note: "매칭=기록 텍스트(입력sha∥subject+statement+check) 기준·의미 동일성 아님 · 해소=head 에 같은 키 실패 없음(고침의 증명 아님)",
+      ...d,
+    }, null, 2));
+    process.exit(d.newFailures.length ? 1 : 0);
+  }
+
+  console.log("");
+  console.log(line);
+  console.log(`Evidence Graph diff: base=${baseLabel}(${baseRows.length}건) → head=${headLabel}(${headRows.length}건)${o.sealed ? " · 봉인 확인분만" : ""}`);
+  console.log(line);
+  console.log(`  신규 실패 ${d.newFailures.length} · 해소 ${d.resolvedFailures.length} · 상태변화 ${d.statusChanged.length} · 지속 ${d.persistingCount} · 입력 verdict 변화 ${d.inputVerdictChanges.length}`);
+  if (d.tamperedBase || d.tamperedHead) console.log(`  ⚠ 봉인확인실패 실패이벤트: base ${d.tamperedBase} · head ${d.tamperedHead}${o.sealed ? " (제외됨)" : " (포함됨 — --sealed 로 제외 가능)"}`);
+  for (const e of d.newFailures) console.log(`  + 신규: [${e.check}] ${e.status} · ${e.subject.slice(0, 30)} · ${e.statement.slice(0, 40)}`);
+  for (const e of d.resolvedFailures) console.log(`  - 해소: [${e.check}] ${e.status} · ${e.subject.slice(0, 30)} · ${e.statement.slice(0, 40)}`);
+  for (const c of d.statusChanged) console.log(`  ~ 상태: [${c.check}] ${c.baseStatus} → ${c.headStatus} · ${c.subject.slice(0, 30)}`);
+  for (const v of d.inputVerdictChanges) console.log(`  ⇄ 입력 ${v.inputSha.slice(0, 10)}…: ${v.baseVerdict} → ${v.headVerdict}`);
+  console.log(line);
+  console.log("  참고: 매칭은 기록 텍스트 기준(문구 변경=해소+신규로 보임) · 해소=고침의 증명 아님 · commit 축은 자가보고.");
+  console.log(line);
+  console.log("");
+  process.exit(d.newFailures.length ? 1 : 0);
 }
