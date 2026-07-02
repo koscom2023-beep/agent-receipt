@@ -27,19 +27,21 @@ It is local-first by design:
 
 ## The model — six objects, not fifty commands
 
-Under the ~50 commands there is **one pipeline over six objects.** The commands are just verbs that produce or transform them:
+This describes the **Work track** — proving what an AI did *to your git repo*. A second, independent track — proving whether an AI's *stated evidence* is true — is covered in [Verification engine](#verification-engine) below; it has its own receipt kind.
+
+Under the ~50 Work-track commands there is **one pipeline over six objects.** The commands are just verbs that produce or transform them:
 
 ```
-AI Session ─▶ Evidence ─▶ Verification ─▶ Verified Receipt ─▶ Ledger ─▶ Audit ─▶ Publication
-  begin        capture       verify           receipt           ledger    risk      share-proof
-  start        claims        check            done                        controls  anchor
-               git diff      reconcile                                     insights  export
+AI Session ─▶ Evidence ─▶ Verification ─▶ Receipt ─▶ Ledger ─▶ Audit ─▶ Publication
+  begin        capture       verify         receipt    ledger    risk      share-proof
+  start        claims        check          done                  controls  anchor
+               git diff      reconcile                             insights  export
 ```
 
 - **Session** — one unit of AI work (`begin` / `start`).
 - **Evidence** — what happened: the agent's *claim*, the *git diff*, and beyond-git actions (`capture`).
 - **Verification** — is it true? `verify` + `check`, and reconcile the claim against git.
-- **Verified Receipt** — the sealed fact + integrity hash (`receipt` / `done`). A *verified, tamper-evident* record, not a bare note.
+- **Receipt** (a **Work Receipt**) — the sealed fact + integrity hash (`receipt` / `done`). A *verified, tamper-evident* record, not a bare note.
 - **Ledger** — append-only, hash-chained trail (`ledger`).
 - **Audit** — read-only judgment: `risk` · `controls` · `insights`.
 - **Publication** — how a fact leaves your machine: `share-proof` · `anchor`.
@@ -71,6 +73,42 @@ Full command list: `agent-receipt help --all`.
 
 ---
 
+## Verification engine
+
+*Is the AI's evidence — a citation, a number, a date, a hash, a signature — actually true against its source?*
+
+Everything above (the **Work track**) proves what an AI did *to your git repo*. This second, independent track proves whether what the AI *said* is true. It takes any JSON report of claims and checks each one deterministically — no LLM judgment, no network required unless you ask for it.
+
+```
+research/council verify --file <report.json> ─▶ Evidence Kernel ─▶ --out Verification Receipt ─▶ graph {query,view,failures,diff,history,subjects}
+        (claims + sources in)                   (evaluateClaim:                (a separate,                (read model: triage,
+                                                  citation/number/date/           sealed receipt kind)         regression gate, timelines,
+                                                  link/hash/signature)                                         a status board)
+```
+
+- **`research verify --file <report.json>`** — check a set of claims (quotes, numbers, dates, hashes, signatures) against their sources.
+- **`council verify --file <decision.json>`** — check a set of *decisions*' supporting claims the same way. It verifies decisions already made; it does **not** run a meeting.
+- Both call the same **Evidence Kernel** (`evaluateClaim`) — deterministic, model-agnostic checks. citation/number/date/hash/signature are *positive* evidence (they can make a claim `verified`); `link` is well-formedness only (*advisory*).
+- **`--out <path>`** seals the result into a **Verification Receipt** — a receipt kind *separate* from the Work Receipt above: `schemaVersion: "evidence/1"`, `kind: "verification-receipt"`. Its provenance is tiered: `verified` = this tool recomputed the fact itself (e.g. re-hashed an input file and it matched); `reported` = a self-reported field (a model name, a commit, a timestamp) — never laundered into `verified`.
+- **`graph`** reads accumulated Verification Receipts — see [Verification engine commands](#verification-engine-commands) below for the full list (`query` / `view` / `failures` / `diff` / `history` / `subjects`).
+- **`spec`** publishes the check format as a machine-readable JSON Schema — the code generates the schema from the same registry `evaluateClaim` uses, so the code *is* the spec.
+
+**Two receipt kinds, one CLI.** The Work track and the Verification track share one CLI, one deterministic-checking philosophy, and the same honesty rules (self-reported fields are always labeled; a check either passed, failed, or had no basis to judge — never a score). They do **not** share a receipt schema, a `replay` target, or downstream readers:
+
+| | Work Receipt | Verification Receipt |
+|---|---|---|
+| Produced by | `done` / `receipt --committed` | `research verify --out` / `council verify --out` |
+| Proves | the AI kept the contract *in this git repo* | the AI's *stated evidence* matches its source |
+| Schema | `schemaVersion: "1.0"` | `schemaVersion: "evidence/1"`, `kind: "verification-receipt"` |
+| Re-verified by | `replay --pack <audit-pack-dir>` | `replay --receipt <path>` |
+| Consumed by | `share-proof` · `ledger` · `controls` · `insights` · `risk` · `anchor` | `graph query/view/failures/diff/history/subjects` · the SDK |
+
+**SDK.** `import { evaluateClaim, buildGraphDiff, buildHistory, ... } from "@promptia-labs/agent-receipt"` exposes the Verification-track functions directly — Stable (semver-promised) and Provisional (may change without notice) tiers. See [docs/SDK.md](https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/SDK.md) and the runnable [examples/](https://github.com/koscom2023-beep/agent-receipt/tree/v0.1-verify-check-split/examples).
+
+**Honest limits.** Fingerprints (`cfp1:`) are text-identity v1 — a reworded claim is a *different* claim, not a semantic match. "Resolved" in `diff`/`history` means *no failure with that key at this point*, not proof of a fix. Full spec: [docs/EVIDENCE_SPEC.md](https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/EVIDENCE_SPEC.md).
+
+---
+
 ## Quick Start
 
 Install globally and run the everyday **two-command loop**:
@@ -95,6 +133,33 @@ Re-verify a saved bundle later with `agent-receipt replay --pack <dir>`. Full co
 > The lower-level commands (`start` / `prompt` / `verify` / `check` / `claims` / `receipt`) still exist — `begin` and `done` simply compose them. See **Commands** below. Feature coverage vs the design docs: [coverage](https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/coverage.md); recipes (worktree/CI/hooks): [recipes](https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/recipes.md).
 
 Once installed, the CLI is invoked as `agent-receipt`. (The single-letter `ag` alias was dropped to avoid clashing with other tools.)
+
+### Verification engine quick start
+
+The second track — checking whether an AI's *stated evidence* holds up — is a separate loop, independent of git:
+
+```bash
+# 1) A report of claims (a minimal example)
+cat > report.json <<'EOF'
+{
+  "query": "example",
+  "claims": [
+    { "statement": "cache hit rate was 52%", "quotedText": "cache hit rate was 52 percent",
+      "sourceText": "...the cache hit rate was 52 percent across all lanes." }
+  ]
+}
+EOF
+
+# 2) Check it, sealing a Verification Receipt
+agent-receipt research verify --file report.json --out vr/r1.json
+
+# 3) Read accumulated receipts
+agent-receipt graph view --dir vr --out browser.html   # open in a browser (Evidence Browser)
+agent-receipt graph failures --dir vr --by check         # triage
+agent-receipt graph diff --base-dir vr-before --head-dir vr-after   # CI regression gate (exit 1 on new failures)
+```
+
+See [Verification engine](#verification-engine) above for the full picture, or [Verification engine commands](#verification-engine-commands) below for every flag.
 
 ### Verify your install (real-use smoke check)
 
@@ -195,7 +260,7 @@ If you omit `--contract`, the contract is auto-discovered (see below).
 | `commit-check` | Gate just before you commit: `verify` PASS, `check` PASS, a receipt matching the current change, and policy rules satisfied. **Never commits.** On pass, prints an `Agent-Receipt:` / `Agent-Contract:` / `Agent-Policy:` commit trailer. | yes |
 | `trailer` | Print the commit trailer only (hashes/paths, no values) to paste into a commit message. | yes |
 | `audit-pack [--out <dir>] [--claim <c.json>] [--redact] [--ledger]` | Bundle the evidence (contract, policy, receipt, claim+verify, approval, signature, environment, manifest) into `.agent-guard/audit-packs/<ts>/`. A review bundle — **tamper-evident, not a non-forgeable proof.** | yes |
-| `replay --pack <dir>` (alias `verify-pack`) | Re-verify a saved audit-pack against the current repo: recompute the receipt `contentHash`, confirm the commit exists. Detects tampering. Cannot reproduce external DB/OS effects. | yes |
+| `replay --pack <dir>` (alias `verify-pack`) | Re-verify a saved **audit-pack** (Work Receipt) against the current repo: recompute the receipt `contentHash`, confirm the commit exists. Detects tampering. Cannot reproduce external DB/OS effects. (A **Verification Receipt** has its own `replay --receipt <path>` mode — see [Verification engine commands](#verification-engine-commands).) | yes |
 | `ledger [--json]` · `ledger rebuild` | Append-only local trail `.agent-guard/ledger.jsonl` — one metadata line per receipt (no diffs/values). `rebuild` regenerates it from `receipts/`. | no |
 | `attest --receipt <p> \| --pack <dir>` | Emit an in-toto **style** Statement (draft) to stdout — provenance over the receipt + commit. Not an SLSA-level claim; tamper-evident, not non-forgeable. | no |
 | `anchor [--receipt <p>]` · `anchor --upload` | Wrap a receipt in a DSSE-signed in-toto Statement (auto-generates an ed25519 key) and either print Rekor-registration instructions (default, offline) or, with **`--upload`**, register it to the public **Rekor** transparency log in one command (Node `fetch` + built-in crypto — no external tools), then write a `<receipt>.rekor.json` sidecar. Seals **time & existence** via a third party; **not** a keyless identity proof. | no |
@@ -219,6 +284,25 @@ These shorten the real-world loop. **None of them run git, npm, or any deploy** 
 | `next` | Recommend the single next command for the current state. | (discovers) |
 
 Contracts may also declare `linked_test_paths` / `expected_linked_tests` (optional) so a guard test outside `allowed_paths` is shown as a *linked guard test (human-confirm)* in `commit-check`/`prepare-commit` — `verify`'s `outOfScope` meaning is unchanged. Policies may set `mode: measure_first | observe_only` to print a self-report checklist in `commit-check` (display only — the tool sees git diffs, not intent).
+
+### Verification engine commands
+
+`research` / `council` / `graph` / `spec` — these check whether an AI's *stated evidence* — a quote, a number, a date, a hash, a signature — matches its source, independent of git. They produce a separate **Verification Receipt** (see [Verification engine](#verification-engine) above). None of them need a contract or a git repo (they take a JSON report as input, though `graph`/`replay --receipt` will use git opportunistically to recheck a commit if one is present).
+
+| Command | What it does | Needs git repo |
+|---|---|---|
+| `research verify --file <report.json> [--fetch] [--out <p>]` | Check each claim's citation/number/date/hash/signature against its source. `--fetch` re-fetches `sourceUrl` live — an independent source, over the network. Any not-found citation or number mismatch → exit `1`. `--out` seals a Verification Receipt. | no |
+| `council verify --file <decision.json> [--log <path>] [--out <p>]` | Check a *decision*'s supporting claims the same way. Does **not** run a meeting — only verifies decisions already made. `--log` appends the result to a hash-chained, append-only DecisionLog. | no |
+| `spec [--format json]` | Publish the check format: a human summary, or (`--format json`) a machine-readable JSON Schema (draft-07) generated from the same check registry `evaluateClaim` uses. | no |
+| `graph query --dir <d> [--commit\|--input\|--model\|--receipt-id] [--format json]` | Filter accumulated Verification Receipts; neutral pass/fail counts. No relationships shown — see `graph view` for that. | no |
+| `graph view --dir <d> [--out <html>] [--format json]` | The main consumer surface. Default: a self-contained, failure-first **Evidence Browser** HTML — Dashboard → failure tabs (by check/model/subject/commit/reason) → reason + evidence (expected↔actual) → affected claim → 1-click claim history → the receipt itself, last. `--format json`: `{summary, indexes, graph:{nodes,edges}, failures, receipts, subjects, histories}` — `graph.edges` (`asserts`/`checked_by`/`same_input`/`same_commit`/`reverifies`) each carry a machine-readable `basis` and a `verified`/`reported` tier (`verified` only for facts this tool recomputed itself). | no |
+| `graph failures --dir <d> [--by check\|reason\|subject\|model\|commit] [--check <k>] [--status <s1,s2>] [--sealed] [--since <iso>] [--limit <n>] [--format json]` | Triage: pull just the failures, grouped/filtered. `--limit` always prints "N of M" (no silent truncation). Always exits `0` — a query, not a gate. | no |
+| `graph diff (--base-dir <d1> --head-dir <d2> \| --dir <d> --base-commit <c1> --head-commit <c2>) [--match statement\|fingerprint] [--sealed] [--format json]` | Compare two receipt sets: new / resolved / status-changed / persisting failures, per-subject deltas, per-input verdict changes. **Exits `1` when there are new failures** — usable as a CI regression gate. "Resolved" means *no failure with that key in head* — not proof of a fix. | no |
+| `graph history --dir <d> (--claim <cfp1:…\|prefix> \| --input <sha256> \| --subject <s>) [--format json]` | Timeline for the same claim/input/subject: first appearance, then per-step new/resolved/status/evidence changes. Claim prefixes resolve git-style — unique → used, ambiguous → candidates listed. | no |
+| `graph subjects --dir <d> [--format json]` | A per-subject (project/question) status board — receipt counts, pass/fail, failing checks, date range. Counts only; trend comparison is `graph diff`'s job. | no |
+| `replay --receipt <path>` | Re-verify a saved Verification Receipt: recompute `contentHash`/`receiptId` (tamper detection), re-hash the input file if still present (drift), re-check the commit if one was reported (link rot). A separate mode of the `replay` command above (`replay --pack` is for Work Receipts' audit-packs). | no |
+
+SDK: `import { evaluateClaim, buildGraphDiff, buildHistory, buildSubjects, ... } from "@promptia-labs/agent-receipt"` — see [docs/SDK.md](https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/SDK.md) for the Stable/Provisional tiers and runnable examples.
 
 ### Contract discovery
 
@@ -473,9 +557,9 @@ On success it writes a `<receipt>.rekor.json` sidecar next to the receipt (entry
 
 ## Package status
 
-Current version **`0.12.0`** (`@promptia-labs/agent-receipt`). **`0.12.0`** ships the verification engine's consumption layer: a real **Evidence Graph** (`graph view --format json` → `{nodes, edges}` — Receipt/Claim/Check nodes; `asserts`/`checked_by`/`same_input`/`same_commit`/`reverifies` edges, each with a machine-readable `basis` and a `verified`/`reported` trust tier — `verified` only for facts this tool recomputed itself), failure-first triage (`graph failures`), a regression gate (`graph diff` — exit 1 on new failures; per-subject deltas), claim **fingerprints** (`cfp1:` — text-identity v1) with timelines (`graph history --claim|--input|--subject`), a subject status board (`graph subjects`), a failure-first static Evidence Browser with 1-click claim history, self-dogfooding fixtures (every `npm test` accumulates this repo's own verification receipts), and a formalized SDK surface (Stable/Provisional tiers — see [docs/SDK.md](https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/SDK.md)). `0.10.0` added `schemaVersion`, provenance, the hash-chain ledger, content hashing, and strict-redact; **`0.11.0`** tightens the surface and adds **`capture`** (a beyond-git action trace, *alpha*), **`anchor`** (a third-party Rekor seal + in-proof verification link), and the read-only **`insights`** / **`risk`** / **`controls`** projections; **`0.11.3`** decouples evidence from the gate — a `post-commit` **`receipt --committed`** records the just-made commit even when the pre-commit gate is bypassed with `--no-verify`, and JSON redaction is now structure-aware (valid JSON, no key false-positives); **`0.11.4`** records the agent session (`CLAUDE_CODE_SESSION_ID`) in receipt provenance so a receipt shows which session produced it (a human-run receipt records `null`); **`0.11.5`** reveals the domain model (an object-first README + design docs), unifies the claim↔git comparison on one path rule (Windows-backslash claims no longer false-mismatch), and freezes the git↔capture reconciliation into the receipt (its unexplained-residual count surfaced on the ledger line). Cloud/SaaS, real Slack/webhook transport, remote approval, and any "compliance guarantee" remain intentionally out of scope. Feature coverage vs the design docs: [coverage](https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/coverage.md).
+Current version **`0.12.1`** (`@promptia-labs/agent-receipt`). **`0.12.1`** is a docs-only patch: this README did not document the verification engine at all — `research` / `council` / `graph` / `spec`, the whole track that shipped in `0.12.0` — even though the code, tests, and CLI help already had it; this fixes that (see [Verification engine](#verification-engine) and [Verification engine commands](#verification-engine-commands)), and renames the six-object model's `Verified Receipt` stage to plain `Receipt` to avoid confusion with the separate `Verification Receipt` kind. **No code changed.** **`0.12.0`** ships the verification engine's consumption layer: a real **Evidence Graph** (`graph view --format json` → `{nodes, edges}` — Receipt/Claim/Check nodes; `asserts`/`checked_by`/`same_input`/`same_commit`/`reverifies` edges, each with a machine-readable `basis` and a `verified`/`reported` trust tier — `verified` only for facts this tool recomputed itself), failure-first triage (`graph failures`), a regression gate (`graph diff` — exit 1 on new failures; per-subject deltas), claim **fingerprints** (`cfp1:` — text-identity v1) with timelines (`graph history --claim|--input|--subject`), a subject status board (`graph subjects`), a failure-first static Evidence Browser with 1-click claim history, self-dogfooding fixtures (every `npm test` accumulates this repo's own verification receipts), and a formalized SDK surface (Stable/Provisional tiers — see [docs/SDK.md](https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/SDK.md)). `0.10.0` added `schemaVersion`, provenance, the hash-chain ledger, content hashing, and strict-redact; **`0.11.0`** tightens the surface and adds **`capture`** (a beyond-git action trace, *alpha*), **`anchor`** (a third-party Rekor seal + in-proof verification link), and the read-only **`insights`** / **`risk`** / **`controls`** projections; **`0.11.3`** decouples evidence from the gate — a `post-commit` **`receipt --committed`** records the just-made commit even when the pre-commit gate is bypassed with `--no-verify`, and JSON redaction is now structure-aware (valid JSON, no key false-positives); **`0.11.4`** records the agent session (`CLAUDE_CODE_SESSION_ID`) in receipt provenance so a receipt shows which session produced it (a human-run receipt records `null`); **`0.11.5`** reveals the domain model (an object-first README + design docs), unifies the claim↔git comparison on one path rule (Windows-backslash claims no longer false-mismatch), and freezes the git↔capture reconciliation into the receipt (its unexplained-residual count surfaced on the ledger line). Cloud/SaaS, real Slack/webhook transport, remote approval, and any "compliance guarantee" remain intentionally out of scope. Feature coverage vs the design docs: [coverage](https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/coverage.md).
 
-Version ladder: `0.7.0` (work receipts) → `0.8.0` (AI work audit protocol) → `0.9.x` (convenience + dogfood fixes) → `0.10.0` (integrity: schemaVersion / provenance / hash-chain ledger) → **`0.11.0` (focused: tightened surface + `capture` — beyond-git action trace (alpha) + `anchor` — third-party Rekor seal & in-proof verification link)** → `0.11.1` (patch: executable `npx` bin + heading clarity) → `0.11.2` (patch: security — strip secret-in-URL passwords / redact `export KEY=` & AWS-secret shapes — plus Windows path handling and anchor hardening) → **`0.11.3` (evidence/gate decoupling: `post-commit` `receipt --committed` survives `--no-verify` + JSON-structure-aware redaction)** → `0.11.4` (provenance: receipt records the agent session `CLAUDE_CODE_SESSION_ID`) → **`0.11.5` (domain-model reveal: object-first README + design docs; ClaimDiff path-normalization SSOT fix; git↔capture reconciliation frozen into the receipt + `reconUnexplained` on the ledger)** → **`0.12.0` (Evidence Graph earned: real nodes/edges with basis+tier · failure-first triage/diff/history/subjects · claim fingerprint v1 · self-dogfood receipts · SDK tiers — release notes: [docs/RELEASE-0.12.0.md](https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/RELEASE-0.12.0.md))**. A feature-maximal `1.0.0` is **deferred** in favor of a focused product — see [the version-decision note](https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/VERSION-DECISION-2026-06-29.md).
+Version ladder: `0.7.0` (work receipts) → `0.8.0` (AI work audit protocol) → `0.9.x` (convenience + dogfood fixes) → `0.10.0` (integrity: schemaVersion / provenance / hash-chain ledger) → **`0.11.0` (focused: tightened surface + `capture` — beyond-git action trace (alpha) + `anchor` — third-party Rekor seal & in-proof verification link)** → `0.11.1` (patch: executable `npx` bin + heading clarity) → `0.11.2` (patch: security — strip secret-in-URL passwords / redact `export KEY=` & AWS-secret shapes — plus Windows path handling and anchor hardening) → **`0.11.3` (evidence/gate decoupling: `post-commit` `receipt --committed` survives `--no-verify` + JSON-structure-aware redaction)** → `0.11.4` (provenance: receipt records the agent session `CLAUDE_CODE_SESSION_ID`) → **`0.11.5` (domain-model reveal: object-first README + design docs; ClaimDiff path-normalization SSOT fix; git↔capture reconciliation frozen into the receipt + `reconUnexplained` on the ledger)** → **`0.12.0` (Evidence Graph earned: real nodes/edges with basis+tier · failure-first triage/diff/history/subjects · claim fingerprint v1 · self-dogfood receipts · SDK tiers — release notes: [docs/RELEASE-0.12.0.md](https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/RELEASE-0.12.0.md))** → `0.12.1` (docs-only: README now documents the verification engine that shipped silently in `0.12.0`; `Verified Receipt` renamed to `Receipt` in the six-object diagram). A feature-maximal `1.0.0` is **deferred** in favor of a focused product — see [the version-decision note](https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/VERSION-DECISION-2026-06-29.md).
 
 For local development:
 
