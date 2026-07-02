@@ -4,10 +4,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>agent-receipt — Receipts for AI work</title>
-<meta name="description" content="Two receipts for AI work: what the agent actually did to your git repo, and whether what it said is actually true — 14 deterministic checks, no LLM judging LLMs. Local-first, no account, no server.">
-<meta property="og:title" content="agent-receipt — Receipts for AI work">
-<meta property="og:description" content="What your agent did — and whether what it said is true. Exit 1 on fabrication. Local-first.">
+<title>agent-receipt — the auditability layer for AI work and AI evidence</title>
+<meta name="description" content="Make what your AI did — and what it said — independently verifiable after the fact. What the agent actually changed, whether its citations, numbers and git facts are real: local receipts, blocked in CI.">
+<meta property="og:title" content="agent-receipt — the auditability layer for AI work and AI evidence">
+<meta property="og:description" content="Make AI work and AI evidence independently verifiable. Fabrication exits 1 in CI. Local-first.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧾</text></svg>">
 <style>
 :root{
@@ -87,6 +87,20 @@ footer a{color:var(--accent);text-decoration:none}
 .badge-t.bad{background:var(--fail-bg);color:var(--fail)}
 .kv{display:grid;grid-template-columns:150px 1fr;gap:4px 10px;font-family:var(--font-mono);font-size:13px;margin-top:8px}
 .kv .k{color:var(--mut)}
+.scn{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:14px}
+.scn .c{background:var(--bg-raised);border:1px solid var(--border);border-radius:12px;padding:14px 16px;border-left:3px solid var(--fail)}
+.scn .c.rec{border-left-color:var(--warn)}
+.scn b{display:block;font-size:15px;margin-bottom:4px}
+.scn p{color:var(--mut);font-size:13.5px;margin:0 0 8px}
+.res{display:inline-block;font-weight:800;font-size:12px;padding:2px 10px;border-radius:999px}
+.res.blk{background:var(--fail-bg);color:var(--fail)}
+.res.rec{background:#9a670014;color:var(--warn)}
+.who{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:14px}
+.who .c{background:var(--bg-raised);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+.who b{display:block;font-size:15px}
+.who p{color:var(--mut);font-size:13.5px;margin:6px 0 0}
+.notl li{margin:8px 0;font-size:15.5px}
+.notl b{color:var(--fail)}
 </style>
 </head>
 <body>
@@ -102,10 +116,10 @@ footer a{color:var(--accent);text-decoration:none}
 
 <header>
   <h1>agent-receipt</h1>
-  <div class="tag"><b>Receipts for AI work.</b> What your agent <i>did</i> — and whether what it <i>said</i> is true.</div>
-  <div class="tag2">Two things, proven mechanically: what happened to your repo (Work Receipt), and whether the evidence in its reports is real (Verification Receipt).</div>
+  <div class="tag"><b>Make what your AI did — and what it said — independently verifiable, after the fact.</b></div>
+  <div class="tag2">What the agent actually changed in your repo; whether the citations, numbers and git facts in its reports are real — sealed into local receipts, blocked in CI when fabricated (exit 1).</div>
   <div class="btns">
-    <a class="btn primary" href="/en/playground">Try the kernel in your browser →</a>
+    <a class="btn primary" href="/en/playground">Catch one yourself, in your browser →</a>
     <a class="btn ghost" href="/demo">Live Evidence Browser</a>
   </div>
   <div style="margin-top:18px"><span class="install">npm install -g @promptia-labs/agent-receipt</span></div>
@@ -122,76 +136,85 @@ footer a{color:var(--accent);text-decoration:none}
 
   <div class="drop" id="drop">
     <h3>🧾 Someone sent you a receipt? Inspect it here — no install</h3>
-    <div class="mut">Drop a Verification Receipt (JSON) and its seal (contentHash · receiptId) is recomputed right here. The file never leaves your browser (zero upload). <a href="/sample-receipt.json" download style="color:var(--accent)">Download a sample receipt</a> → drop it → then edit one character in a text editor and drop it again to watch tamper detection fire.</div>
+    <div class="mut">Drop a Verification Receipt (JSON) and its seal (contentHash · receiptId) is recomputed right here. The file never leaves your browser (zero upload). <a href="/sample-receipt.json" download style="color:var(--accent)">Download a sample receipt</a> → drop it → then edit one character and drop it again to watch tamper detection fire.</div>
     <input type="file" id="drop-file" accept=".json" style="margin-top:10px">
     <div class="drop-out" id="drop-out"></div>
   </div>
 </header>
 
-<section id="tracks">
-  <h2>Two independent tracks</h2>
-  <p class="sub">Each produces its own tamper-evident receipt.</p>
-  <table>
-    <tr><th>Track</th><th>Question it answers</th></tr>
-    <tr><td><b>Work Receipt</b></td><td><b>What did the AI actually do to my git repo?</b> Contract-scoped diff evidence, a hash-chained ledger, third-party Rekor anchoring, and action capture beyond git — including <i>failed attempts</i> and <i>permission-denied attempts</i>.</td></tr>
-    <tr><td><b>Verification Engine</b></td><td><b>Is what the AI <i>said</i> actually true?</b> 14 deterministic check kinds — no LLM judging LLMs. Same input, same verdict, every time. Exit 1 on fabrication: a real CI gate.</td></tr>
-  </table>
-  <div class="pipe">
-    <div class="box"><b>claims in</b>report.json / report.md<br><span style="color:var(--mut)">the agent's citations, numbers, git facts…</span></div>
-    <div class="arr">→</div>
-    <div class="box"><b>Evidence Kernel</b>14 deterministic checks<br><span style="color:var(--mut)">no model in the judging loop</span></div>
-    <div class="arr">→</div>
-    <div class="box"><b>receipts out</b>sealed · foldable · diffable<br><span style="color:var(--mut)">Browser / triage / CI gate / timelines</span></div>
+<section id="prevents">
+  <h2>What it prevents</h2>
+  <p class="sub">Not a feature list — the incidents that actually happen. Badges state exactly what the machine does: <span class="res blk">BLOCKED</span> = command fails (exit 1) or the commit is refused · <span class="res rec">RECORDED</span> = kept as evidence (not blocked).</p>
+  <div class="scn">
+    <div class="c"><b>📋 The AI wrote "passed SOC 2 Type II" — only Type I was completed</b>
+      <p>Quotes are deterministically checked against the source — a sentence that isn't there fails on the spot.</p>
+      <span class="res blk">BLOCKED in CI (exit 1)</span></div>
+    <div class="c"><b>🔀 The AI wrote "commit abc modified payment.ts" — the history says otherwise</b>
+      <p>Commit existence, changed files, even diff contents — checked against actual git history.</p>
+      <span class="res blk">BLOCKED in CI (exit 1)</span></div>
+    <div class="c"><b>📁 The AI modified files outside the agreed scope</b>
+      <p>The contract's allowed paths are compared against the real diff — the pre-commit gate refuses, and even a bypass (--no-verify) still leaves an evidence receipt.</p>
+      <span class="res blk">GATE BLOCKED</span> <span class="res rec">RECEIPT RECORDED</span></div>
+    <div class="c rec"><b>🔑 The AI tried to read .env (and failed), then tried to phone home</b>
+      <p>Invisible to git — failed attempts and permission-denied attempts are kept as action classes (values never stored).</p>
+      <span class="res rec">RECORDED — not blocked</span>
+<pre style="margin:10px 0 0;font-size:12px">  <span class="y">⚠️ READ_SECRET_FILE  .env  (failed attempt)</span>
+  <span class="y">⚠️ EXTERNAL_NETWORK_CALL  api.exfil.example</span></pre></div>
   </div>
 </section>
 
-<section id="catch">
-  <h2>The 60-second catch</h2>
-  <p class="sub">The classic quiet upgrade — "Type I completed" becomes "Type II passed". Real output, verbatim (the CLI prints in Korean; exit codes and JSON are language-neutral).</p>
-<pre>
-$ agent-receipt research verify --file report.md --out vr/r1.json
-
-[1] Acme completed a SOC 2 Type I audit in March 2026
-    quote: completed a SOC 2 Type I audit in March 2026  <span class="g">→ verified</span>
-[2] Acme has passed a SOC 2 Type II audit
-    quote: has passed a SOC 2 Type II audit  <span class="r">→ not-found</span>
-    <span class="r">✗ FAIL — evidence does not match the source</span>
-result: verified 1 · FAIL 1 · advisory 0
-
-$ echo $?
-<span class="r">1</span>   <span class="c"># a real CI gate — not a report you must remember to read</span>
-</pre>
-  <div class="note">Claims go far beyond quotes: <i>"commit X changed file Y"</i> is checked against actual git history, versions against semver ranges, cited receipts are replay-verified. <a href="/en/playground">Run the kernel yourself →</a></div>
+<section id="who">
+  <h2>Who this is for</h2>
+  <div class="who">
+    <div class="c"><b>🏗 Agencies & contractors shipping AI-assisted work</b><p>Prove — without a dispute — whether the AI stayed inside the contract and what it actually changed. Hand the client a self-contained proof HTML (share-proof).</p></div>
+    <div class="c"><b>📊 Teams whose decisions consume AI research</b><p>Fabricated citations, numbers, versions and commit facts get blocked in CI before they reach a decision. What passes accumulates as receipts.</p></div>
+    <div class="c"><b>🔐 Internal dev teams under security/audit requirements</b><p>Sensitive-file reads, exfiltration attempts and change scope — evidenced locally, no server, no account, third-party sealable (Rekor).</p></div>
+  </div>
 </section>
 
-<section id="beyond-git">
-  <h2>Beyond git — including failed attempts</h2>
-  <p class="sub">git shows a clean one-line diff. The same session also <i>tried</i> to read your secrets and phoned home. Real sandbox output, verbatim — action classes only, values are never stored.</p>
+<section id="tracks">
+  <h2>One layer, two audits</h2>
+  <p class="sub"><b>agent-receipt is a local audit layer that turns an AI agent's code work and report evidence into an independently verifiable trail.</b> Two subsystems underneath:</p>
+  <table>
+    <tr><th>Audit</th><th>Question it answers</th></tr>
+    <tr><td><b>AI Change Audit</b></td><td><b>What did the AI actually do to my repo?</b> Contract-scoped diff evidence, hash-chained ledger, third-party Rekor anchoring, beyond-git action capture (incl. failed & denied attempts).</td></tr>
+    <tr><td><b>AI Evidence Audit</b></td><td><b>Is what the AI said actually true?</b> 14 deterministic check kinds — no LLM judging LLMs. Same input, same verdict, every time.</td></tr>
+  </table>
+</section>
+
+<section id="scenarios">
+  <h2>How it's used</h2>
+  <p class="sub">Workflows, not command menus.</p>
 <pre>
-$ agent-receipt capture show
+<span class="c"># Scenario A — before an AI-written report reaches a decision</span>
+agent-receipt research verify --file report.md --out vr/r1.json
+<span class="c">#   a single fabrication → exit 1 (CI stops it)</span>
+agent-receipt graph view --dir vr --out browser.html    <span class="c"># triage what accumulates</span>
+agent-receipt graph diff --base-dir vr-old --head-dir vr    <span class="c"># regression gate: NEW failures only</span>
 
-agent-receipt capture (alpha) — actions beyond git: 2 (notable 2)
-  <span class="y">⚠️ READ_SECRET_FILE  .env  (failed attempt)</span>
-  <span class="y">⚠️ EXTERNAL_NETWORK_CALL  api.exfil.example</span>
-
-  what git sees: 0  ⟷  notable actions: 2  (total recorded 2)
+<span class="c"># Scenario B — before AI-assisted code ships</span>
+agent-receipt init --preset generic     <span class="c"># contract: what the agent may touch</span>
+agent-receipt begin                     <span class="c"># baseline + paste-in agent instructions</span>
+<span class="c">…the agent works…</span>
+agent-receipt done                      <span class="c"># verify + check + sealed Work Receipt</span>
+agent-receipt share-proof               <span class="c"># proof HTML for the client / audit team</span>
 </pre>
 </section>
 
 <section id="kinds">
   <h2>14 deterministic checks</h2>
-  <p class="sub">One kernel registry — the code is the spec (<code style="font-family:var(--font-mono)">agent-receipt spec --format json</code>). Every verdict is recomputable arithmetic, string, or crypto.</p>
+  <p class="sub">One kernel registry — the code is the spec (<code style="font-family:var(--font-mono)">agent-receipt spec --format json</code>).</p>
   <table>
     <tr><th>kind</th><th>verifies</th></tr>
     <tr><td><b>citation</b></td><td>the quote is literally in the cited source</td></tr>
-    <tr><td><b>number</b></td><td>a stated number exists in the source, or matches a <i>recomputation</i> (sum/mean/ratio…)</td></tr>
+    <tr><td><b>number</b></td><td>a stated number exists in the source, or matches a recomputation (sum/mean/ratio…)</td></tr>
     <tr><td><b>date</b></td><td>format-agnostic date match ("Mar 1, 2026" ≡ "2026-03-01")</td></tr>
-    <tr><td><b>hash / signature</b></td><td>SHA-256 integrity · real Ed25519 verification (non-repudiation)</td></tr>
+    <tr><td><b>hash / signature</b></td><td>SHA-256 integrity · real Ed25519 verification</td></tr>
     <tr><td><b>commit / fileChanged / diffContains</b></td><td>"commit X exists / changed file Y / its diff contains Z" — against actual git history</td></tr>
     <tr><td><b>schema / version</b></td><td>JSON-Schema subset conformity · real semver-range satisfaction (^3.23.8 ⊨ 3.24.0)</td></tr>
-    <tr><td><b>file / artifact</b></td><td>a claimed path exists · a build output matches declared shape constraints (size bounds / sha)</td></tr>
-    <tr><td><b>receipt</b></td><td>a <i>cited receipt</i> exists and its seal replays clean — fabricated receipt references are mismatches</td></tr>
-    <tr><td><b>link</b></td><td style="color:var(--mut);font-family:var(--font-mono);font-size:12.5px">URL well-formedness — advisory only, never counted as evidence</td></tr>
+    <tr><td><b>file / artifact</b></td><td>a claimed path exists · a build output matches declared shape constraints</td></tr>
+    <tr><td><b>receipt</b></td><td>a cited receipt exists and its seal replays clean</td></tr>
+    <tr><td><b>link</b></td><td style="color:var(--mut);font-family:var(--font-mono);font-size:12.5px">URL well-formedness — advisory only</td></tr>
   </table>
 </section>
 
@@ -208,23 +231,15 @@ agent-receipt capture (alpha) — actions beyond git: 2 (notable 2)
   </div>
 </section>
 
-<section id="quickstart">
-  <h2>Quick start</h2>
-<pre>
-<span class="c"># install</span>
-npm install -g @promptia-labs/agent-receipt
-
-<span class="c"># Track A — work receipts (in a git repo)</span>
-agent-receipt init --preset generic     <span class="c"># contract: what the agent may touch</span>
-agent-receipt begin                     <span class="c"># baseline + paste-in agent instructions</span>
-<span class="c">…the agent works…</span>
-agent-receipt done                      <span class="c"># verify + check + sealed Work Receipt</span>
-
-<span class="c"># Track B — verify what the agent *said* (no git needed)</span>
-agent-receipt research verify --file report.md --out vr/r1.json
-agent-receipt graph view --dir vr --out browser.html   <span class="c"># Evidence Browser</span>
-agent-receipt graph diff --base-dir vr-old --head-dir vr   <span class="c"># exit 1 on new failures</span>
-</pre>
+<section id="not-list">
+  <h2>What this is not</h2>
+  <ul class="notl">
+    <li><b>Not a code-quality guarantee.</b> Static analysis, linting and tests are other tools' jobs.</li>
+    <li><b>Not a legal-compliance guarantee.</b> It supplies evidence for review, nothing more.</li>
+    <li><b>Not an LLM-reasoning evaluator.</b> It checks whether the evidence exists, not whether the conclusion is wise.</li>
+    <li><b>Not total surveillance of everything an AI does.</b> What it can and cannot see is stated in the docs.</li>
+    <li>Instead — <b style="color:var(--pass)">it leaves a verifiable trail for AI work and AI evidence.</b></li>
+  </ul>
 </section>
 
 <section id="faq">
@@ -232,21 +247,17 @@ agent-receipt graph diff --base-dir vr-old --head-dir vr   <span class="c"># exi
   <details><summary>Why not just have another LLM check the first LLM?</summary>
     <p>A model checking a model can hallucinate its own "yes, that's accurate." Every verdict here is recomputable arithmetic/string/crypto — same input, same answer, on any machine. That's also why it works as a CI gate: exit codes don't have moods.</p></details>
   <details><summary>What does a pass actually guarantee?</summary>
-    <p><b>Faithfulness, not truth.</b> A pass means the claim matches its cited source / recomputation. If the source document itself is wrong, a faithful citation still passes — claiming otherwise would be a lie, so this tool doesn't.</p></details>
+    <p><b>Faithfulness, not truth.</b> A pass means the claim matches its cited source / recomputation. If the source itself is wrong, a faithful citation still passes — claiming otherwise would be a lie, so this tool doesn't.</p></details>
   <details><summary>Where does my data go?</summary>
-    <p>Nowhere. Local-first: no account, no server, no telemetry. The only network calls are explicitly opt-in: <code>--fetch</code> (re-fetch a cited URL) and <code>anchor --upload</code> (register a receipt <i>hash</i> to the public Rekor transparency log so third parties can verify without trusting you).</p></details>
-  <details><summary>How is this different from permission hooks?</summary>
-    <p>Hooks <i>prevent</i>, receipts <i>prove</i>. Permissions stop an action before it happens; agent-receipt produces after-the-fact, tamper-evident evidence of what actually landed — including gate bypasses (<code>--no-verify</code> still leaves an evidence receipt), failed attempts, and permission-denied attempts.</p></details>
-  <details><summary>Is this a compliance product?</summary>
-    <p>No. It provides <b>git-based evidence relevant to review</b> (mappable to control families via <code>controls</code>) — it never asserts compliance.</p></details>
+    <p>Nowhere. Local-first: no account, no server, no telemetry. The only network calls are explicitly opt-in: <code>--fetch</code> (re-fetch a cited URL) and <code>anchor --upload</code> (register a receipt <i>hash</i> to the public Rekor transparency log).</p></details>
 </section>
 
 <section id="links">
   <h2>Docs & links</h2>
   <div class="cards">
-    <a class="card" href="https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/EVIDENCE_SPEC.md"><b>Evidence Spec</b><span>the claim/check format others can adopt — the code is the spec</span></a>
-    <a class="card" href="https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/SDK.md"><b>SDK</b><span>Stable/Provisional tiers · import the same functions the CLI runs</span></a>
-    <a class="card" href="https://github.com/koscom2023-beep/agent-receipt"><b>GitHub</b><span>source · 400+ tests incl. 143 golden · MIT</span></a>
+    <a class="card" href="https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/EVIDENCE_SPEC.md"><b>Evidence Spec</b><span>the claim/check format others can adopt</span></a>
+    <a class="card" href="https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/SDK.md"><b>SDK</b><span>import the same functions the CLI runs</span></a>
+    <a class="card" href="https://github.com/koscom2023-beep/agent-receipt"><b>GitHub</b><span>source · 400+ tests · MIT</span></a>
     <a class="card" href="https://www.npmjs.com/package/@promptia-labs/agent-receipt"><b>npm</b><span>@promptia-labs/agent-receipt</span></a>
   </div>
 </section>

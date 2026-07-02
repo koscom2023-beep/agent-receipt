@@ -14,7 +14,7 @@ const check = (name, fn) => { try { fn(); pass++; } catch (e) { fail.push(`${nam
 
 const pairs = [["index.html", "en/index.html"], ["playground.html", "en/playground.html"]];
 const MUST_BOTH = {
-  "index.html": ["hero-try", "h-quote", "h-go", 'id="drop"', "drop-file", "replay-lite.js", "/kernel.js", "sample-receipt.json", 'id="gallery"', "#p=soc2"],
+  "index.html": ["hero-try", "h-quote", "h-go", 'id="drop"', "drop-file", "replay-lite.js", "/kernel.js", "sample-receipt.json", 'id="gallery"', "#p=soc2", 'id="prevents"', 'id="who"', 'id="scenarios"', 'id="not-list"', 'id="tracks"'],
   "playground.html": ["/kernel.js", "mode-simple", "mode-json", 's-quote', 'id="share"', '#s=', 'data-p="soc2"', 'data-p="verdrift"', 'data-p="numdrift"'],
 };
 for (const [koF, enF] of pairs) {

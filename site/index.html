@@ -4,10 +4,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>agent-receipt — AI 작업 영수증</title>
-<meta name="description" content="AI 작업의 두 가지 영수증: 에이전트가 저장소에 실제로 한 일, 그리고 에이전트가 말한 근거가 진짜인지 — 14종 결정론 검사, LLM이 LLM을 심사하지 않습니다. 로컬 우선·계정 없음·서버 없음.">
-<meta property="og:title" content="agent-receipt — AI 작업 영수증">
-<meta property="og:description" content="에이전트가 한 일과, 에이전트가 말한 것의 진위. 날조는 exit 1. 로컬 우선.">
+<title>agent-receipt — AI 작업·AI 근거의 감사 레이어</title>
+<meta name="description" content="AI가 한 일과 AI가 한 말을, 나중에 독립적으로 검증할 수 있게 만드세요. 에이전트가 저장소에서 실제로 무엇을 바꿨는지, 보고서 속 인용·숫자·git 사실이 진짜인지 — 로컬에서 영수증으로 남기고 CI에서 막습니다.">
+<meta property="og:title" content="agent-receipt — AI 작업·AI 근거의 감사 레이어">
+<meta property="og:description" content="AI가 한 일과 AI가 한 말을 사후에 독립 검증 가능하게 — 날조는 CI에서 exit 1.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧾</text></svg>">
 <style>
 :root{
@@ -87,6 +87,20 @@ footer a{color:var(--accent);text-decoration:none}
 .badge-t.bad{background:var(--fail-bg);color:var(--fail)}
 .kv{display:grid;grid-template-columns:150px 1fr;gap:4px 10px;font-family:var(--font-mono);font-size:13px;margin-top:8px}
 .kv .k{color:var(--mut)}
+.scn{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:14px}
+.scn .c{background:var(--bg-raised);border:1px solid var(--border);border-radius:12px;padding:14px 16px;border-left:3px solid var(--fail)}
+.scn .c.rec{border-left-color:var(--warn)}
+.scn b{display:block;font-size:15px;margin-bottom:4px}
+.scn p{color:var(--mut);font-size:13.5px;margin:0 0 8px}
+.res{display:inline-block;font-weight:800;font-size:12px;padding:2px 10px;border-radius:999px}
+.res.blk{background:var(--fail-bg);color:var(--fail)}
+.res.rec{background:var(--warn-bg,#9a670014);color:var(--warn)}
+.who{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:14px}
+.who .c{background:var(--bg-raised);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+.who b{display:block;font-size:15px}
+.who p{color:var(--mut);font-size:13.5px;margin:6px 0 0}
+.notl li{margin:8px 0;font-size:15.5px}
+.notl b{color:var(--fail)}
 </style>
 </head>
 <body>
@@ -102,10 +116,10 @@ footer a{color:var(--accent);text-decoration:none}
 
 <header>
   <h1>agent-receipt</h1>
-  <div class="tag"><b>AI 작업 영수증.</b> 에이전트가 <i>실제로 한 일</i> — 그리고 에이전트가 <i>말한 것</i>이 진짜인지.</div>
-  <div class="tag2">두 가지를 기계로 증명합니다: 저장소에서 벌어진 일(작업 영수증)과, 보고서 속 근거의 진위(검증 영수증).</div>
+  <div class="tag"><b>AI가 한 일과 AI가 한 말을, 나중에 독립적으로 검증할 수 있게 만드세요.</b></div>
+  <div class="tag2">에이전트가 저장소에서 실제로 무엇을 바꿨는지, 보고서 속 인용·숫자·git 사실이 진짜인지 — 로컬에서 영수증(receipt)으로 남기고, 날조는 CI에서 막습니다(exit 1).</div>
   <div class="btns">
-    <a class="btn primary" href="/playground">브라우저에서 커널 돌려보기 →</a>
+    <a class="btn primary" href="/playground">브라우저에서 직접 잡아보기 →</a>
     <a class="btn ghost" href="/demo">증거 브라우저(Evidence Browser) 데모</a>
   </div>
   <div style="margin-top:18px"><span class="install">npm install -g @promptia-labs/agent-receipt</span></div>
@@ -122,82 +136,91 @@ footer a{color:var(--accent);text-decoration:none}
 
   <div class="drop" id="drop">
     <h3>🧾 남이 준 영수증, 설치 없이 검사 — 여기 끌어다 놓으세요</h3>
-    <div class="mut">Verification Receipt(JSON 파일)를 떨어뜨리면 봉인(contentHash·receiptId)을 이 자리에서 재계산합니다. 파일은 브라우저 메모리에서만 읽습니다(업로드 0). <a href="/sample-receipt.json" download style="color:var(--accent)">샘플 영수증 내려받기</a> → 떨어뜨려보고 → 메모장에서 한 글자 고쳐 다시 떨어뜨려보세요(변조 검출 체험).</div>
+    <div class="mut">검증 영수증(JSON)을 떨어뜨리면 봉인(contentHash·receiptId)을 이 자리에서 재계산합니다. 파일은 브라우저 메모리에서만 읽습니다(업로드 0). <a href="/sample-receipt.json" download style="color:var(--accent)">샘플 영수증 내려받기</a> → 떨어뜨려보고 → 메모장에서 한 글자 고쳐 다시 떨어뜨려보세요(변조 검출 체험).</div>
     <input type="file" id="drop-file" accept=".json" style="margin-top:10px">
     <div class="drop-out" id="drop-out"></div>
   </div>
 </header>
 
-<section id="tracks">
-  <h2>독립된 두 트랙</h2>
-  <p class="sub">각 트랙이 서로 다른 종류의 변조-감지 영수증(tamper-evident receipt)을 만듭니다.</p>
-  <table>
-    <tr><th>트랙</th><th>답하는 질문</th></tr>
-    <tr><td><b>작업 영수증(Work Receipt)</b></td><td><b>AI가 내 저장소에서 실제로 뭘 했나?</b> 계약(contract) 범위 대조 증거·해시체인 원장(ledger)·제3자 공개 로그 봉인(Rekor)·git 너머 행위 기록 — <i>실패한 시도</i>와 <i>권한이 거부한 시도</i>까지.</td></tr>
-    <tr><td><b>검증 엔진(Verification Engine)</b></td><td><b>AI가 <i>말한 것</i>이 진짜인가?</b> 14종 결정론(deterministic) 검사 — LLM이 LLM을 심사하지 않습니다. 같은 입력이면 언제나 같은 판정. 날조가 있으면 exit 1: 진짜 CI 게이트.</td></tr>
-  </table>
-  <div class="pipe">
-    <div class="box"><b>주장 입력</b>report.json / report.md<br><span style="color:var(--mut)">에이전트의 인용·수치·git 사실…</span></div>
-    <div class="arr">→</div>
-    <div class="box"><b>증거 커널(Evidence Kernel)</b>14종 결정론 검사<br><span style="color:var(--mut)">판정 루프에 모델 없음</span></div>
-    <div class="arr">→</div>
-    <div class="box"><b>영수증 출력</b>봉인·접힘·비교 가능<br><span style="color:var(--mut)">브라우저·트리아지·CI 게이트·이력</span></div>
+<section id="prevents">
+  <h2>무엇을 막아주는가</h2>
+  <p class="sub">기능 목록이 아니라, 실제로 벌어지는 사고입니다. 결과 배지는 기계 동작 그대로 — <span class="res blk">차단</span>=명령이 실패(exit 1)하거나 커밋이 거부됨 · <span class="res rec">기록</span>=증적으로 남음(차단 아님).</p>
+  <div class="scn">
+    <div class="c"><b>📋 AI가 "SOC2 Type II 통과"라고 씀 — 실제론 Type I만 완료</b>
+      <p>인용문을 출처와 결정론 대조 → 출처에 없는 문장이면 그 자리에서 실패.</p>
+      <span class="res blk">CI에서 차단 (exit 1)</span></div>
+    <div class="c"><b>🔀 AI가 "커밋 abc가 payment.ts를 수정했다"고 씀 — 실제 이력엔 없음</b>
+      <p>커밋 실재·변경 파일·diff 내용까지 실제 git 이력으로 대조.</p>
+      <span class="res blk">CI에서 차단 (exit 1)</span></div>
+    <div class="c"><b>📁 AI가 계약 범위 밖 파일을 수정함</b>
+      <p>허용 경로 계약과 실제 diff를 대조 — 커밋 직전 게이트가 막고, 우회(--no-verify)해도 증거 영수증은 남습니다.</p>
+      <span class="res blk">게이트 차단</span> <span class="res rec">영수증 기록</span></div>
+    <div class="c rec"><b>🔑 AI가 .env를 읽으려다 실패하고, 외부로 전송을 시도함</b>
+      <p>git에는 안 보이는 행위 — 실패한 시도·권한 거부된 시도까지 행위 종류만 남깁니다(값 미저장).</p>
+      <span class="res rec">기록 — 차단 아님</span>
+<pre style="margin:10px 0 0;font-size:12px">  <span class="y">⚠️ READ_SECRET_FILE  .env  (실패 시도)</span>
+  <span class="y">⚠️ EXTERNAL_NETWORK_CALL  api.exfil.example</span></pre></div>
   </div>
 </section>
 
-<section id="catch">
-  <h2>60초 데모</h2>
-  <p class="sub">고전 수법 — "1형(Type I) 완료"가 "2형(Type II) 통과"로 슬쩍 격상. 실제 실행 출력 그대로입니다.</p>
-<pre>
-$ agent-receipt research verify --file report.md --out vr/r1.json
-
-[1] Acme completed a SOC 2 Type I audit in March 2026
-    인용 : completed a SOC 2 Type I audit in March 2026  <span class="g">→ verified</span>
-[2] Acme has passed a SOC 2 Type II audit
-    인용 : has passed a SOC 2 Type II audit  <span class="r">→ not-found</span>
-    <span class="r">✗ FAIL — 근거가 출처와 불일치(날조/수치·날짜오류)</span>
-결과: verified 1 · FAIL 1 · advisory 0
-
-$ echo $?
-<span class="r">1</span>   <span class="c"># 읽어야 아는 보고서가 아니라, 진짜 CI 게이트</span>
-</pre>
-  <div class="note">인용만이 아닙니다: <i>"커밋 X가 파일 Y를 바꿨다"</i>는 실제 git 이력으로, 버전은 semver 범위로, 인용된 영수증은 봉인 재계산으로 검증합니다. <a href="/playground">직접 돌려보기 →</a></div>
+<section id="who">
+  <h2>누구를 위한 제품인가</h2>
+  <div class="who">
+    <div class="c"><b>🏗 AI로 납품하는 에이전시·외주팀</b><p>AI가 계약 범위를 넘겼는지, 무엇을 실제로 바꿨는지 — 분쟁 없이 증빙. 클라이언트에게 건네는 증거 HTML(share-proof)까지.</p></div>
+    <div class="c"><b>📊 AI 리서치·보고서를 의사결정에 쓰는 팀</b><p>날조 인용·숫자·버전·커밋 사실이 의사결정에 들어가기 전에 CI에서 차단. 통과분은 영수증으로 축적.</p></div>
+    <div class="c"><b>🔐 보안·감사 요구가 있는 내부 개발팀</b><p>AI가 읽은 민감 파일·외부 전송 시도·변경 범위를 로컬에 증적화 — 서버·계정 없이, 제3자 공개 로그 봉인(Rekor)까지.</p></div>
+  </div>
 </section>
 
-<section id="beyond-git">
-  <h2>git 너머 — 실패한 시도까지</h2>
-  <p class="sub">git에는 깔끔한 한 줄 diff만 보입니다. 같은 세션이 비밀 파일을 읽으려다 <i>실패</i>했고, 외부로 전송을 시도했다면? 실제 출력 그대로 — 값은 저장하지 않고 행위 종류만 남깁니다.</p>
+<section id="tracks">
+  <h2>하나의 레이어, 두 개의 감사</h2>
+  <p class="sub"><b>agent-receipt는 AI 에이전트가 남긴 코드 작업과 보고서 근거를, 사후에 독립적으로 검증 가능한 증적 체계로 바꾸는 로컬 감사 레이어입니다.</b> 그 아래 두 서브시스템:</p>
+  <table>
+    <tr><th>감사</th><th>답하는 질문</th></tr>
+    <tr><td><b>AI 작업 감사<br><span style="font-weight:400;color:var(--mut);font-size:12px">(AI Change Audit)</span></b></td><td><b>AI가 내 저장소에서 실제로 뭘 했나?</b> 계약 범위 대조·해시체인 원장·제3자 봉인(Rekor)·git 너머 행위(실패·거부된 시도 포함) 기록.</td></tr>
+    <tr><td><b>AI 근거 감사<br><span style="font-weight:400;color:var(--mut);font-size:12px">(AI Evidence Audit)</span></b></td><td><b>AI가 말한 근거가 진짜인가?</b> 14종 결정론 검사 — LLM이 LLM을 심사하지 않습니다. 같은 입력이면 언제나 같은 판정.</td></tr>
+  </table>
+</section>
+
+<section id="scenarios">
+  <h2>사용 시나리오</h2>
+  <p class="sub">명령 목록이 아니라 업무 흐름입니다.</p>
 <pre>
-$ agent-receipt capture show
+<span class="c"># 시나리오 A — AI가 만든 보고서를 의사결정에 넣기 전에</span>
+agent-receipt research verify --file report.md --out vr/r1.json
+<span class="c">#   날조 1건이라도 → exit 1 (CI가 그대로 막음)</span>
+agent-receipt graph view --dir vr --out browser.html    <span class="c"># 쌓인 결과 훑기(증거 브라우저)</span>
+agent-receipt graph diff --base-dir vr-old --head-dir vr    <span class="c"># 신규 실패만 잡는 회귀 게이트</span>
 
-agent-receipt capture (alpha) — git 너머 행위 2건 (주목 2)
-  <span class="y">⚠️ READ_SECRET_FILE  .env  (실패 시도)</span>
-  <span class="y">⚠️ EXTERNAL_NETWORK_CALL  api.exfil.example</span>
-
-  git 가 보는 것: 0  ⟷  주목 행위: 2  (전체 기록 2)
+<span class="c"># 시나리오 B — AI에게 코드 작업을 시키고 납품/커밋하기 전에</span>
+agent-receipt init --preset generic     <span class="c"># 계약: 건드려도 되는 범위 선언</span>
+agent-receipt begin                     <span class="c"># 기준점 + 에이전트에게 줄 지시문</span>
+<span class="c">…에이전트 작업…</span>
+agent-receipt done                      <span class="c"># 검증 + 검사 + 봉인된 작업 영수증</span>
+agent-receipt share-proof               <span class="c"># 클라이언트/감사팀에 건넬 증거 HTML</span>
 </pre>
 </section>
 
 <section id="kinds">
   <h2>14종 결정론 검사</h2>
-  <p class="sub">커널 레지스트리 하나에 등록 — 코드가 곧 스펙(<code style="font-family:var(--font-mono)">agent-receipt spec --format json</code>). 전부 재계산 가능한 산술·문자열·암호 연산입니다.</p>
+  <p class="sub">커널 레지스트리 하나에 등록 — 코드가 곧 스펙(<code style="font-family:var(--font-mono)">agent-receipt spec --format json</code>).</p>
   <table>
     <tr><th>종류</th><th>검증 내용</th></tr>
     <tr><td><b>citation</b></td><td>인용문이 출처에 실제로 있나</td></tr>
-    <tr><td><b>number</b></td><td>주장한 수가 출처에 있거나 <i>재계산</i>(합계·평균·비율…)과 일치하나</td></tr>
+    <tr><td><b>number</b></td><td>주장한 수가 출처에 있거나 재계산(합계·평균·비율…)과 일치하나</td></tr>
     <tr><td><b>date</b></td><td>표기가 달라도 같은 날인가("Mar 1, 2026" ≡ "2026-03-01")</td></tr>
-    <tr><td><b>hash / signature</b></td><td>SHA-256 무결성 · 진짜 Ed25519 전자서명 검증(부인 방지)</td></tr>
+    <tr><td><b>hash / signature</b></td><td>SHA-256 무결성 · 진짜 Ed25519 전자서명 검증</td></tr>
     <tr><td><b>commit / fileChanged / diffContains</b></td><td>"커밋 X가 존재/파일 Y 변경/그 diff에 Z 포함" — 실제 git 이력 대조</td></tr>
     <tr><td><b>schema / version</b></td><td>JSON 스키마 부분집합 정합 · 진짜 semver 범위 충족(^3.23.8 ⊨ 3.24.0)</td></tr>
-    <tr><td><b>file / artifact</b></td><td>주장한 경로 실재 · 빌드 산출물이 선언한 형태(크기 경계/해시)와 정합</td></tr>
-    <tr><td><b>receipt</b></td><td><i>인용한 영수증</i>이 실재하고 봉인 재계산까지 통과 — 지어낸 영수증 인용은 불일치</td></tr>
+    <tr><td><b>file / artifact</b></td><td>주장한 경로 실재 · 빌드 산출물이 선언한 형태(크기/해시)와 정합</td></tr>
+    <tr><td><b>receipt</b></td><td>인용한 영수증이 실재하고 봉인 재계산까지 통과</td></tr>
     <tr><td><b>link</b></td><td style="color:var(--mut);font-family:var(--font-mono);font-size:12.5px">URL 형식만 — 참고용, 증거로 안 침</td></tr>
   </table>
 </section>
 
 <section id="gallery">
   <h2>날조 패턴 모음</h2>
-  <p class="sub">각 카드는 플레이그라운드에서 실시간으로 판정됩니다 — 커널이 당신의 브라우저에서 직접.</p>
+  <p class="sub">각 카드는 플레이그라운드에서 실시간으로 판정됩니다.</p>
   <div class="gal">
     <a href="/playground#p=soc2"><b>📋 조용한 격상</b><span>"1형 완료" → "2형 통과" — citation not-found</span></a>
     <a href="/playground#p=numdrift"><b>🔢 숫자 슬쩍 바꿈</b><span>출처는 52%, 주장은 58% — number mismatch</span></a>
@@ -208,45 +231,33 @@ agent-receipt capture (alpha) — git 너머 행위 2건 (주목 2)
   </div>
 </section>
 
-<section id="quickstart">
-  <h2>바로 시작</h2>
-<pre>
-<span class="c"># 설치</span>
-npm install -g @promptia-labs/agent-receipt
-
-<span class="c"># 트랙 A — 작업 영수증 (git 저장소 안에서)</span>
-agent-receipt init --preset generic     <span class="c"># 계약: 에이전트가 건드려도 되는 범위</span>
-agent-receipt begin                     <span class="c"># 기준점 + 에이전트에게 줄 지시문</span>
-<span class="c">…에이전트 작업…</span>
-agent-receipt done                      <span class="c"># 검증 + 검사 + 봉인된 작업 영수증</span>
-
-<span class="c"># 트랙 B — AI가 *말한 것* 검증 (git 불필요)</span>
-agent-receipt research verify --file report.md --out vr/r1.json
-agent-receipt graph view --dir vr --out browser.html   <span class="c"># 증거 브라우저</span>
-agent-receipt graph diff --base-dir vr-old --head-dir vr   <span class="c"># 신규 실패=exit 1</span>
-</pre>
+<section id="not-list">
+  <h2>이건 무엇이 아닙니다</h2>
+  <ul class="notl">
+    <li><b>코드 품질을 보장하는 도구가 아닙니다.</b> 정적 분석·린트·테스트는 다른 도구의 일입니다.</li>
+    <li><b>법적 컴플라이언스를 보증하는 도구가 아닙니다.</b> 검토에 쓸 증거를 제공할 뿐입니다.</li>
+    <li><b>LLM의 추론 품질을 평가하는 도구가 아닙니다.</b> 결론이 옳은지가 아니라 근거가 실재하는지를 봅니다.</li>
+    <li><b>AI의 모든 행동을 완벽히 감시하는 도구가 아닙니다.</b> 보는 범위와 못 보는 범위를 문서에 명시합니다.</li>
+    <li>대신 — <b style="color:var(--pass)">AI 작업과 AI 근거에 대해 "검증 가능한 증적"을 남깁니다.</b></li>
+  </ul>
 </section>
 
 <section id="faq">
   <h2>자주 묻는 질문</h2>
   <details><summary>왜 다른 LLM으로 검사하지 않나요?</summary>
-    <p>모델이 모델을 검사하면 "네, 정확합니다"라는 환각을 자기도 낼 수 있습니다. 여기의 모든 판정은 재계산 가능한 산술·문자열·암호 연산 — 같은 입력이면 어느 컴퓨터에서든 같은 답. 그래서 CI 게이트가 될 수 있습니다(exit 코드엔 기분이 없습니다).</p></details>
+    <p>모델이 모델을 검사하면 "네, 정확합니다"라는 환각을 자기도 낼 수 있습니다. 여기의 모든 판정은 재계산 가능한 산술·문자열·암호 연산 — 같은 입력이면 어느 컴퓨터에서든 같은 답. 그래서 CI 게이트가 됩니다(exit 코드엔 기분이 없습니다).</p></details>
   <details><summary>통과(pass)는 정확히 뭘 보장하나요?</summary>
-    <p><b>충실성이지 진실이 아닙니다.</b> 통과는 "주장이 인용한 출처/재계산과 일치한다"는 뜻. 출처 문서 자체가 틀렸다면 충실한 인용도 통과합니다 — 그걸 잡아준다고 말하는 순간이 거짓말이라, 그렇게 말하지 않습니다.</p></details>
+    <p><b>충실성이지 진실이 아닙니다.</b> "주장이 인용한 출처/재계산과 일치한다"는 뜻. 출처 자체가 틀렸다면 충실한 인용도 통과합니다 — 그걸 잡아준다고 말하는 순간이 거짓말이라, 그렇게 말하지 않습니다.</p></details>
   <details><summary>내 데이터는 어디로 가나요?</summary>
-    <p>아무 데도 안 갑니다. 로컬 우선: 계정 없음·서버 없음·텔레메트리 없음. 네트워크는 명시적 옵트인 둘뿐 — <code>--fetch</code>(인용한 URL 재확인)와 <code>anchor --upload</code>(영수증 <i>해시</i>를 공개 투명성 로그 Rekor에 등록 — 남이 당신을 안 믿어도 검증 가능).</p></details>
-  <details><summary>권한 훅(hook)과 뭐가 다른가요?</summary>
-    <p>훅은 <i>막고</i>, 영수증은 <i>증명합니다</i>. 권한은 행동을 사전에 차단하고, agent-receipt는 사후에 변조-감지 증거를 남깁니다 — 게이트 우회(<code>--no-verify</code>)에도 증거는 남고, 실패한 시도·거부된 시도까지 기록합니다.</p></details>
-  <details><summary>컴플라이언스 제품인가요?</summary>
-    <p>아닙니다. 검토에 쓸 수 있는 <b>git 기반 증거</b>를 제공할 뿐(<code>controls</code>로 통제 항목에 매핑 가능) — 규정 준수를 보장한다고 절대 말하지 않습니다.</p></details>
+    <p>아무 데도 안 갑니다. 로컬 우선: 계정·서버·텔레메트리 없음. 네트워크는 명시적 옵트인 둘뿐 — <code>--fetch</code>(인용 URL 재확인)와 <code>anchor --upload</code>(영수증 <i>해시</i>를 공개 로그 Rekor에 등록).</p></details>
 </section>
 
 <section id="links">
   <h2>문서·링크</h2>
   <div class="cards">
-    <a class="card" href="https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/EVIDENCE_SPEC.md"><b>증거 스펙(Evidence Spec)</b><span>남이 그대로 채택할 수 있는 주장/검사 포맷 — 코드가 곧 스펙</span></a>
-    <a class="card" href="https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/SDK.md"><b>SDK</b><span>Stable/Provisional 등급 · CLI와 같은 함수를 import</span></a>
-    <a class="card" href="https://github.com/koscom2023-beep/agent-receipt"><b>GitHub</b><span>소스 · 테스트 400+ (골든 143 포함) · MIT</span></a>
+    <a class="card" href="https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/EVIDENCE_SPEC.md"><b>증거 스펙(Evidence Spec)</b><span>남이 그대로 채택할 수 있는 주장/검사 포맷</span></a>
+    <a class="card" href="https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/SDK.md"><b>SDK</b><span>CLI와 같은 함수를 import</span></a>
+    <a class="card" href="https://github.com/koscom2023-beep/agent-receipt"><b>GitHub</b><span>소스 · 테스트 400+ · MIT</span></a>
     <a class="card" href="https://www.npmjs.com/package/@promptia-labs/agent-receipt"><b>npm</b><span>@promptia-labs/agent-receipt</span></a>
   </div>
 </section>
