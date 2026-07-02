@@ -42,6 +42,10 @@ try {
     ["research", join(root, "fixtures", "dogfood", "research-pass.json"), `vr-${ts}-research-pass.json`],
     ["research", join(root, "fixtures", "dogfood", "research-fail.json"), `vr-${ts}-research-fail.json`],
     ["council", join(root, "fixtures", "dogfood", "council-decision.json"), `vr-${ts}-council.json`],
+    // Phase5 신규 체크(schema/version/file) 커버 — 전부 순수/바이트안정 가능 종류만.
+    // git-fact 3종(commit/fileChanged/diffContains)+receipt 는 커밋해시·영수증 id 가 바이트안정 불가라
+    // 여기 못 들어옴 — 실레포/실영수증 테스트(test/gitfacts·research-verify)가 담당(정직 분담).
+    ["research", join(root, "fixtures", "dogfood", "research-newchecks.json"), `vr-${ts}-research-newchecks.json`],
   ];
   let made = 0;
   for (const [surface, file, name] of gen) {
@@ -87,7 +91,7 @@ try {
 
   console.log("────────────────────────────────────────────");
   console.log("dogfood(자기 영수증) 요약 — 생성은 비차단·정확성 게이트는 test/dogfood.test.mjs");
-  console.log(`  이번 실행 생성: ${made}건(research pass/fail·council) + 변조 교보재 1건(고정·의도됨)`);
+  console.log(`  이번 실행 생성: ${made}건(research pass/fail/newchecks·council) + 변조 교보재 1건(고정·의도됨)`);
   console.log(`  누적 영수증: ${total}건 · 실패 이벤트: ${failures}건 · tampered 표시: ${tampered}건(교보재 포함)`);
   console.log(`  history(대표 주장): 영수증 ${historyLen}건 축적 — 실행할수록 자람`);
   console.log(`  diff(직전 상태 → 현재): 신규 실패 ${newFailures}건(첫 실행만 신규·이후 지속으로 수렴)`);

@@ -32,7 +32,26 @@ claim:
   schemaData    +  schemaDef
   # version (dependency fact)
   statedPackage +  statedPackageVersion  +  dependencyFile
+  # file (existence fact)
+  statedFile                          # surface resolves via fs existence check (no content read)
+  # receipt (cited-receipt integrity)
+  statedReceiptId (≥8-char prefix)  +  receiptFile   # surface re-runs the existing seal replay
 ```
+
+### Markdown input (frozen grammar)
+
+`research verify --file report.md` accepts a fixed markdown form — parsed by regex only (no NLP), and pinned by an isomorphism test to produce **identical verdicts** to the equivalent JSON:
+
+```markdown
+# <query>
+
+- statement: <text>
+  quotedText: "<text>"
+  sourceFile: <path>
+  statedValue: 42
+```
+
+First `# ` line = query · `- statement:` starts a claim · following indented `key: value` lines are that claim's fields (same names as JSON, 1:1 — no translation table) · surrounding double quotes stripped · `operands` = comma-separated numbers · zero parsed claims = exit 2 (no silent empty result).
 
 ## Check kinds & statuses
 
@@ -48,19 +67,25 @@ claim:
 | `fileChanged` | statedCommit's changeset includes statedChangedFile | verified / not-found / no-basis |
 | `diffContains` | statedCommit's diff for statedChangedFile contains statedDiffText | verified / not-found / no-basis |
 | `schema` | schemaData satisfies schemaDef (JSON Schema subset: type/required/properties/enum/items) | verified / mismatch / no-basis |
-| `version` | dependencyFile's dependency map has statedPackage == statedPackageVersion (range prefixes `^~>=<` stripped before comparing — not full semver-range satisfaction) | verified / mismatch / no-basis |
+| `version` | statedPackageVersion **satisfies** the dependency map's declared range — real single-comparator semver (`^ ~ >= > <= <`, npm caret rule for 0.x, partial versions zero-filled); prerelease / compound ranges / wildcards → no-basis (no false verdicts), unparseable falls back to strip-prefix equality | verified / mismatch / no-basis |
+| `file` | statedFile exists on disk (existence only — content comparison stays citation/hash's job) | verified / not-found / no-basis |
+| `receipt` | the cited Verification Receipt (receiptFile) exists, its receiptId starts with statedReceiptId (≥8 chars), and its seal **replays clean** (contentHash + receiptId recomputed via the same replay used everywhere). A missing cited file is `mismatch` (same principle as citation not-found — citation accuracy is the citer's responsibility). Work Receipts (schemaVersion 1.0) → no-basis in v1 (honest unsupported) | verified / mismatch / no-basis |
 
 `signature` is the one check that promotes self-report toward proof: it confirms *this content was signed by this key* — it does not vouch for the key's trust (that is out of scope).
 
 `commit`/`fileChanged`/`diffContains` need git access (IO), which the kernel itself never does — a surface module (`gitfacts.ts`) resolves the git facts first (does this commit exist? what did it change? what does its diff say?) and hands the kernel only the resolved boolean/text, the same pattern `hash`/`signature` already used for file content. This keeps the kernel's "no IO" invariant intact while letting `research verify`/`council verify` check claims against actual repository history, not just static documents — e.g. catching a council decision that claims "the config already supports X" when no commit actually changed the config that way.
 
-`schema` is fully pure (both `schemaData` and `schemaDef` are inline in the claim, no file/git resolution needed) — the smallest-footprint of the ten kinds.
+`schema` is fully pure (both `schemaData` and `schemaDef` are inline in the claim, no file/git resolution needed) — the smallest-footprint of the thirteen kinds.
 
-A claim **fails** if any check is `not-found` / `mismatch` / `invalid`. A claim is **verified** if a positive check (citation/number/date/hash/commit/fileChanged/diffContains/schema/version) is `verified` and nothing failed. `link: valid` is advisory (well-formedness ≠ evidence).
+A claim **fails** if any check is `not-found` / `mismatch` / `invalid`. A claim is **verified** if a positive check (any kind except `link`) is `verified` and nothing failed. `link: valid` is advisory (well-formedness ≠ evidence).
+
+### Exception kinds (graph rollup — `spec --format json` exposes `exceptionKinds`)
+
+`graph view`'s summary carries `exceptions` — a frozen reclassification of facts already recorded in verification receipts, counted after receipt-folding (so re-running the same input can't inflate them). No state, no workflow, counts only: **`seal_failed`** (receipt seal fails replay), **`ungrounded_decision`** (a council receipt whose verdict is fail — a decision resting on fabricated evidence), **`source_unreachable`** (live `--fetch` couldn't reach a cited source; from the receipt's own summary). `gate_bypassed` is deliberately absent: that fact lives in the Work-Receipt track, which the graph does not read — a structural boundary, not an omission.
 
 ## Extensibility (the engine, not just checkers)
 
-New verifiers register in the **check registry** (`CHECK_REGISTRY`) — one descriptor, no engine change. `spec` reflects them automatically. Ten kinds ship today (citation/number/date/hash/signature/link/commit/fileChanged/diffContains/schema/version). Planned next: `file` (a claimed file exists on disk), `artifact` (a build/test artifact's shape), `replay` (a receipt's own replay result as a checkable claim). Execution-based checks (run a test/command and check its outcome) were deliberately **not** added alongside this batch — a live-execution check is a different trust/security tier than a static file or git-history comparison (arbitrary code execution vs. read-only queries), so it stays a separate, explicitly opt-in track if it ever ships. This is what raises the copy cost: not the checkers, but the extensible engine + shared format.
+New verifiers register in the **check registry** (`CHECK_REGISTRY`) — one descriptor, no engine change. `spec` reflects them automatically. **Thirteen kinds ship today** (citation/number/date/hash/signature/link/commit/fileChanged/diffContains/schema/version/file/receipt). Of the previously planned three: `file` shipped as promised; `replay` shipped as the `receipt` kind (a cited receipt's own replay result as a checkable claim — same idea, honest name); `artifact` (a build/test artifact's shape) remains planned. Execution-based checks (run a test/command and check its outcome) were deliberately **not** added alongside this batch — a live-execution check is a different trust/security tier than a static file or git-history comparison (arbitrary code execution vs. read-only queries), so it stays a separate, explicitly opt-in track if it ever ships. This is what raises the copy cost: not the checkers, but the extensible engine + shared format.
 
 This is a **plugin / registry** dispatch, **not** an "Evidence VM" — there is no DSL, opcode set, or execution state yet. That would be a later stage; today it is a clean plugin point.
 

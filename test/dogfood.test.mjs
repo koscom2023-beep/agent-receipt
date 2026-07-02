@@ -21,14 +21,22 @@ const runScript = () =>
 
 const first = runScript();
 
-check("1회차: 영수증 3건(research pass/fail·council) + 변조 교보재 1건 생성", () => {
+check("1회차: 영수증 4건(research pass/fail/newchecks·council) + 변조 교보재 1건 생성", () => {
   const files = readdirSync(out).filter((f) => f.endsWith(".json"));
-  assert.equal(files.length, 4);
+  assert.equal(files.length, 5);
   assert.ok(files.includes("vr-tampered-exhibit.json"));
+});
+check("신규 5종 커버(Phase5): schema/version/file 픽스처가 전부 verified 로 자기영수증에 실림", () => {
+  const rows = buildViewData(out);
+  const nc = rows.find((r) => r.subject.includes("schema/version/file checks sample"));
+  assert.ok(nc, "newchecks 영수증 없음");
+  assert.equal(nc.verdict, "pass");
+  const kinds = new Set(nc.claims.flatMap((c) => Object.entries(c.checks).filter(([, v]) => v === "verified").map(([k]) => k)));
+  for (const k of ["schema", "version", "file"]) assert.ok(kinds.has(k), `누락: ${k}`);
 });
 check("생성된 영수증을 graph 가 바로 읽음(소비 가능)", () => {
   const rows = buildViewData(out);
-  assert.equal(rows.length, 4);
+  assert.equal(rows.length, 5);
   assert.ok(rows.some((r) => r.surface === "research") && rows.some((r) => r.surface === "council"));
 });
 check("tampered tier 실물 검증: 교보재만 봉인 실패로 표시", () => {
@@ -48,9 +56,9 @@ check("요약 출력: 비차단 규율 문구 존재", () => {
 
 // 2회차 실행 = 축적(history 가 실데이터로 자람)
 runScript();
-check("2회차: 영수증 누적(4→7·교보재는 고정 1개 유지)", () => {
+check("2회차: 영수증 누적(5→9·교보재는 고정 1개 유지)", () => {
   const files = readdirSync(out).filter((f) => f.endsWith(".json"));
-  assert.equal(files.length, 7); // 3 신규 + 기존 3 + 교보재 1(덮어쓰기)
+  assert.equal(files.length, 9); // 4 신규 + 기존 4 + 교보재 1(덮어쓰기)
 });
 check("history 실데이터: 같은 주장(fingerprint)이 2회차에 걸쳐 쌓임", () => {
   const rows = buildViewData(out);
