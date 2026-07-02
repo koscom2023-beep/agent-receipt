@@ -609,6 +609,15 @@ check("Browser 예외 칩: 클릭 상세(excDetail)·3종 분해 정보 임베�
   assert.ok(html.includes("분류보기"));
   rmSync(dX, { recursive: true, force: true });
 });
+check("예외카드 점프: EXC_ROWS 매핑+data-r 링크+합계/영수증수 병기 코드 존재", () => {
+  const dJ = mkdtempSync(join(tmpdir(), "argraphExcJ-"));
+  writeFileSync(join(dJ, "c.json"), JSON.stringify({ kind: "verification-receipt", receiptId: "j1", subject: "S", verdict: "fail", surface: "council", input: { sha256: "s" } }));
+  const html = buildGraphHtml(buildViewData(dJ));
+  assert.ok(html.includes("EXC_ROWS")); // kind→행 매핑
+  assert.ok(html.includes("영수증 '+rows.length+'개에서 합계")); // unreachable 정직 병기
+  assert.ok(html.includes("excDetail") && html.includes("wire()")); // 점프는 기존 wire 재사용
+  rmSync(dJ, { recursive: true, force: true });
+});
 check("failureKey export: statement/fingerprint 두 모드 모두 문자열 키", () => {
   const ev = { fingerprint: "cfp1:aa", check: "citation", inputSha: "s", subject: "S", statement: "x" };
   assert.ok(typeof failureKey(ev, "statement") === "string" && typeof failureKey(ev, "fingerprint") === "string");

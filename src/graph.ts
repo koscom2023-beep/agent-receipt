@@ -701,11 +701,16 @@ function st(s){return s==='verified'||s==='valid'?'<span class="pass">✅ '+esc(
 function cd(l,n,c){return '<div class="cd '+(c==='mut'?'':(c||''))+'"><div class="n">'+n+'</div><div class="l">'+l+'</div></div>'}
 const EXC=S.exceptions||{};const excTotal=Object.values(EXC).reduce((a,b)=>a+(b||0),0);
 const EXC_INFO={seal_failed:['봉인확인실패','영수증 봉인 재계산이 안 맞음 — 저장 후 내용이 바뀌었을 수 있음(변조 의심). 화면의 ⚠ 표시와 같은 건을 분류한 것.'],ungrounded_decision:['날조근거 결정','회의 검증에서 근거가 출처에 없다고 판정된 결정(council 영수증 실패). 결정이 지어낸 근거 위에 서 있었다는 뜻.'],source_unreachable:['출처 도달실패','라이브 재대조(--fetch)에서 인용한 출처에 접속하지 못함(링크 소멸/차단). 영수증 자체 기록에서 집계.']};
+const EXC_ROWS={seal_failed:r=>!(r.integrity&&r.integrity.contentHashOk&&r.integrity.receiptIdOk),ungrounded_decision:r=>r.surface==='council'&&r.verdict==='fail',source_unreachable:r=>(r.unreachable||0)>0};
 function excDetail(){let h='<div class="card"><div class="big warn">예외 '+excTotal+'건 — 분류</div><div class="mut" style="margin-top:2px">이미 기록된 사실의 재분류(접힘 후 집계)일 뿐 — 상태/처리흐름 없음. 없어지는 조건도 각 원인이 사라지는 것뿐.</div></div>';
-for(const k of Object.keys(EXC_INFO)){const n=EXC[k]||0;const info=EXC_INFO[k];
-h+='<div class="card'+(n?' accent-fail':'')+'"><b>'+esc(info[0])+' <span class="'+(n?'fail':'mut')+'">'+n+'건</span></b> <span class="mut">('+esc(k)+')</span><div class="mut" style="margin-top:4px">'+esc(info[1])+'</div></div>'}
+for(const k of Object.keys(EXC_INFO)){const n=EXC[k]||0;const info=EXC_INFO[k];const rows=FOLDED.filter(EXC_ROWS[k]);
+h+='<div class="card'+(n?' accent-fail':'')+'"><b>'+esc(info[0])+' <span class="'+(n?'fail':'mut')+'">'+n+'건</span></b> <span class="mut">('+esc(k)+')'+(k==='source_unreachable'&&n?' · 영수증 '+rows.length+'개에서 합계':'')+'</span><div class="mut" style="margin-top:4px">'+esc(info[1])+'</div>';
+if(rows.length){h+='<div style="margin-top:8px">';
+rows.forEach(r=>{h+='<div class="lnk" data-r="'+esc(r.file||'')+'">→ '+esc(r.verifiedAt||'-')+' · '+esc((r.subject||'').slice(0,40))+(r.occurrences>1?' <span class="badge rep">×'+r.occurrences+'</span>':'')+'</div>'});
+h+='</div>'}
+h+='</div>'}
 h+='<div class="card mut">gate 우회(작업영수증 트랙)는 여기 없음 — 이 화면은 검증 영수증만 읽는 구조라서(스펙 명시).</div>';
-el('detail').innerHTML=h}
+el('detail').innerHTML=h;wire()}
 el('dash').innerHTML=cd('전체',S.total||0)+(S.fileCount&&S.fileCount!==S.total?cd('파일',S.fileCount,'mut'):'')+cd('통과',S.pass||0,'pass')+cd('실패',S.fail||0,'fail')+
 (NEWCNT!==null?cd('신규 실패',NEWCNT,(NEWCNT?'fail':'pass')):'')+
 cd('최다 실패',S.mostFailedCheck||'-')+cd('드리프트',S.driftCount||0,(S.driftCount?'warn':''))+cd('봉인확인실패',S.tamperedCount||0,(S.tamperedCount?'fail':''))+

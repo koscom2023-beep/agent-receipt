@@ -208,6 +208,39 @@ check("HOOK_MATCHER(설치 스니펫 경유): anchored regex + mcp__.* 포함, �
   assert.ok(!re.test("NotebookReadExtra")); // unanchored 였다면 Read 가 부분매칭했을 형태
 });
 
+// ── Phase8: PostToolUseFailure(fail) — 실패한 시도의 기록(값/에러 미저장) ──
+check("classifyEvent(phase=fail): 레코드에 phase=fail 로 남음(성공과 구분)", () => {
+  const r = classifyEvent({ tool_name: "Read", tool_input: { file_path: "/x/.env" } }, "fail", "T");
+  assert.equal(r.length, 1);
+  assert.equal(r[0].phase, "fail");
+});
+check("aggregateActions: fail 유래 액션에 failed=true·flag/notable 기준은 불변", () => {
+  const recs = [
+    { ts: "T", phase: "fail", tool: "Read", op: "read", path: ".env" },
+    { ts: "T", phase: "post", tool: "Read", op: "read", path: ".env" },
+  ];
+  const { actions } = aggregateActions(recs, new Set());
+  assert.equal(actions.length, 2);
+  assert.equal(actions[0].failed, true);
+  assert.ok(!("failed" in actions[1])); // 성공엔 필드 자체 없음
+  assert.equal(actions[0].flag, "READ_SECRET_FILE"); // 기밀읽기 *시도*도 같은 flag(숨기지 않음)
+});
+check("mergeCaptureHooks: PostToolUseFailure 항목 추가(--event fail·같은 anchored matcher)", () => {
+  const { merged } = mergeCaptureHooks({});
+  const f = merged.hooks.PostToolUseFailure;
+  assert.ok(Array.isArray(f) && f.length === 1);
+  assert.ok(f[0].hooks[0].command.endsWith("--event fail"));
+  assert.equal(f[0].matcher, merged.hooks.PreToolUse[0].matcher);
+});
+check("mergeCaptureHooks: 기존 pre/post 만 있던 설치본에 fail 항목이 additive 로 붙음(changed)", () => {
+  const oldInstall = mergeCaptureHooks({}).merged;
+  delete oldInstall.hooks.PostToolUseFailure; // 구버전 설치 시뮬레이션
+  const { merged, changed } = mergeCaptureHooks(oldInstall);
+  assert.equal(changed, true);
+  assert.ok(merged.hooks.PostToolUseFailure);
+  assert.equal(merged.hooks.PreToolUse.length, 1); // 중복 없음
+});
+
 if (fail.length) {
   console.error(`capture-actions: ${fail.length} FAIL\n  ` + fail.join("\n  "));
   process.exit(1);

@@ -24,7 +24,7 @@ export type ActionFlag =
 
 export interface CaptureRecord {
   ts: string;
-  phase: "pre" | "post";
+  phase: "pre" | "post" | "fail"; // fail=PostToolUseFailure(도구 실패 *시도* — Phase8·값/에러텍스트 미저장)
   tool: string;
   op: "read" | "write" | "delete" | "network" | "command" | "capture-degraded";
   path?: string;
@@ -71,6 +71,7 @@ export interface CaptureAction {
   path?: string;
   host?: string;
   flag: ActionFlag;
+  failed?: boolean; // PostToolUseFailure 유래 — *실패한 시도*(성공 행위와 절대 혼동 금지·표시 병기)
 }
 
 export interface ActionsResult {
@@ -165,7 +166,7 @@ export function normalizeEnvelope(payload: unknown): NormalizedEnvelope {
 }
 
 /** 정규화된 envelope(또는 {tool,input}) → CaptureRecord[](없으면 []). 값 미저장. */
-export function classifyEvent(payload: unknown, phase: "pre" | "post" = "post", ts = ""): CaptureRecord[] {
+export function classifyEvent(payload: unknown, phase: "pre" | "post" | "fail" = "post", ts = ""): CaptureRecord[] {
   const o = payload as { tool_name?: string; tool?: string; tool_input?: Record<string, unknown>; input?: Record<string, unknown> };
   const tool = String(o?.tool_name ?? o?.tool ?? "");
   if (!tool) return [];
@@ -227,7 +228,7 @@ export function aggregateActions(records: CaptureRecord[], gitChangedPaths: Set<
     else if (r.op === "network") flag = "EXTERNAL_NETWORK_CALL";
     else if (r.op === "write") flag = r.path && deletes.has(r.path) ? "CREATED_THEN_DELETED" : "FILE_WRITE";
     else flag = "COMMAND_RUN";
-    actions.push({ tool: r.tool, op: r.op, path: r.path, host: r.host, flag });
+    actions.push({ tool: r.tool, op: r.op, path: r.path, host: r.host, flag, ...(r.phase === "fail" ? { failed: true } : {}) });
   }
 
   return {
@@ -463,7 +464,7 @@ export function reconcileCapture(records: CaptureRecord[], gitChanged: Set<strin
 }
 
 /** 실패를 조용히 삼키지 않고 'capture-degraded' 마커를 체인에 남긴다(비차단 exit 0). 마커 기록조차 실패하면 조용히 통과. */
-function markDegraded(phase: "pre" | "post", ts: string, reason: string): never {
+function markDegraded(phase: "pre" | "post" | "fail", ts: string, reason: string): never {
   try {
     appendCapture([{ ts, phase, tool: "(capture)", op: "capture-degraded", reason }], undefined);
   } catch {
@@ -474,7 +475,7 @@ function markDegraded(phase: "pre" | "post", ts: string, reason: string): never 
 
 /** `agent-receipt capture [--event pre|post]` — 훅 stdin(JSON) 1건을 분류·마스킹·체인 append. 항상 통과(비차단). */
 export function runCaptureIngest(event: string | undefined): never {
-  const phase: "pre" | "post" = event === "pre" ? "pre" : "post";
+  const phase: "pre" | "post" | "fail" = event === "pre" ? "pre" : event === "fail" ? "fail" : "post"; // fail 명시(모르는 값은 post 유지 — 구버전 동작 보존)
   if (process.stdin.isTTY) process.exit(0); // 파이프 입력 없으면 무동작(실패 아님)
   const now = new Date().toISOString();
   let raw = "";
@@ -518,7 +519,7 @@ export function runCaptureShow(json: boolean): never {
   const s = result.actionsSummary;
   const { notable, mutedCount } = splitActionsForDisplay(result.actions);
   console.log(`\nagent-receipt capture (alpha) — git 너머 행위 ${s.total}건 (주목 ${notable.length})`);
-  for (const a of notable) console.log(`  ⚠️ ${a.flag}  ${a.path ?? a.host ?? ""}`);
+  for (const a of notable) console.log(`  ⚠️ ${a.flag}  ${a.path ?? a.host ?? ""}${a.failed ? "  (실패 시도)" : ""}`);
   if (mutedCount) console.log(`  · 그 외 일반 read/command ${mutedCount}건 (기록됨·접힘)`);
   console.log(`\n  git 가 보는 것: ${s.gitVisible}  ⟷  주목 행위: ${notable.length}  (전체 기록 ${s.total})`);
   // 대사(11차 council): git 변경 ↔ capture write 교차대조 + 잔차 분류(자동 cleared 금지·미설명은 남김).
@@ -585,7 +586,7 @@ export function runCaptureReset(): never {
 // `.` 이 들어가는 순간 matcher 전체가 regex 경로(unanchored test·공식 문서 실측)가 되므로
 // `^(...)$` 로 명시 anchor — unanchored "Read" 가 임의 신규 도구명에 부분매칭하는 사고 방지.
 const HOOK_MATCHER = `^(${COVERED_TOOLS.map((t) => (t === "mcp__*" ? "mcp__.*" : t)).join("|")})$`;
-const captureCommand = (phase: "pre" | "post"): string => `agent-receipt capture --event ${phase}`;
+const captureCommand = (phase: "pre" | "post" | "fail"): string => `agent-receipt capture --event ${phase}`;
 
 interface HookCmd {
   type?: string;
@@ -605,9 +606,11 @@ export function mergeCaptureHooks(input: SettingsShape): { merged: SettingsShape
   const merged: SettingsShape = JSON.parse(JSON.stringify(input ?? {}));
   if (!merged.hooks || typeof merged.hooks !== "object") merged.hooks = {};
   let changed = false;
-  const phases: Array<["PreToolUse" | "PostToolUse", "pre" | "post"]> = [
+  const phases: Array<["PreToolUse" | "PostToolUse" | "PostToolUseFailure", "pre" | "post" | "fail"]> = [
     ["PreToolUse", "pre"],
     ["PostToolUse", "post"],
+    // 도구 실패도 사실(시도) — 문서 실측: 비차단 이벤트·tool_name/tool_input 공통형만 읽음(에러 텍스트=값·미저장).
+    ["PostToolUseFailure", "fail"],
   ];
   for (const [key, phase] of phases) {
     const cmd = captureCommand(phase);
