@@ -600,6 +600,15 @@ check("histories 상한 미달: historiesTruncated 필드 부재", () => {
   assert.ok(!("historiesTruncated" in emb));
   rmSync(dV, { recursive: true, force: true });
 });
+check("Browser 예외 칩: 클릭 상세(excDetail)·3종 분해 정보 임베드", () => {
+  const dX = mkdtempSync(join(tmpdir(), "argraphExcUi-"));
+  writeFileSync(join(dX, "b.json"), JSON.stringify({ kind: "verification-receipt", receiptId: "xu1", subject: "S", verdict: "fail", surface: "council", input: { sha256: "s" } }));
+  const html = buildGraphHtml(buildViewData(dX));
+  assert.ok(html.includes("exc-chip") && html.includes("excDetail"));
+  assert.ok(html.includes("봉인확인실패") && html.includes("날조근거 결정") && html.includes("출처 도달실패"));
+  assert.ok(html.includes("분류보기"));
+  rmSync(dX, { recursive: true, force: true });
+});
 check("failureKey export: statement/fingerprint 두 모드 모두 문자열 키", () => {
   const ev = { fingerprint: "cfp1:aa", check: "citation", inputSha: "s", subject: "S", statement: "x" };
   assert.ok(typeof failureKey(ev, "statement") === "string" && typeof failureKey(ev, "fingerprint") === "string");

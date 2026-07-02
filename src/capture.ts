@@ -48,7 +48,9 @@ export interface CaptureChainResult {
 // 정확한 사실(Phase6 정정): 목록 밖 도구는 "훅이 못 오는" 게 아니라 *이 목록으로 만든 matcher 가
 //   안 매칭*해서 안 오는 것 — 그래서 여기 추가하면 잡힌다. 단 기존 설치본의 settings.json 에는
 //   옛 matcher 가 박제돼 있으므로 `capture install --write` 재실행 후부터 적용(출력에 고지).
-// 여전히 밖: Task(서브에이전트)·mcp__*(이벤트 형태가 도구마다 달라 실조사 전 편입=발명 — 정직 보류).
+// Task·mcp__*(Phase7 편입·공식 훅 문서 실측): 둘 다 PreToolUse/PostToolUse 를 정상 발화하고
+//   mcp 는 `mcp__<server>__<tool>` 이름으로 옴 — 기록은 *이름만*(op=command·파라미터/값 0·muted).
+//   여전히 밖: PostToolUseFailure 등 다른 훅 이벤트(범위 밖 명시)·OS 레벨.
 export const COVERED_TOOLS: readonly string[] = [
   "Bash",
   "Read",
@@ -59,6 +61,8 @@ export const COVERED_TOOLS: readonly string[] = [
   "NotebookRead",
   "WebFetch",
   "WebSearch",
+  "Task",
+  "mcp__*",
 ];
 
 export interface CaptureAction {
@@ -203,7 +207,11 @@ export function classifyEvent(payload: unknown, phase: "pre" | "post" = "post", 
     // 검색어=값이라 저장 금지 — 외부 호출 사실만 고정 표기로 남김.
     return [{ ...base, op: "network", host: "(web-search)" }];
   }
-  return []; // 그 외 도구(Task·mcp__* 등)는 alpha 행위추적 비대상 — COVERED_TOOLS 주석 참고
+  if (tool === "Task" || tool.startsWith("mcp__")) {
+    // 이름만 기록(서브에이전트 생성/MCP 호출이 있었다는 사실) — prompt/인자=값이라 저장 금지. muted(COMMAND_RUN).
+    return [{ ...base, op: "command" }];
+  }
+  return []; // 그 외 도구는 alpha 행위추적 비대상 — COVERED_TOOLS 주석 참고
 }
 
 /** records → actions[] + 요약. gitChangedPaths(주입 가능·테스트 결정론) ∩ 행위경로 = gitVisible. */
@@ -573,7 +581,10 @@ export function runCaptureReset(): never {
 // ── Claude Code 훅 자동배선 (capture install) — council A Decision #2/#3 ──
 // .claude/settings.json 의 hooks.PreToolUse/PostToolUse 에 `agent-receipt capture` 추가.
 // 기본 --print(미리보기·무쓰기), 실제 쓰기는 --write opt-in. 머지는 멱등·기존 보존·malformed 거부.
-const HOOK_MATCHER = COVERED_TOOLS.join("|"); // = "Bash|Read|Write|Edit|MultiEdit|NotebookEdit|NotebookRead"(단일 출처 COVERED_TOOLS).
+// matcher 파생(단일 출처 COVERED_TOOLS): `mcp__*` 표기는 regex `mcp__.*` 로 변환.
+// `.` 이 들어가는 순간 matcher 전체가 regex 경로(unanchored test·공식 문서 실측)가 되므로
+// `^(...)$` 로 명시 anchor — unanchored "Read" 가 임의 신규 도구명에 부분매칭하는 사고 방지.
+const HOOK_MATCHER = `^(${COVERED_TOOLS.map((t) => (t === "mcp__*" ? "mcp__.*" : t)).join("|")})$`;
 const captureCommand = (phase: "pre" | "post"): string => `agent-receipt capture --event ${phase}`;
 
 interface HookCmd {

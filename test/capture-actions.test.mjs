@@ -183,6 +183,31 @@ check("mergeCaptureHooks: 최신 matcher면 여전히 멱등(changed=false)", ()
   assert.equal(again.changed, false);
 });
 
+// ── Phase7: Task/mcp__* 편입(이름만·값 0) + anchored matcher ──
+check("classifyEvent: Task → command·이름만(프롬프트/서브에이전트타입 미저장)", () => {
+  const r = classifyEvent({ tool_name: "Task", tool_input: { prompt: "극비 지시문", subagent_type: "researcher" } }, "post", "T");
+  assert.equal(r.length, 1);
+  assert.equal(r[0].op, "command");
+  assert.equal(r[0].tool, "Task");
+  const j = JSON.stringify(r);
+  assert.ok(!j.includes("극비") && !j.includes("researcher")); // 값 미저장
+});
+check("classifyEvent: mcp__server__tool → command·전체 이름=식별자만", () => {
+  const r = classifyEvent({ tool_name: "mcp__github__search_repositories", tool_input: { query: "secret query" } }, "post", "T");
+  assert.equal(r.length, 1);
+  assert.equal(r[0].tool, "mcp__github__search_repositories");
+  assert.ok(!JSON.stringify(r).includes("secret query"));
+});
+check("HOOK_MATCHER(설치 스니펫 경유): anchored regex + mcp__.* 포함, 각 도구명 실매칭", () => {
+  const m = mergeCaptureHooks({}).merged.hooks.PreToolUse[0].matcher;
+  assert.ok(m.startsWith("^(") && m.endsWith(")$"));
+  assert.ok(m.includes("mcp__.*") && !m.includes("mcp__*")); // 표기→regex 변환
+  const re = new RegExp(m);
+  for (const t of ["Bash", "Read", "WebFetch", "WebSearch", "Task", "mcp__memory__create_entities"]) assert.ok(re.test(t), `미매칭: ${t}`);
+  assert.ok(!re.test("SomeOtherTool")); // anchored — 임의 도구 부분매칭 없음
+  assert.ok(!re.test("NotebookReadExtra")); // unanchored 였다면 Read 가 부분매칭했을 형태
+});
+
 if (fail.length) {
   console.error(`capture-actions: ${fail.length} FAIL\n  ` + fail.join("\n  "));
   process.exit(1);

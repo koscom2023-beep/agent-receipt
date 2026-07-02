@@ -1,5 +1,5 @@
 // 멀티에이전트 envelope 정규화 토대(7차 council) — 여러 코딩 에이전트 훅 stdin 을 공통 모양으로.
-// 잠금: Claude/Codex passthrough · Copilot camelCase alias · Cursor conversation_id · source 라벨 · 미지원 tool []·source hash 조건부(pre-source 불변).
+// 잠금: Claude/Codex passthrough · Copilot camelCase alias · Cursor conversation_id · source 라벨 · 미지원 tool [](mcp 는 Phase7 이름만 포착)·source hash 조건부(pre-source 불변).
 // 합성 payload(공식 문서 형식)로 검증 — 실 에이전트 미구동(best-effort). `node test/multiagent-envelope.test.mjs`.
 import assert from "node:assert/strict";
 import { normalizeEnvelope, classifyEvent, captureEntryHash, aggregateActions } from "../dist/capture.js";
@@ -52,10 +52,13 @@ check("camelCase 입력이 정규화 후 classifyEvent 로 분류", () => {
   assert.equal(recs[0].path, ".env");
 });
 
-// 6) 미지원 tool(MCP·apply_patch) → 미포착(크래시 0) — shape 미검증분 안 박음
-check("미지원 tool → [] (apply_patch/MCP)", () => {
+// 6) 미지원 tool(apply_patch 등) → 미포착(크래시 0). MCP 는 Phase7 편입 — 이름만(command) 포착.
+check("미지원 tool → [] (apply_patch) · mcp__* 는 이름만 포착(Phase7)", () => {
   assert.equal(classifyEvent(normalizeEnvelope({ tool_name: "apply_patch", tool_input: { patch: "x" } }), "post", "t").length, 0);
-  assert.equal(classifyEvent(normalizeEnvelope({ tool_name: "mcp__foo__bar", tool_input: {} }), "post", "t").length, 0);
+  const m = classifyEvent(normalizeEnvelope({ tool_name: "mcp__foo__bar", tool_input: { secret: "v" } }), "post", "t");
+  assert.equal(m.length, 1);
+  assert.equal(m[0].op, "command");
+  assert.ok(!JSON.stringify(m).includes("secret")); // 인자=값 미저장
 });
 
 // 7) 빈/이상 payload → tool_name "" → [] (방어)

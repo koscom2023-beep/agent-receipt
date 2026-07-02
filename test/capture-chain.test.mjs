@@ -110,8 +110,8 @@ check("체인 필드(seq/prevHash/entryHash/sessionId)는 actions 에 누출 안
 });
 
 // ── 커버리지 단일 출처 ──
-check("COVERED_TOOLS = 훅 matcher 와 동일 9종(Phase6: WebFetch/WebSearch 편입)", () => {
-  assert.deepEqual([...COVERED_TOOLS], ["Bash", "Read", "Write", "Edit", "MultiEdit", "NotebookEdit", "NotebookRead", "WebFetch", "WebSearch"]);
+check("COVERED_TOOLS = 11항목(Phase7: Task·mcp__* 편입 — mcp 는 표기 리터럴)", () => {
+  assert.deepEqual([...COVERED_TOOLS], ["Bash", "Read", "Write", "Edit", "MultiEdit", "NotebookEdit", "NotebookRead", "WebFetch", "WebSearch", "Task", "mcp__*"]);
   // classifyEvent 가 실제로 이 도구들을 분류하는지(대표 2종)
   assert.equal(classifyEvent({ tool_name: "Read", tool_input: { file_path: "/x/.env" } }, "post", "t").length, 1);
   assert.equal(classifyEvent({ tool_name: "WebFetch", tool_input: { url: "http://x" } }, "post", "t").length, 1); // Phase6 편입 — 이제 network 로 분류
