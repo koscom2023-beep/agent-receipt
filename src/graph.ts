@@ -648,7 +648,7 @@ export function buildGraphHtml(data: ViewRow[], opts: GraphHtmlOpts = {}): strin
     subjects: buildSubjects(data),
   }).replace(/</g, "\\u003c");
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Evidence Browser — Verification Receipts</title><style>
+<title>증거 브라우저(Evidence Browser) — 검증 영수증</title><style>
 :root{
   --bg:#f1f2f4;--bg-raised:#f8f9fa;--bg-hover:#e9ebee;--border:#dadde2;--border-soft:#e6e8eb;
   --text:#24292f;--mut:#57606a;--pass:#1a7f37;--fail:#d03b3b;--warn:#9a6700;--accent:#0969da;
@@ -685,7 +685,7 @@ code{color:#7a3d00;background:#eceef1;padding:1px 6px;border-radius:5px;font-siz
 .badge.rep{background:var(--warn-bg);color:var(--warn)}
 .badge.new{background:var(--fail-bg);color:var(--fail)}
 </style></head><body>
-<header><h1>Evidence Browser</h1><div class="sub">요약 → 실패(이유·증거) → 영향받은 주장 → 이력(1클릭) → 영수증(맨 마지막) · 정적 파일·서버 없음 · 무결성=생성 시점 스냅샷</div></header>
+<header><h1>증거 브라우저 <span style="color:var(--mut);font-size:14px;font-weight:500">(Evidence Browser)</span></h1><div class="sub">요약 → 실패(이유·증거) → 영향받은 주장 → 이력(1클릭) → 영수증(맨 마지막) · 정적 파일·서버 없음 · 무결성=생성 시점 스냅샷</div></header>
 <div class="dash" id="dash"></div>
 <div class="tabs" id="tabs"></div>
 <div class="wrap"><div><div class="filters" id="filters">

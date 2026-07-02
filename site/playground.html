@@ -62,14 +62,14 @@ footer a{color:var(--accent);text-decoration:none}
   <div class="honest"><b>정직한 범위:</b> 이 페이지는 <b>순수</b> 종류만 돌립니다 — 인용(citation) · 수치(number) · 날짜(date) · 링크(link) · 스키마(schema) · 버전(version·semver). 암호 계열(hash·signature·receipt)과 git 사실 계열(commit·fileChanged·diffContains·file·artifact)은 당신 컴퓨터의 암호/git/파일시스템이 필요해 CLI에서 돕니다. <span style="color:var(--mut)">암호·git 계열은 CLI 몫(브라우저가 재현하면 그게 거짓이라서).</span></div>
 
   <div class="presets" id="presets">
-    <button class="preset" data-p="soc2">📋 SOC2 quiet upgrade</button>
-    <button class="preset" data-p="numdrift">🔢 number drift (52%→58%)</button>
-    <button class="preset" data-p="datedrift">📅 date drift</button>
-    <button class="preset" data-p="verdrift">📦 version drift (^1 vs 2.0)</button>
-    <button class="preset" data-p="sum">🧮 sum recompute</button>
-    <button class="preset" data-p="semver">✅ semver satisfied</button>
-    <button class="preset" data-p="schema">🧩 missing required field</button>
-    <button class="preset" data-p="date">🗓 format-agnostic date</button>
+    <button class="preset" data-p="soc2">📋 조용한 격상(SOC2)</button>
+    <button class="preset" data-p="numdrift">🔢 수치 표류(52%→58%)</button>
+    <button class="preset" data-p="datedrift">📅 날짜 표류</button>
+    <button class="preset" data-p="verdrift">📦 버전 표류(^1 vs 2.0)</button>
+    <button class="preset" data-p="sum">🧮 합계 재계산</button>
+    <button class="preset" data-p="semver">✅ 버전 범위 충족(semver)</button>
+    <button class="preset" data-p="schema">🧩 필수 필드 누락</button>
+    <button class="preset" data-p="date">🗓 형식 무관 날짜</button>
   </div>
 
   <div class="modes" style="display:flex;gap:8px;margin:0 0 12px">
@@ -103,7 +103,7 @@ footer a{color:var(--accent);text-decoration:none}
   <div class="run">
     <button class="go" id="go">검증 ▸</button>
     <button class="preset" id="share" title="URL 해시(#)에만 담김 — 서버로 전송되지 않음">🔗 판정 공유 링크 복사</button>
-    <span class="mut" style="font-size:13px" id="sharenote">runs locally · 공유 링크도 # 해시라 서버로 안 감</span>
+    <span class="mut" style="font-size:13px" id="sharenote">로컬 실행 · 공유 링크도 # 해시(fragment)라 서버로 안 감</span>
   </div>
   <div class="out" id="out"><span class="mut">프리셋을 고르거나 직접 쓰고 "검증"을 누르세요.</span></div>
 
