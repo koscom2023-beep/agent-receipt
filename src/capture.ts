@@ -39,6 +39,8 @@ export interface CaptureRecord {
   entryHash?: string; // 이 레코드의 무결성 해시(entryHash 자신 제외, prevHash 포함).
   guard?: "warn" | "deny"; // 실시간 가드 판정(pre·write/delete 만) — warn=표시만, deny=차단 방출됨(policy guard: block). guard.ts
   guardRule?: string; // 매칭 근거 "origin:glob" (예: policy.forbidAlways:.env*)
+  cmdHash?: string; // Bash 명령의 sha256 앞 16hex — *본문 미저장* 원칙 유지(동일 명령 반복 비교 전용 지문·값 복원 불가)
+  cmdKind?: "test" | "build" | "lint" | "install" | "other"; // 명령 분류(정규식·본문 미저장) — 반복 표시용
 }
 
 export interface CaptureChainResult {
@@ -169,6 +171,19 @@ export function normalizeEnvelope(payload: unknown): NormalizedEnvelope {
   return { tool_name, tool_input, sessionId, source };
 }
 
+// 명령 종류 분류(정규식·본문 미저장) — 반복 낭비 표시용. 확신 없으면 other(추정 승격 금지).
+const CMD_TEST = /\b(vitest|jest|mocha|pytest|go test|cargo test|(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?test)\b/;
+const CMD_BUILD = /\b(tsc\b|next build|vite build|cargo build|go build|(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?build|make\b)\b/;
+const CMD_LINT = /\b(eslint|ruff|flake8|prettier|(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?lint)\b/;
+const CMD_INSTALL = /\b((?:npm|pnpm)\s+(?:i|ci|install)\b|yarn(?:\s+install)?\b|pip3?\s+install|cargo add)\b/;
+function classifyCmdKind(cmd: string): NonNullable<CaptureRecord["cmdKind"]> {
+  if (CMD_TEST.test(cmd)) return "test";
+  if (CMD_BUILD.test(cmd)) return "build";
+  if (CMD_LINT.test(cmd)) return "lint";
+  if (CMD_INSTALL.test(cmd)) return "install";
+  return "other";
+}
+
 /** 정규화된 envelope(또는 {tool,input}) → CaptureRecord[](없으면 []). 값 미저장. */
 export function classifyEvent(payload: unknown, phase: "pre" | "post" | "fail" | "denied" = "post", ts = ""): CaptureRecord[] {
   const o = payload as { tool_name?: string; tool?: string; tool_input?: Record<string, unknown>; input?: Record<string, unknown> };
@@ -198,7 +213,9 @@ export function classifyEvent(payload: unknown, phase: "pre" | "post" | "fail" |
     if (dels.length) {
       return dels.map((p) => ({ ...base, op: "delete" as const, path: clean(toRel(p)) ?? p }));
     }
-    return [{ ...base, op: "command" }];
+    // 반복 탐지용 지문(council 2026-07-03 증분1): 본문은 여전히 미저장 — sha256 16hex(복원 불가)와 종류 분류만.
+    const cmdHash = createHash("sha256").update(cmd).digest("hex").slice(0, 16);
+    return [{ ...base, op: "command", cmdHash, cmdKind: classifyCmdKind(cmd) }];
   }
   if (tool === "WebFetch") {
     // url 파라미터에서 host 만(값·경로·쿼리 미저장 — Bash network 와 같은 규칙·자격증명 strip 승계).
@@ -245,6 +262,75 @@ export function aggregateActions(records: CaptureRecord[], gitChangedPaths: Set<
       gitVisible: actions.filter((a) => a.path && gitChangedPaths.has(a.path)).length,
     },
   };
+}
+
+// ── 반복 낭비 분석 (council 2026-07-03 증분1) — 읽기전용·결정론·저장 0(항상 레코드에서 재계산) ──
+// 정직 규칙(결정 4): 관측 가능한 횟수만 센다. 토큰/시간 절감 환산·인과 주장 없음. "정상적인 재확인"일 수 있어
+// 판단은 사람 몫 — 표시 문구에 반드시 병기. 재독은 *사이에 그 파일 편집(write/delete)이 없을 때만* 반복으로 센다.
+export interface WasteSummary {
+  rereads: Array<{ path: string; repeats: number }>; // 사이 편집 없는 재독 횟수(첫 읽기 제외)
+  repeatedCommands: Array<{ cmdKind: string; count: number }>; // 동일 명령(cmdHash 지문) 2회 이상 실행
+  repeatedFailures: Array<{ label: string; count: number }>; // 동일 대상 실패(phase=fail) 2회 이상
+}
+
+export function analyzeWaste(records: CaptureRecord[]): WasteSummary {
+  // pre+post 이중 기록 dedupe: post 가 하나라도 있으면 post(완료 행위)만, 아니면 pre 만 사용(pre-only 설치 호환).
+  const phase = records.some((r) => r.phase === "post") ? "post" : "pre";
+  const acts = records.filter((r) => r.phase === phase);
+
+  const sinceWrite = new Map<string, number>();
+  const repeats = new Map<string, number>();
+  for (const r of acts) {
+    if (!r.path) continue;
+    if (r.op === "read") {
+      const c = (sinceWrite.get(r.path) ?? 0) + 1;
+      sinceWrite.set(r.path, c);
+      if (c >= 2) repeats.set(r.path, (repeats.get(r.path) ?? 0) + 1);
+    } else if (r.op === "write" || r.op === "delete") {
+      sinceWrite.set(r.path, 0); // 편집 후 재독은 정상 — 창 리셋
+    }
+  }
+
+  const byHash = new Map<string, { cmdKind: string; count: number }>();
+  for (const r of acts) {
+    if (r.op !== "command" || !r.cmdHash) continue;
+    const e = byHash.get(r.cmdHash) ?? { cmdKind: r.cmdKind ?? "other", count: 0 };
+    e.count += 1;
+    byHash.set(r.cmdHash, e);
+  }
+
+  const failKey = (r: CaptureRecord): string => `${r.tool} ${r.path ?? r.host ?? (r.cmdHash ? `(command:${r.cmdHash.slice(0, 6)})` : "")}`;
+  const fails = new Map<string, number>();
+  for (const r of records) {
+    if (r.phase !== "fail") continue;
+    const k = failKey(r);
+    fails.set(k, (fails.get(k) ?? 0) + 1);
+  }
+
+  const desc = <T>(arr: T[], by: (t: T) => number): T[] => [...arr].sort((a, b) => by(b) - by(a));
+  return {
+    rereads: desc([...repeats].map(([path, n]) => ({ path, repeats: n })), (x) => x.repeats),
+    repeatedCommands: desc([...byHash.values()].filter((e) => e.count >= 2), (x) => x.count),
+    repeatedFailures: desc([...fails].filter(([, n]) => n >= 2).map(([label, count]) => ({ label, count })), (x) => x.count),
+  };
+}
+
+/** 사람용 표시 줄(없으면 [] → 출력 불변). 상한 5줄/범주 — 장황 리포트 금지(회의 User Advocate). */
+export function wasteDisplayLines(w: WasteSummary): string[] {
+  const L: string[] = [];
+  for (const r of w.rereads.slice(0, 5)) L.push(`같은 파일 재독 ${r.repeats}회 (사이 편집 없음): ${r.path}`);
+  for (const c of w.repeatedCommands.slice(0, 5)) L.push(`동일 ${c.cmdKind} 명령 ${c.count}회 실행`);
+  for (const f of w.repeatedFailures.slice(0, 5)) L.push(`실패 반복 ${f.count}회: ${f.label}`);
+  return L;
+}
+
+/** 현 저장소의 capture 로그에서 반복 요약 줄 생성(없으면 []) — insights 등 다른 표면에서 호출. */
+export function wasteLinesFromDisk(): string[] {
+  try {
+    return wasteDisplayLines(analyzeWaste(readRecords()));
+  } catch {
+    return [];
+  }
 }
 
 function capFile(): string {
@@ -357,6 +443,8 @@ export function captureEntryHash(r: CaptureRecord): string {
   if (r.source) o.source = r.source; // 신규 필드는 *있을 때만* 포함 → source 없는 기존 체인 레코드의 해시는 불변.
   if (r.guard) o.guard = r.guard; // 동일 원칙(present-only) — 가드 판정도 변조 탐지 대상에 포함.
   if (r.guardRule) o.guardRule = r.guardRule;
+  if (r.cmdHash) o.cmdHash = r.cmdHash;
+  if (r.cmdKind) o.cmdKind = r.cmdKind;
   return "sha256:" + createHash("sha256").update(JSON.stringify(o)).digest("hex");
 }
 
@@ -556,6 +644,11 @@ export function runCaptureShow(json: boolean): never {
   const guardDeny = records.filter((r) => r.guard === "deny").length;
   const guardWarn = records.filter((r) => r.guard === "warn").length;
   if (guardDeny || guardWarn) console.log(`  가드(금지 경로 쓰기): 차단 ${guardDeny} · 경고 ${guardWarn} — 근거는 capture.jsonl guardRule`); // present-only(없으면 출력 불변)
+  const wasteL = wasteDisplayLines(analyzeWaste(records));
+  if (wasteL.length) {
+    console.log(`\n  반복(참고 — 정상적인 재확인일 수 있음·판단은 사람 몫):`); // present-only·환산/인과주장 없음(council 결정 4)
+    for (const l of wasteL) console.log(`   · ${l}`);
+  }
   // 대사(11차 council): git 변경 ↔ capture write 교차대조 + 잔차 분류(자동 cleared 금지·미설명은 남김).
   const recon = reconcileCapture(records, gitChanged);
   const degraded = records.filter((r) => r.op === "capture-degraded").length;

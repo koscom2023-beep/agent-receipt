@@ -1,5 +1,6 @@
 import { listReceipts, parseReceiptJson, criticalTouchedCount, RECEIPTS_REL, type ReceiptJson } from "./receiptStore.js";
 import { LIMIT_NOTE } from "./disclosure.js";
+import { wasteLinesFromDisk } from "./capture.js";
 
 // ── 로컬 분석 (9차 council) — 읽기전용 투영: receipts 의 *기간대비 추세 + 재발 패턴* (audit/incident 가 못 주던 빈 곳만) ──
 // 정직 doctrine: 점수·등급·'예측' 없음(서술만) · n 작으면 'small sample, directional only' 강제 · LIMIT_NOTE 승계.
@@ -129,5 +130,14 @@ export function runInsights(sinceArg: string | undefined, format: string | undef
   const result = computeInsights(receipts);
   const out = format === "json" ? renderInsightsJson(result) : renderInsightsMd(result);
   process.stdout.write(out + "\n");
+  // 반복 낭비(capture 기반·council 2026-07-03 증분1) — human 표면 한정(--json 계약 불변)·capture 없으면 출력 불변.
+  if (format !== "json") {
+    const wl = wasteLinesFromDisk();
+    if (wl.length) {
+      process.stdout.write(`\n## 반복 (capture — 참고: 정상적인 재확인일 수 있음·판단은 사람 몫)\n`);
+      for (const l of wl) process.stdout.write(`- ${l}\n`);
+      process.stdout.write(`- ⓘ 횟수 실측만 — 토큰/시간 절감 환산 없음(측정 불가한 값은 표시하지 않음)\n`);
+    }
+  }
   process.exit(0);
 }
