@@ -1319,6 +1319,30 @@ const V09_LINKED =
   emit("v09-12-prepare-commit-pass", "guard start --kind implementation … ; guard prepare-commit",
     run(c.repo, "prepare-commit", ["--contract", c.contract]), S6_CONTRACT);
 }
+// focus-01: 리뷰 압축 + 확인 신호 (council 2026-07-03 R1~R3) — total>=4 발동·티어 정렬·red flag 결정론
+{
+  const c = track(newCase());
+  mkdirSync(join(c.repo, "src"), { recursive: true });
+  mkdirSync(join(c.repo, "tests"), { recursive: true });
+  const FOCUS_CONTRACT =
+    `id: s6-focus\ntitle: review focus\n` +
+    `scope:\n  allowed_paths:\n    - "src/**"\n    - "tests/**"\n    - "package.json"\n  denied_paths: []\n` +
+    `required_checks:\n  commands: []\n`;
+  writeFileSync(c.contract, FOCUS_CONTRACT);
+  // 기준 커밋: package.json(dep a)·src/big.ts(소형) — 이후 변경이 HEAD diff 로 잡히게
+  writeFileSync(join(c.repo, "package.json"), JSON.stringify({ name: "fx", dependencies: { a: "1.0.0" } }, null, 2) + "\n");
+  writeFileSync(join(c.repo, "src", "big.ts"), "export const b = 0;\n");
+  git(c.repo, ["add", "."]);
+  git(c.repo, ["commit", "-q", "-m", "seed"]);
+  run(c.repo, "start", ["--kind", "implementation", "--contract", c.contract]);
+  // 변경 4개: 의존성 추가(T2+신호)·대형 diff(T3)·신규 src(T4)·신규 테스트에 skip 추가(신호)
+  writeFileSync(join(c.repo, "package.json"), JSON.stringify({ name: "fx", dependencies: { a: "1.0.0", b: "2.0.0" } }, null, 2) + "\n");
+  writeFileSync(join(c.repo, "src", "big.ts"), Array.from({ length: 90 }, (_, i) => `export const v${i} = ${i};`).join("\n") + "\n");
+  writeFileSync(join(c.repo, "src", "newmod.ts"), "export const n = 1;\n");
+  writeFileSync(join(c.repo, "tests", "t.test.ts"), "it.skip('later', () => {});\n");
+  emit("focus-01-prepare-commit-review-pack", "4+ 파일 변경 ; guard prepare-commit   (우선 검토 후보 + 확인 신호)",
+    run(c.repo, "prepare-commit", ["--contract", c.contract]), FOCUS_CONTRACT);
+}
 // v09-13: prepare-commit BLOCK — 진짜 범위 밖 → 커밋 블록 생략, exit 1
 {
   const c = track(newCase());

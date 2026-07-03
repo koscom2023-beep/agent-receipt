@@ -153,6 +153,46 @@ export function numstatVsHead(): LineStat {
   return { filesChanged, added, deleted };
 }
 
+// 파일별 변경 규모 — numstatVsHead 와 같은 명령, 경로 컬럼을 버리지 않는 판(리뷰 압축 정렬용·의미판단 0).
+export function numstatPerFile(): Array<{ path: string; added: number; deleted: number }> {
+  try {
+    const out = git(["diff", "HEAD", "--numstat"]);
+    const rows: Array<{ path: string; added: number; deleted: number }> = [];
+    for (const ln of out.split("\n")) {
+      if (!ln) continue;
+      const [a, d, ...rest] = ln.split("\t");
+      const path = rest.join("\t");
+      if (!path) continue;
+      rows.push({ path, added: a && a !== "-" ? Number(a) || 0 : 0, deleted: d && d !== "-" ? Number(d) || 0 : 0 });
+    }
+    return rows;
+  } catch {
+    return [];
+  }
+}
+
+// 한 파일의 작업트리 diff 에서 *추가된 줄*만(+++ 헤더 제외·앞의 + 제거). 신호 스캔용 — 기존 줄 재고는 신호 아님.
+export function diffAddedLines(path: string): string[] {
+  try {
+    const out = git(["diff", "HEAD", "--", path]);
+    return out
+      .split("\n")
+      .filter((l) => l.startsWith("+") && !l.startsWith("+++"))
+      .map((l) => l.slice(1));
+  } catch {
+    return [];
+  }
+}
+
+// HEAD 시점의 파일 내용(없으면 null) — 의존성 키 집합 비교 등 '이전 vs 지금' 대조용.
+export function headFileContent(path: string): string | null {
+  try {
+    return git(["show", `HEAD:${path}`]);
+  } catch {
+    return null;
+  }
+}
+
 // git 의 canonical empty tree 해시 — 루트 커밋(부모 없음)을 diff 할 때 base 로 쓴다(전부 신규로 측정).
 export const EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 

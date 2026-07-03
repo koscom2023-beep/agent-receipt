@@ -1,0 +1,10 @@
+id: s6-focus
+title: review focus
+scope:
+  allowed_paths:
+    - "src/**"
+    - "tests/**"
+    - "package.json"
+  denied_paths: []
+required_checks:
+  commands: []

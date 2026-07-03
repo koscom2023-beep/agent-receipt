@@ -1,0 +1,40 @@
+
+────────────────────────────────────────────────────────
+agent-receipt prepare-commit: s6-focus  (자동 commit/add 안 함 — 복붙 블록만)
+────────────────────────────────────────────────────────
+허용 변경         : 4
+   - package.json
+   - src/big.ts
+   - src/newmod.ts
+   - tests/t.test.ts
+진짜 범위 밖      : 0
+────────────────────────────────────────────────────────
+우선 검토 후보 3 / 전체 4 (정렬 제안 — 보증 아님·나머지도 검토 대상)
+  1. package.json — 의존성 매니페스트 (+2/-1)
+  2. src/big.ts — 대형 diff (+90/-1)
+  3. src/newmod.ts — 신규 파일 (+2/-0)
+  · 부수로 분류: tests/t.test.ts
+⚠️ 확인 신호(관찰·판정 아님): 테스트 skip/only 추가 1곳(tests/t.test.ts) · 의존성 추가 1개(b)
+────────────────────────────────────────────────────────
+── 커밋 블록 (복사해서 실행) ──
+
+git add package.json \
+        src/big.ts \
+        src/newmod.ts \
+        tests/t.test.ts
+
+git commit -F - <<'EOF'
+chore(s6-focus): <요약 작성>
+
+Agent-Receipt: sha256:ebcfe08fd301e6f22e432af604fe03c0e6d1092637ca1bd408f3981a6240f84c
+Agent-Contract: sha256:74e38aad442126dc8bfdfe23c78b214af2a59a7efc7e5533b819e7581c0af436
+Agent-Policy: none
+EOF
+
+── reset 블록 (커밋 성공 후에만 — 위 블록과 별도로 실행) ──
+
+agent-receipt reset
+
+────────────────────────────────────────────────────────
+  이 도구는 git 작업트리 기준입니다 — .gitignore된 파일·레포 밖·OS 명령·DB write·외부 서비스 변경은 직접 볼 수 없습니다.
+

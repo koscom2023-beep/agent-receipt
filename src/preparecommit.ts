@@ -6,6 +6,10 @@ import { listReceipts } from "./receiptStore.js";
 import { loadPolicySafe, policyPath } from "./policy.js";
 import { hashFileOrNull } from "./environment.js";
 import { classifyTouched } from "./linked.js";
+import { buildReviewFocus, focusLines, collectRedFlags, redFlagLine } from "./reviewfocus.js";
+import { numstatPerFile } from "./git.js";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { LIMIT_NOTE } from "./disclosure.js";
 
 const line = "─".repeat(56);
@@ -107,6 +111,30 @@ export function runPrepareCommit(
         : "   add 후보에서 제외했습니다 — 포함하려면 --include-linked-tests.",
     );
   }
+
+  // 리뷰 압축(council R1) — total<4 또는 티어 해당 0 이면 null → 출력 불변(골든 안전).
+  const perFile = new Map(numstatPerFile().map((x) => [x.path, { added: x.added, deleted: x.deleted }]));
+  for (const p of r.untracked) {
+    if (perFile.has(p)) continue;
+    try {
+      perFile.set(p, { added: readFileSync(join(cwd, p), "utf8").split("\n").length, deleted: 0 }); // 신규 파일=전체가 추가(untracked 는 diff 에 안 잡힘)
+    } catch {
+      /* fail-open */
+    }
+  }
+  const riskHits = [
+    ...r.deniedHits,
+    ...r.criticalPaths.flatMap((c) => c.touched),
+    ...(r.policy ? [...r.policy.forbidAlwaysHits, ...r.policy.protectAlwaysHits, ...r.policy.approvalNeededHits] : []),
+  ];
+  const focus = buildReviewFocus({ touched: r.touched, untracked: r.untracked, riskHits, perFile });
+  const fLines = focusLines(focus);
+  if (fLines.length) {
+    console.log(line);
+    for (const l of fLines) console.log(l);
+  }
+  const rf = redFlagLine(collectRedFlags(r.touched, r.untracked, cwd));
+  if (rf) console.log(rf);
 
   const { policy } = loadPolicySafe(cwd);
   const polHash = policy ? hashFileOrNull(policyPath(cwd)) : null;

@@ -1,7 +1,7 @@
 # agent-guard v0.1 golden baseline (A0.5)
 
 - branch: v0.1-verify-check-split
-- 캡처 케이스: 143개
+- 캡처 케이스: 144개
 - 결정론: 고정 git identity(ci/ci@local) + 고정 DATE(2025-01-01T00:00:00 +0000) → headHash 재현
 - 정규화(스냅샷 한정): $HOME→<HOME>, /tmp/ag-gold-*→<FIXTURE>
 
@@ -129,6 +129,7 @@
 | v09-10-close-recon-dirty | `guard begin --kind recon ; (src/a.ts 변경) ; guard close-recon` | 1 |
 | v09-11-close-recon-impl-refuse | `guard begin --kind implementation ; guard close-recon   (구현 세션 거부)` | 1 |
 | v09-12-prepare-commit-pass | `guard start --kind implementation … ; guard prepare-commit` | 0 |
+| focus-01-prepare-commit-review-pack | `4+ 파일 변경 ; guard prepare-commit   (우선 검토 후보 + 확인 신호)` | 0 |
 | v09-13-prepare-commit-block-oos | `guard … ; (outsider.txt) ; guard prepare-commit   (범위 밖 → 차단)` | 1 |
 | v09-14-prepare-commit-linked | `guard … ; (src + tests/) ; guard prepare-commit --include-linked-tests` | 0 |
 | v09-15-finish-pass | `guard … ; guard finish` | 0 |
