@@ -42,27 +42,30 @@ export function transcriptDir(cwd: string = process.cwd()): string {
   return join(homedir(), ".claude", "projects", projectDirName(cwd));
 }
 
-// 세션 파일 선택: env CLAUDE_CODE_SESSION_ID 우선(현 세션), 없으면 가장 최근 수정 .jsonl.
-export function findSessionFile(cwd: string = process.cwd(), sessionId?: string): string | null {
+// 프로젝트 세션 파일을 mtime 내림차순(최신 우선)으로. 없으면 [].
+export function sessionFilesByRecency(cwd: string = process.cwd()): string[] {
   const dir = transcriptDir(cwd);
-  if (!existsSync(dir)) return null;
+  if (!existsSync(dir)) return [];
+  try {
+    return readdirSync(dir)
+      .filter((n) => n.endsWith(".jsonl"))
+      .map((n) => ({ p: join(dir, n), m: statSync(join(dir, n)).mtimeMs }))
+      .sort((a, b) => b.m - a.m)
+      .map((x) => x.p);
+  } catch {
+    return [];
+  }
+}
+
+// 세션 파일 선택: env CLAUDE_CODE_SESSION_ID 우선(현 세션·정확), 없으면 가장 최근 .jsonl.
+// (usage-있는 세션 폴백은 summarizeCurrentSession 이 담당 — 빈/요약 세션이 최신일 때 대비.)
+export function findSessionFile(cwd: string = process.cwd(), sessionId?: string): string | null {
   const sid = sessionId ?? process.env.CLAUDE_CODE_SESSION_ID;
   if (sid) {
-    const p = join(dir, `${sid}.jsonl`);
+    const p = join(transcriptDir(cwd), `${sid}.jsonl`);
     if (existsSync(p)) return p;
   }
-  let newest: { path: string; mtime: number } | null = null;
-  try {
-    for (const name of readdirSync(dir)) {
-      if (!name.endsWith(".jsonl")) continue;
-      const p = join(dir, name);
-      const m = statSync(p).mtimeMs;
-      if (!newest || m > newest.mtime) newest = { path: p, mtime: m };
-    }
-  } catch {
-    return null;
-  }
-  return newest?.path ?? null;
+  return sessionFilesByRecency(cwd)[0] ?? null;
 }
 
 const zero = (): UsageTokens => ({ input: 0, output: 0, cacheRead: 0, cacheCreation: 0 });
@@ -170,42 +173,58 @@ export function summarizeTranscriptLines(lines: string[], sessionFile?: string):
   };
 }
 
+const unsupported = (reason: string, file?: string): TranscriptSummary => ({
+  supported: false,
+  reason,
+  sessionFile: file,
+  messages: 0,
+  tokens: zero(),
+  byModel: [],
+  toolCounts: [],
+  cost: null,
+  hasUnpriced: false,
+  contextPeak: 0,
+  pricingAsOf: PRICING_AS_OF,
+});
+
 // 디스크에서 현 세션 요약(없으면 supported:false·이유). 읽기전용.
+// sessionId 명시(env 포함) → 그 세션만. 미명시 → 최신부터 최대 6개를 훑어 *usage 있는 첫 세션* 사용
+// (빈/요약 세션이 mtime 최신일 때 "미지원" 오판 방지 — promptia 셋팅서 실측된 케이스).
 export function summarizeCurrentSession(cwd: string = process.cwd(), sessionId?: string): TranscriptSummary {
-  const file = findSessionFile(cwd, sessionId);
-  if (!file) {
-    return {
-      supported: false,
-      reason: "이 저장소의 Claude Code 세션 기록을 찾지 못했습니다(~/.claude/projects/…). 비용 계량 off.",
-      messages: 0,
-      tokens: zero(),
-      byModel: [],
-      toolCounts: [],
-      cost: null,
-      hasUnpriced: false,
-      contextPeak: 0,
-      pricingAsOf: PRICING_AS_OF,
-    };
+  const sid = sessionId ?? process.env.CLAUDE_CODE_SESSION_ID;
+  const read = (f: string): string[] | null => {
+    try {
+      return readFileSync(f, "utf8").split("\n");
+    } catch {
+      return null;
+    }
+  };
+  // 1) 지정 세션(env 포함)이 이 프로젝트 dir 에 실재하고 usage 있으면 그걸 우선.
+  if (sid) {
+    const p = join(transcriptDir(cwd), `${sid}.jsonl`);
+    if (existsSync(p)) {
+      const lines = read(p);
+      if (lines) {
+        const s = summarizeTranscriptLines(lines, p);
+        if (s.supported) return s;
+      }
+    }
+    // 지정 세션이 이 dir 에 없거나(교차프로젝트) 빈/요약이면 → 아래 usage-스캔으로 폴백.
   }
-  let raw = "";
-  try {
-    raw = readFileSync(file, "utf8");
-  } catch {
-    return {
-      supported: false,
-      reason: "세션 기록을 읽지 못했습니다(권한/삭제?). 비용 계량 off.",
-      sessionFile: file,
-      messages: 0,
-      tokens: zero(),
-      byModel: [],
-      toolCounts: [],
-      cost: null,
-      hasUnpriced: false,
-      contextPeak: 0,
-      pricingAsOf: PRICING_AS_OF,
-    };
+  // 2) 최신부터 usage 있는 첫 세션(빈/요약 세션이 최신일 때 오판 방지 — promptia 셋팅서 실측).
+  const files = sessionFilesByRecency(cwd);
+  if (!files.length) return unsupported("이 저장소의 Claude Code 세션 기록을 찾지 못했습니다(~/.claude/projects/…). 비용 계량 off.");
+  let firstReason: string | undefined;
+  let firstFile: string | undefined;
+  for (const file of files.slice(0, 6)) {
+    const lines = read(file);
+    if (!lines) continue;
+    const s = summarizeTranscriptLines(lines, file);
+    if (s.supported) return s;
+    firstReason = firstReason ?? s.reason;
+    firstFile = firstFile ?? file;
   }
-  return summarizeTranscriptLines(raw.split("\n"), file);
+  return unsupported(firstReason ?? "최근 세션에 usage 토큰 필드가 없습니다. 비용 계량 off.", firstFile);
 }
 
 // 컨텍스트 bloat 신호 임계(council 결정 4·보수적). 정점 컨텍스트가 이 이상이면 fresh-session 권유 1줄.

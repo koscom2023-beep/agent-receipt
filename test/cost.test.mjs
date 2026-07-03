@@ -1,8 +1,11 @@
 // 화폐화: 가격표 + transcript 리더 + cost — council 2026-07-03 수락 기준. `node test/cost.test.mjs`.
 import assert from "node:assert/strict";
 import { costOf, priceFor, normalizeModelId, fmtUsd } from "../dist/pricing.js";
-import { summarizeTranscriptLines, projectDirName, CONTEXT_BLOAT_TOKENS, lastDateOf, sumProjectToday } from "../dist/transcript.js";
+import { summarizeTranscriptLines, projectDirName, CONTEXT_BLOAT_TOKENS, lastDateOf, sumProjectToday, summarizeCurrentSession } from "../dist/transcript.js";
 import { costLines, todayLine } from "../dist/cost.js";
+import { mkdtempSync, mkdirSync, writeFileSync, utimesSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 let pass = 0;
 const fail = [];
@@ -115,6 +118,33 @@ check("가격 미상 모델 섞임 → hasUnpriced true·부분 합산", () => {
 
 check("projectDirName: cwd → 디렉터리명(실측 규칙)", () => {
   assert.equal(projectDirName("/home/sah4444/agent-receipt"), "-home-sah4444-agent-receipt");
+});
+
+check("빈/요약 세션이 최신일 때 usage-있는 세션으로 폴백 (promptia 셋팅 실측 회귀)", () => {
+  const home = mkdtempSync(join(tmpdir(), "ar-home-"));
+  const cwd = "/proj/x";
+  const dir = join(home, ".claude", "projects", projectDirName(cwd));
+  mkdirSync(dir, { recursive: true });
+  const older = join(dir, "older.jsonl");
+  const newer = join(dir, "newer.jsonl");
+  writeFileSync(older, asst("claude-fable-5", { input_tokens: 0, output_tokens: 1e6 }) + "\n"); // usage 있음
+  writeFileSync(newer, mkLine({ message: { role: "assistant", content: [] } }) + "\n"); // 빈/요약(usage 0)
+  // newer 를 최신 mtime 으로
+  const t = Date.now() / 1000;
+  utimesSync(older, t - 100, t - 100);
+  utimesSync(newer, t, t);
+  const savedHome = process.env.HOME;
+  const savedSid = process.env.CLAUDE_CODE_SESSION_ID;
+  process.env.HOME = home;
+  delete process.env.CLAUDE_CODE_SESSION_ID;
+  try {
+    const s = summarizeCurrentSession(cwd);
+    assert.equal(s.supported, true, "빈 최신 세션에 막혀 폴백 실패");
+    assert.ok(Math.abs(s.cost - 50) < 0.01, `폴백 세션 비용 ${s.cost}`); // fable output 1M×$50
+  } finally {
+    process.env.HOME = savedHome;
+    if (savedSid !== undefined) process.env.CLAUDE_CODE_SESSION_ID = savedSid;
+  }
 });
 
 // ── 표시 ──
