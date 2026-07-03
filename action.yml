@@ -36,16 +36,25 @@ inputs:
 runs:
   using: "composite"
   steps:
+    # 격리 프리픽스 1회 설치 후 절대경로 실행 — npx 는 소비자 repo 의 package.json 이름이
+    # @promptia-labs/agent-receipt 와 겹치면(이 repo 자신의 CI가 그 사례) 로컬 미빌드 bin 으로 오인해 127.
+    # 실PR 검증(2026-07-03 PR #1 run 1)에서 실측된 버그. 설치 1회를 뒷 스텝들이 재사용(중복 다운로드 제거).
+    - name: Install pinned CLI (isolated prefix)
+      shell: bash
+      run: |
+        PREFIX="${RUNNER_TEMP}/agent-receipt-cli"
+        npm install --prefix "$PREFIX" "@promptia-labs/agent-receipt@${{ inputs.version }}" --no-save --no-audit --no-fund --silent
+        echo "AGENT_RECEIPT_BIN=$PREFIX/node_modules/.bin/agent-receipt" >> "$GITHUB_ENV"
     - name: Verify claims (exit 1 on any fabricated/failed check)
       shell: bash
       run: |
         mkdir -p "$(dirname "${{ inputs.out }}")"
-        npx -y @promptia-labs/agent-receipt@${{ inputs.version }} research verify --file "${{ inputs.report }}" --out "${{ inputs.out }}"
+        "$AGENT_RECEIPT_BIN" research verify --file "${{ inputs.report }}" --out "${{ inputs.out }}"
     - name: Regression gate (only when base-dir given — exit 1 on NEW failures vs base)
       if: ${{ inputs.base-dir != '' }}
       shell: bash
       run: |
-        npx -y @promptia-labs/agent-receipt@${{ inputs.version }} graph diff --base-dir "${{ inputs.base-dir }}" --head-dir "$(dirname "${{ inputs.out }}")"
+        "$AGENT_RECEIPT_BIN" graph diff --base-dir "${{ inputs.base-dir }}" --head-dir "$(dirname "${{ inputs.out }}")"
     # PR 영수증 코멘트(council 2026-07-03 결정 4) — always(): 검증 실패(exit 1)일 때야말로 코멘트가 필요.
     # 본문은 scripts/pr-comment-body.mjs 가 봉인 영수증을 기계 투영(자유 텍스트 0)·MARKER 로 기존 코멘트 갱신(도배 방지).
     # 어떤 실패(fork 읽기전용 토큰·API 오류)도 job 을 깨지 않음 — 게이트는 위 두 스텝, 코멘트는 표시일 뿐.
