@@ -117,7 +117,7 @@ footer a{color:var(--accent);text-decoration:none}
 <header>
   <h1>agent-receipt</h1>
   <div class="tag"><b>Make what your AI did — and what it said — independently verifiable, after the fact.</b></div>
-  <div class="tag2">What the agent actually changed in your repo; whether the citations, numbers and git facts in its reports are real — sealed into local receipts, blocked in CI when fabricated (exit 1).</div>
+  <div class="tag2">What the agent actually changed in your repo; whether the citations, numbers and git facts in its reports are real — sealed into local receipts, blocked in CI when fabricated (exit 1). Since 0.14, optionally preventive too: a real-time guard (opt-in) that stops forbidden-path writes <i>before</i> the tool runs.</div>
   <div class="btns">
     <a class="btn primary" href="/en/playground">Catch one yourself, in your browser →</a>
     <a class="btn ghost" href="/demo">Live Evidence Browser</a>
@@ -153,13 +153,16 @@ footer a{color:var(--accent);text-decoration:none}
       <p>Commit existence, changed files, even diff contents — checked against actual git history.</p>
       <span class="res blk">BLOCKED in CI (exit 1)</span></div>
     <div class="c"><b>📁 The AI modified files outside the agreed scope</b>
-      <p>The contract's allowed paths are compared against the real diff — the pre-commit gate refuses, and even a bypass (--no-verify) still leaves an evidence receipt.</p>
-      <span class="res blk">GATE BLOCKED</span> <span class="res rec">RECEIPT RECORDED</span></div>
+      <p>The contract's allowed paths are compared against the real diff — the pre-commit gate refuses, and even a bypass (--no-verify) still leaves an evidence receipt. New in 0.14: with <code>guard: block</code>, forbidden-path writes are stopped <b>before the tool runs</b> — the agent sees why and backs off without retry loops (the denied attempt is chain-recorded too).</p>
+      <span class="res blk">BLOCKED IN REAL TIME (opt-in)</span> <span class="res blk">GATE BLOCKED</span> <span class="res rec">RECEIPT RECORDED</span></div>
     <div class="c rec"><b>🔑 The AI tried to read .env (and failed), then tried to phone home</b>
-      <p>Invisible to git — failed attempts and permission-denied attempts are kept as action classes (values never stored).</p>
+      <p>Invisible to git — failed attempts and permission-denied attempts are kept as action classes (values never stored). Reads and network calls stay record-only: real-time blocking covers forbidden-path <i>writes</i>, nothing more (honest scope).</p>
       <span class="res rec">RECORDED — not blocked</span>
 <pre style="margin:10px 0 0;font-size:12px">  <span class="y">⚠️ READ_SECRET_FILE  .env  (failed attempt)</span>
   <span class="y">⚠️ EXTERNAL_NETWORK_CALL  api.exfil.example</span></pre></div>
+    <div class="c rec"><b>🔁 The AI re-read the same file 11 times and re-ran the same test 4 times</b>
+      <p>Recomputed from the capture log: rereads with no edit in between · duplicate commands (fingerprint only — the command body is never stored) · the same failure repeating. It may be legitimate double-checking, so the human judges — which is why we show measured counts only, and never convert them into token/time "savings" (unmeasurable numbers don't get displayed).</p>
+      <span class="res rec">RECORDED &amp; REPORTED — not blocked</span></div>
   </div>
 </section>
 
@@ -177,7 +180,7 @@ footer a{color:var(--accent);text-decoration:none}
   <p class="sub"><b>agent-receipt is a local audit layer that turns an AI agent's code work and report evidence into an independently verifiable trail.</b> Two subsystems underneath:</p>
   <table>
     <tr><th>Audit</th><th>Question it answers</th></tr>
-    <tr><td><b>AI Change Audit</b></td><td><b>What did the AI actually do to my repo?</b> Contract-scoped diff evidence, hash-chained ledger, third-party Rekor anchoring, beyond-git action capture (incl. failed & denied attempts).</td></tr>
+    <tr><td><b>AI Change Audit</b></td><td><b>What did the AI actually do to my repo?</b> Contract-scoped diff evidence, hash-chained ledger, third-party Rekor anchoring, beyond-git action capture (incl. failed & denied attempts) — plus an opt-in real-time guard that stops forbidden-path writes up front.</td></tr>
     <tr><td><b>AI Evidence Audit</b></td><td><b>Is what the AI said actually true?</b> 14 deterministic check kinds — no LLM judging LLMs. Same input, same verdict, every time.</td></tr>
   </table>
 </section>
@@ -191,12 +194,15 @@ agent-receipt research verify --file report.md --out vr/r1.json
 <span class="c">#   a single fabrication → exit 1 (CI stops it)</span>
 agent-receipt graph view --dir vr --out browser.html    <span class="c"># triage what accumulates</span>
 agent-receipt graph diff --base-dir vr-old --head-dir vr    <span class="c"># regression gate: NEW failures only</span>
+<span class="c"># GitHub Action (comment: "true") → receipt summary as a PR comment: failure reasons included · updates in place</span>
 
 <span class="c"># Scenario B — before AI-assisted code ships</span>
-agent-receipt init --preset generic     <span class="c"># contract: what the agent may touch</span>
+agent-receipt init --preset generic     <span class="c"># contract: what the agent may touch (+ optional change budget)</span>
+agent-receipt policy init --profile strict  <span class="c"># (optional) block forbidden-path writes before the tool runs</span>
 agent-receipt begin                     <span class="c"># baseline + paste-in agent instructions</span>
 <span class="c">…the agent works…</span>
-agent-receipt done                      <span class="c"># verify + check + sealed Work Receipt</span>
+agent-receipt done                      <span class="c"># verify + check + sealed Work Receipt (budget overrun → ⚠️)</span>
+agent-receipt capture show              <span class="c"># beyond git: guard blocks/warns · repeats (rereads, duplicate commands)</span>
 agent-receipt share-proof               <span class="c"># proof HTML for the client / audit team</span>
 </pre>
 </section>
@@ -238,6 +244,7 @@ agent-receipt share-proof               <span class="c"># proof HTML for the cli
     <li><b>Not a legal-compliance guarantee.</b> It supplies evidence for review, nothing more.</li>
     <li><b>Not an LLM-reasoning evaluator.</b> It checks whether the evidence exists, not whether the conclusion is wise.</li>
     <li><b>Not total surveillance of everything an AI does.</b> What it can and cannot see is stated in the docs.</li>
+    <li><b>Not a token/time-savings calculator.</b> It counts what is observable (blocks, rereads, repeats) — unmeasurable numbers are never displayed.</li>
     <li>Instead — <b style="color:var(--pass)">it leaves a verifiable trail for AI work and AI evidence.</b></li>
   </ul>
 </section>
@@ -255,6 +262,7 @@ agent-receipt share-proof               <span class="c"># proof HTML for the cli
 <section id="links">
   <h2>Docs & links</h2>
   <div class="cards">
+    <a class="card" href="https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/QUICKSTART.md"><b>Quickstart (one page)</b><span>contract → guard → receipt → PR comment</span></a>
     <a class="card" href="https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/EVIDENCE_SPEC.md"><b>Evidence Spec</b><span>the claim/check format others can adopt</span></a>
     <a class="card" href="https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/SDK.md"><b>SDK</b><span>import the same functions the CLI runs</span></a>
     <a class="card" href="https://github.com/koscom2023-beep/agent-receipt"><b>GitHub</b><span>source · 400+ tests · MIT</span></a>
