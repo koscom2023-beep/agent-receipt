@@ -99,9 +99,11 @@ function requireRepo(): void {
 // 짧은 help — 일상 흐름 5개 + explain + help --all. 초보자 진입장벽 최소화.
 function printHelp(): void {
   console.log(`
-agent-receipt — AI 작업 감사 영수증 (git 작업트리 기준 — git 만 증거)
+agent-receipt — AI 코딩 세션 비용·git 작업 증빙 (로컬 · git 만 증거)
 
-핵심 흐름 (이 셋이면 충분):
+  agent-receipt cost                                     이번 세션 토큰 비용(로컬 Claude Code transcript · 추정 · 청구서 아님)
+
+작업 증빙 흐름 (이 셋):
   agent-receipt begin [--cursor|--claude] [--kind ...]   작업 시작(baseline + 지시문)
   agent-receipt done                                     작업 종료(verify+check+receipt 저장)
   agent-receipt share-proof                              클라이언트 전달용 증거 HTML 생성
@@ -117,9 +119,9 @@ function printHelpAll(): void {
   console.log(`
 agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
 
-■ 핵심 루프(대부분 이 6개면 충분):
+■ 핵심 루프(대부분 이 7개면 충분):
   begin [--cursor|--claude] [--kind <recon|implementation|docs|test|measure-first|observe-only|release-check>]
-  done / share-proof [--receipt <p>] [--out <p>] / next / audit-pack / prepare-commit [--message <m>] [--include-linked-tests] / explain
+  cost / done / share-proof [--receipt <p>] [--out <p>] / next / audit-pack / prepare-commit [--message <m>] [--include-linked-tests] / explain
 
 ■ 세션 / 정찰 / 구현:
   start / status / mode / reset / close-recon / finish [--message <m>] [--client] / trailer / commit-check / receipt

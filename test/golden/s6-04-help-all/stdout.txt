@@ -1,9 +1,9 @@
 
 agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
 
-■ 핵심 루프(대부분 이 6개면 충분):
+■ 핵심 루프(대부분 이 7개면 충분):
   begin [--cursor|--claude] [--kind <recon|implementation|docs|test|measure-first|observe-only|release-check>]
-  done / share-proof [--receipt <p>] [--out <p>] / next / audit-pack / prepare-commit [--message <m>] [--include-linked-tests] / explain
+  cost / done / share-proof [--receipt <p>] [--out <p>] / next / audit-pack / prepare-commit [--message <m>] [--include-linked-tests] / explain
 
 ■ 세션 / 정찰 / 구현:
   start / status / mode / reset / close-recon / finish [--message <m>] [--client] / trailer / commit-check / receipt
