@@ -1,8 +1,8 @@
 // 화폐화: 가격표 + transcript 리더 + cost — council 2026-07-03 수락 기준. `node test/cost.test.mjs`.
 import assert from "node:assert/strict";
 import { costOf, priceFor, normalizeModelId, fmtUsd } from "../dist/pricing.js";
-import { summarizeTranscriptLines, projectDirName, CONTEXT_BLOAT_TOKENS } from "../dist/transcript.js";
-import { costLines, sessionCostLine } from "../dist/cost.js";
+import { summarizeTranscriptLines, projectDirName, CONTEXT_BLOAT_TOKENS, lastDateOf, sumProjectToday } from "../dist/transcript.js";
+import { costLines, todayLine } from "../dist/cost.js";
 
 let pass = 0;
 const fail = [];
@@ -136,6 +136,36 @@ check("costLines supported:false → 이유 1줄", () => {
   const L = costLines({ supported: false, reason: "없음" });
   assert.equal(L.length, 1);
   assert.ok(L[0].includes("없음"));
+});
+
+// ── 오늘 누적 (council 결정 3·순수 합산) ──
+const dayAsst = (day, model, out) =>
+  mkLine({ timestamp: `${day}T12:00:00.000Z`, message: { role: "assistant", model, usage: { input_tokens: 0, output_tokens: out } } });
+
+check("lastDateOf: 마지막 timestamp 날짜", () => {
+  assert.equal(lastDateOf([dayAsst("2026-07-03", "claude-fable-5", 10), dayAsst("2026-07-03", "claude-fable-5", 20)]), "2026-07-03");
+  assert.equal(lastDateOf(["{broken", ""]), null);
+});
+
+check("sumProjectToday: 오늘 세션만 합산·다른 날 제외(순수 합산·오탐 0)", () => {
+  const files = { today1: [dayAsst("2026-07-03", "claude-fable-5", 1e6)], today2: [dayAsst("2026-07-03", "claude-opus-4-8", 1e6)], yday: [dayAsst("2026-07-02", "claude-fable-5", 1e6)] };
+  const t = sumProjectToday(Object.keys(files), (f) => files[f], "2026-07-03");
+  assert.equal(t.supported, true);
+  assert.equal(t.sessions, 2); // 어제 제외
+  assert.ok(Math.abs(t.cost - 75) < 0.01, `cost ${t.cost}`); // fable $50 + opus $25
+});
+
+check("sumProjectToday: 오늘 활동 0 → supported:false", () => {
+  const t = sumProjectToday(["a"], () => [dayAsst("2026-07-01", "claude-fable-5", 10)], "2026-07-03");
+  assert.equal(t.supported, false);
+  assert.equal(t.sessions, 0);
+});
+
+check("todayLine: 세션 0이면 null / 있으면 청구서 아님", () => {
+  assert.equal(todayLine({ supported: false, sessions: 0 }), null);
+  const l = todayLine({ supported: true, sessions: 3, cost: 843.39, hasUnpriced: false, date: "2026-07-03" });
+  assert.ok(l.includes("청구서 아님"));
+  assert.ok(l.includes("세션 3개"));
 });
 
 console.log(`cost.test: ${pass} passed, ${fail.length} failed`);

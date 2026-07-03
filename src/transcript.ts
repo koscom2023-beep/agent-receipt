@@ -210,4 +210,69 @@ export function summarizeCurrentSession(cwd: string = process.cwd(), sessionId?:
 
 // 컨텍스트 bloat 신호 임계(council 결정 4·보수적). 정점 컨텍스트가 이 이상이면 fresh-session 권유 1줄.
 export const CONTEXT_BLOAT_TOKENS = 200_000;
+
+// ── 오늘 누적 (council 결정 3·User Advocate "월말 청구서 공포" — 가장 안전한 레버: 순수 합산·오탐 0) ──
+export interface TodayTotal {
+  supported: boolean;
+  sessions: number; // 오늘 활동한 세션 수
+  cost: number | null;
+  hasUnpriced: boolean;
+  date: string;
+}
+
+// 한 라인 배열의 마지막 timestamp 날짜(YYYY-MM-DD)와 요약 — 프로젝트 합산용 순수 헬퍼.
+export function lastDateOf(lines: string[]): string | null {
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i];
+    if (!line || !line.trim()) continue;
+    try {
+      const r = JSON.parse(line);
+      if (typeof r?.timestamp === "string" && r.timestamp.length >= 10) return r.timestamp.slice(0, 10);
+    } catch {
+      /* skip */
+    }
+  }
+  return null;
+}
+
+// 프로젝트 디렉터리의 *오늘*(todayISO=YYYY-MM-DD) 활동 세션 비용 합. 순수 함수(파일 IO는 loader 주입).
+// loader: (file) => 라인 배열. files: 세션 파일 경로 목록. 날짜는 호출부가 주입(결정론·Date 격리).
+export function sumProjectToday(files: string[], loader: (f: string) => string[], todayISO: string): TodayTotal {
+  let sessions = 0;
+  let cost = 0;
+  let hasUnpriced = false;
+  let anySupported = false;
+  for (const f of files) {
+    const lines = loader(f);
+    if (lastDateOf(lines) !== todayISO) continue;
+    const s = summarizeTranscriptLines(lines, f);
+    if (!s.supported || !s.messages) continue;
+    anySupported = true;
+    sessions += 1;
+    if (s.cost != null) cost += s.cost;
+    if (s.hasUnpriced) hasUnpriced = true;
+  }
+  return { supported: anySupported, sessions, cost: anySupported ? cost : null, hasUnpriced, date: todayISO };
+}
+
+// 디스크 래퍼 — 프로젝트 dir 의 모든 세션 .jsonl 을 오늘 기준 합산. today 는 호출부가 UTC 날짜 주입.
+export function summarizeProjectToday(cwd: string, today: string): TodayTotal {
+  const dir = transcriptDir(cwd);
+  if (!existsSync(dir)) return { supported: false, sessions: 0, cost: null, hasUnpriced: false, date: today };
+  let files: string[] = [];
+  try {
+    files = readdirSync(dir).filter((n) => n.endsWith(".jsonl")).map((n) => join(dir, n));
+  } catch {
+    return { supported: false, sessions: 0, cost: null, hasUnpriced: false, date: today };
+  }
+  const loader = (f: string): string[] => {
+    try {
+      return readFileSync(f, "utf8").split("\n");
+    } catch {
+      return [];
+    }
+  };
+  return sumProjectToday(files, loader, today);
+}
+
 export { costOf, priceFor };

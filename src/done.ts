@@ -48,7 +48,7 @@ export function runDone(
   if (gw) console.log(gw);
   const rf = redFlagLine(collectRedFlags(r.touched, r.untracked)); // 확인 신호(council R2) — 없으면 null=출력 불변
   if (rf) console.log(rf);
-  const cl = sessionCostLine(); // 세션 비용 1줄(council 화폐화) — transcript 없으면 null=출력 불변
+  const cl = sessionCostLine(process.cwd(), r.touched.length + r.untracked.length); // 세션 활동 1줄(도구·비용·git변경 병치) — transcript 없으면 null
   if (cl) console.log(cl);
   const crit = r.criticalPaths.filter((c) => c.touched.length);
   if (crit.length) console.log(`⚠️ 고위험 경로: ${crit.map((c) => c.glob).join(", ")}`);
