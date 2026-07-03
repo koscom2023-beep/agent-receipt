@@ -9,8 +9,10 @@
 | **Work Receipt** | *What did the AI actually do to my git repo?* — did it stay inside the contract, what landed, what was bypassed | `schemaVersion: "1.0"` — git-measured, tamper-evident |
 | **Verification Engine** | *Is what the AI **said** actually true?* — quotes, numbers, dates, git facts, versions, cited receipts… **14 deterministic check kinds, no LLM judging LLMs** | `kind: "verification-receipt"` (`evidence/1`) |
 
-> **Hooks prevent. agent-receipt proves.**
-> Permission systems stop actions *before* they happen. agent-receipt does the complementary job: mechanical, after-the-fact **evidence** — of what landed in git, and of whether stated evidence matches its sources. It provides **git-based evidence for compliance review — not a compliance guarantee.**
+> **agent-receipt proves — and, if you opt in, prevents.**
+> Its core job is mechanical, after-the-fact **evidence** — of what landed in git, and of whether stated evidence matches its sources (**git-based evidence for compliance review — not a compliance guarantee**). On top of that, an opt-in **real-time scope guard** (`policy guard: block`) stops writes to contract/policy-forbidden paths *before the tool runs* — the denied attempt itself becomes chained evidence. Default stays warn-only: nothing blocks unless you ask it to.
+
+One-page setup (contract → guard → receipt → PR comment): [docs/QUICKSTART.md](https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/QUICKSTART.md)
 
 ---
 
