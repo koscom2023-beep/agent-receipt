@@ -8,3 +8,7 @@
   statedValue: 14
   op: sum
   operands: 10, 4
+
+- statement: README promises a money-back guarantee
+  quotedText: "money-back guarantee for all users"
+  sourceFile: README.md
