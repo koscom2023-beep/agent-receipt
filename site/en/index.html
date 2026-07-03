@@ -4,228 +4,326 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>agent-receipt — the auditability layer for AI work and AI evidence</title>
-<meta name="description" content="Make what your AI did — and what it said — independently verifiable after the fact. What the agent actually changed, whether its citations, numbers and git facts are real: local receipts, blocked in CI.">
-<meta property="og:title" content="agent-receipt — the auditability layer for AI work and AI evidence">
-<meta property="og:description" content="Make AI work and AI evidence independently verifiable. Fabrication exits 1 in CI. Local-first.">
+<title>agent-receipt — local receipts for your AI coding session's cost, work and evidence</title>
+<meta name="description" content="AI coding: what this session cost, where it's leaking, and whether it did only what you asked — locally. Reads real token cost from the local transcript, signals waste, and leaves a verifiable trail for AI work and evidence. No account, no server.">
+<meta property="og:title" content="agent-receipt — local receipts for your AI coding session's cost, work and evidence">
+<meta property="og:description" content="What this session cost, where it leaks, whether it stayed in scope — as local receipts. Fabrication exits 1 in CI.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧾</text></svg>">
 <style>
 :root{
-  --bg:#f1f2f4;--bg-raised:#f8f9fa;--border:#dadde2;--border-soft:#e6e8eb;
-  --text:#24292f;--mut:#57606a;--pass:#1a7f37;--fail:#d03b3b;--warn:#9a6700;--accent:#0969da;
-  --fail-bg:#d03b3b14;--pass-bg:#1a7f3714;--accent-bg:#0969da14;
-  --font-ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
-  --font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --desk:#e7e1d3; --desk-2:#efe9dc;
+  --paper:#fdfbf4; --paper-2:#f6f1e4; --edge:#e6dfcd;
+  --ink:#211d16; --mut:#6f6754; --faint:#948c79;
+  --rule:#cec4ad;
+  --red:#bd3b2b; --red-bg:#bd3b2b14; --green:#1c7a39; --green-bg:#1c7a3914; --amber:#8f6210; --amber-bg:#8f621014;
+  --brand:#bd3b2b;
+  --term:#201d17; --term-fg:#ece4d3; --term-mut:#96907f; --term-g:#5fb872; --term-r:#f0785f; --term-y:#e0a94a;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Pretendard,Roboto,"Helvetica Neue",Arial,sans-serif;
+  --w:940px;
 }
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-ui);font-size:16px;line-height:1.65;-webkit-font-smoothing:antialiased}
-nav{display:flex;gap:18px;align-items:center;padding:14px 24px;border-bottom:1px solid var(--border);background:var(--bg-raised);position:sticky;top:0;z-index:5}
-nav .brand{font-family:var(--font-mono);font-weight:700;font-size:16px;color:var(--text);text-decoration:none}
-nav a{color:var(--mut);text-decoration:none;font-size:14px;font-weight:600}
-nav a.on,nav a:hover{color:var(--accent)}
-nav .lang{margin-left:auto;border:1px solid var(--border);border-radius:999px;padding:4px 12px;background:var(--bg)}
-.wrap{max-width:920px;margin:0 auto;padding:0 24px}
-header{padding:52px 0 36px;text-align:center}
-h1{margin:0;font-size:40px;letter-spacing:-.02em;font-family:var(--font-mono)}
-.tag{color:var(--text);font-size:19px;margin-top:10px}
-.tag2{color:var(--mut);font-size:15px;margin-top:6px}
-.btns{margin-top:22px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
-.btn{display:inline-block;padding:11px 22px;border-radius:10px;font-weight:600;text-decoration:none;font-size:15px}
-.btn.primary{background:var(--accent);color:#fff}
-.btn.ghost{border:1.5px solid var(--border);color:var(--text);background:var(--bg-raised)}
-.btn:hover{filter:brightness(1.05)}
-.install{margin:16px auto 0;display:inline-block;background:#24292f;color:#e6edf3;font-family:var(--font-mono);font-size:14px;padding:10px 18px;border-radius:9px;user-select:all}
-section{padding:34px 0;border-top:1px solid var(--border)}
-h2{font-size:22px;margin:0 0 6px;letter-spacing:-.01em}
-.sub{color:var(--mut);font-size:14px;margin:0 0 18px}
-table{width:100%;border-collapse:collapse;background:var(--bg-raised);border:1px solid var(--border);border-radius:12px;overflow:hidden}
-th,td{padding:12px 15px;text-align:left;border-bottom:1px solid var(--border-soft);vertical-align:top;font-size:14.5px}
-th{color:var(--mut);font-size:12px;text-transform:uppercase;letter-spacing:.05em}
-tr:last-child td{border-bottom:none}
-td b{font-family:var(--font-mono)}
-pre{background:#24292f;color:#e6edf3;padding:16px 18px;border-radius:12px;overflow-x:auto;font-family:var(--font-mono);font-size:13px;line-height:1.6;margin:12px 0}
-pre .c{color:#8b949e}pre .g{color:#3fb950}pre .r{color:#f85149}pre .y{color:#d29922}
-.pipe{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:8px;align-items:stretch;margin-top:14px}
-.pipe .box{background:var(--bg-raised);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:13px}
-.pipe .box b{display:block;font-family:var(--font-mono);font-size:13.5px}
-.pipe .arr{align-self:center;color:var(--mut)}
-@media(max-width:760px){.pipe{grid-template-columns:1fr}.pipe .arr{display:none}}
-.limits li{margin:7px 0;color:var(--mut);font-size:15px}
-.limits li b{color:var(--text)}
-details{background:var(--bg-raised);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin:8px 0}
-summary{cursor:pointer;font-weight:600;font-size:15px}
-details p{color:var(--mut);font-size:14.5px;margin:8px 0 2px}
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-top:14px}
-.card{background:var(--bg-raised);border:1px solid var(--border);border-radius:12px;padding:14px 16px;text-decoration:none;color:var(--text)}
-.card:hover{border-color:var(--accent)}
-.card b{display:block;font-size:15px}
-.card span{color:var(--mut);font-size:13px}
-footer{padding:36px 0 54px;border-top:1px solid var(--border);color:var(--mut);font-size:13.5px;text-align:center}
-footer a{color:var(--accent);text-decoration:none}
-.note{background:var(--accent-bg);border:1px solid var(--border);border-radius:10px;padding:12px 16px;font-size:14px;color:var(--mut);margin-top:14px}
-.hero-try{max-width:720px;margin:24px auto 0;text-align:left;background:var(--bg-raised);border:1px solid var(--border);border-radius:14px;padding:16px 18px}
-.hero-try label{display:block;font-size:11.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin:8px 0 4px}
-.hero-try input,.hero-try textarea{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 11px;font-family:var(--font-mono);font-size:13px;color:var(--text)}
-.hero-try textarea{min-height:64px;resize:vertical}
-.hero-try .go{margin-top:10px;background:var(--accent);color:#fff;border:none;border-radius:9px;padding:10px 22px;font-size:14.5px;font-weight:700;cursor:pointer}
-.hero-out{margin-top:10px;font-size:14.5px}
-.hero-out .v{font-weight:700}
-.hero-src{margin-top:8px;background:var(--bg);border:1px solid var(--border-soft);border-radius:8px;padding:9px 11px;font-family:var(--font-mono);font-size:12.5px;color:var(--mut);line-height:1.6}
-.hero-src mark{background:#fff3bf;color:var(--text);border-radius:3px;padding:0 2px}
-.gal{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-top:14px}
-.gal a{background:var(--bg-raised);border:1px solid var(--border);border-radius:10px;padding:11px 13px;text-decoration:none;color:var(--text);font-size:13.5px}
-.gal a:hover{border-color:var(--accent)}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--desk);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.62;-webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(var(--desk-2) 1px,transparent 1px);background-size:22px 22px}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--brand);outline-offset:2px;border-radius:4px}
+.wrap{max-width:var(--w);margin:0 auto;padding:0 22px}
+
+nav{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:20px;
+  padding:12px 22px;background:color-mix(in srgb,var(--desk) 86%,#fff);backdrop-filter:blur(8px);
+  border-bottom:1px dashed var(--rule)}
+nav .brand{font-family:var(--mono);font-weight:700;font-size:15.5px;letter-spacing:-.01em;text-decoration:none;display:flex;align-items:center;gap:7px}
+nav .brand::before{content:"🧾";font-size:15px}
+nav .lk{color:var(--mut);text-decoration:none;font-size:13.5px;font-weight:600}
+nav .lk:hover{color:var(--brand)}
+nav .sp{margin-left:auto}
+nav .ver{font-family:var(--mono);font-size:11.5px;font-weight:700;color:var(--brand);border:1px solid var(--red-bg);background:var(--red-bg);border-radius:5px;padding:2px 7px}
+nav .en{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--mut);border:1px solid var(--rule);border-radius:999px;padding:3px 11px;text-decoration:none}
+@media(max-width:720px){nav .lk.hide{display:none}}
+
+header{padding:56px 0 20px;text-align:center}
+.eyebrow{font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--brand)}
+h1{margin:12px 0 0;font-family:var(--mono);font-size:clamp(34px,6vw,52px);font-weight:700;letter-spacing:-.03em;line-height:1;text-wrap:balance}
+.thesis{font-size:clamp(18px,2.6vw,22px);font-weight:650;margin:16px auto 0;max-width:660px;text-wrap:balance;line-height:1.4}
+.sub-hero{color:var(--mut);font-size:14.5px;margin:12px auto 0;max-width:620px}
+.sub-hero .h{color:var(--ink);font-weight:650}
+.btns{margin:24px 0 0;display:flex;gap:11px;justify-content:center;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:11px 20px;border-radius:9px;font-weight:650;font-size:14.5px;text-decoration:none;border:1.5px solid transparent}
+.btn.p{background:var(--brand);color:#fff;box-shadow:0 1px 0 #8a2a1e}
+.btn.p:hover{background:#a9331f}
+.btn.g{border-color:var(--rule);background:var(--paper);color:var(--ink)}
+.btn.g:hover{border-color:var(--brand);color:var(--brand)}
+.install{margin:16px auto 0;display:inline-flex;align-items:center;gap:9px;background:var(--term);color:var(--term-fg);font-family:var(--mono);font-size:13.5px;padding:9px 15px;border-radius:8px;user-select:all}
+.install::before{content:"$";color:var(--term-mut)}
+
+.receipt-stage{margin:34px auto 0;max-width:390px}
+.receipt{position:relative;background:var(--paper);color:var(--ink);font-family:var(--mono);text-align:left;
+  padding:26px 26px 30px;border-radius:14px;filter:drop-shadow(0 10px 22px rgba(60,45,20,.20));
+  animation:print .7s cubic-bezier(.2,.7,.2,1) both}
+@supports ((-webkit-mask:conic-gradient(#000,#000)) or (mask:conic-gradient(#000,#000))){
+  .receipt{border-radius:0;
+    -webkit-mask:
+      conic-gradient(from 135deg at top,#0000,#000 1deg 89deg,#0000 90deg) top/15px 52% repeat-x,
+      conic-gradient(from -45deg at bottom,#0000,#000 1deg 89deg,#0000 90deg) bottom/15px 52% repeat-x;
+    mask:
+      conic-gradient(from 135deg at top,#0000,#000 1deg 89deg,#0000 90deg) top/15px 52% repeat-x,
+      conic-gradient(from -45deg at bottom,#0000,#000 1deg 89deg,#0000 90deg) bottom/15px 52% repeat-x}
+}
+@keyframes print{from{clip-path:inset(0 0 100% 0);opacity:.4}to{clip-path:inset(0 0 0 0);opacity:1}}
+.r-head{text-align:center;font-size:13px;letter-spacing:.16em;font-weight:700}
+.r-sub{text-align:center;font-size:10.5px;letter-spacing:.22em;color:var(--mut);margin-top:3px}
+.r-rule{border:0;border-top:1.5px dashed var(--rule);margin:14px 0}
+.r-rule.solid{border-top:2px solid var(--ink)}
+.r-line{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;line-height:1.9;font-variant-numeric:tabular-nums}
+.r-line .k{color:var(--mut)}
+.r-line .fill{flex:1;border-bottom:1.5px dotted var(--rule);transform:translateY(-4px);margin:0 3px}
+.r-total{display:flex;justify-content:space-between;align-items:baseline;margin:4px 0}
+.r-total .lab{font-size:12px;letter-spacing:.14em;color:var(--mut)}
+.r-total .amt{font-size:30px;font-weight:700;letter-spacing:-.02em}
+.r-warn{font-size:11.5px;color:var(--amber);line-height:1.55;margin:2px 0}
+.r-today{display:flex;justify-content:space-between;font-size:12.5px;color:var(--green);font-weight:650;font-variant-numeric:tabular-nums}
+.r-foot{text-align:center;font-size:10.5px;letter-spacing:.08em;color:var(--faint);line-height:1.7;margin-top:4px}
+.r-barcode{height:26px;margin:12px -4px 0;background:repeating-linear-gradient(90deg,var(--ink) 0 1px,transparent 1px 2px,var(--ink) 2px 4px,transparent 4px 7px,var(--ink) 7px 9px,transparent 9px 11px);opacity:.82}
+.hero-cap{color:var(--mut);font-size:12.5px;margin:14px auto 0;max-width:390px}
+
+section{padding:40px 0;position:relative}
+section::before{content:"";position:absolute;top:0;left:0;right:0;border-top:2px dashed var(--rule)}
+section:first-of-type::before{display:none}
+.eyebrow-s{font-family:var(--mono);font-size:11.5px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:var(--brand)}
+h2{font-size:clamp(21px,3vw,26px);margin:8px 0 6px;letter-spacing:-.015em;text-wrap:balance;font-weight:700}
+.sub{color:var(--mut);font-size:14.5px;margin:0 0 20px;max-width:680px}
+
+.stamp{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-weight:800;
+  font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;padding:3px 9px;border-radius:4px;
+  border:1.5px solid;transform:rotate(-2.2deg);line-height:1.3}
+.stamp.blk{color:var(--red);border-color:var(--red);background:var(--red-bg)}
+.stamp.rec{color:var(--amber);border-color:var(--amber);background:var(--amber-bg)}
+.stamp.ok{color:var(--green);border-color:var(--green);background:var(--green-bg)}
+
+.scn{display:grid;grid-template-columns:repeat(auto-fit,minmax(272px,1fr));gap:13px}
+.scn .c{background:var(--paper);border:1px solid var(--edge);border-left:3px solid var(--red);border-radius:12px;padding:15px 17px}
+.scn .c.rec{border-left-color:var(--amber)}
+.scn .c b{display:block;font-size:14.5px;margin-bottom:5px;line-height:1.4}
+.scn .c p{color:var(--mut);font-size:13px;margin:0 0 10px;line-height:1.55}
+.badges{display:flex;gap:6px;flex-wrap:wrap}
+.who{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:13px}
+.who .c{background:var(--paper);border:1px solid var(--edge);border-radius:12px;padding:16px 18px}
+.who .c b{display:block;font-size:15px}
+.who .c p{color:var(--mut);font-size:13px;margin:7px 0 0;line-height:1.55}
+.gal{display:grid;grid-template-columns:repeat(auto-fit,minmax(212px,1fr));gap:11px}
+.gal a{background:var(--paper);border:1px solid var(--edge);border-radius:11px;padding:13px 15px;text-decoration:none;transition:transform .12s,border-color .12s}
+.gal a:hover{transform:translateY(-2px);border-color:var(--brand)}
 .gal b{display:block;font-size:14px}
 .gal span{color:var(--mut);font-size:12.5px}
-.drop{max-width:720px;margin:14px auto 0;text-align:left;border:2px dashed var(--border);border-radius:14px;padding:18px;background:var(--bg-raised);transition:border-color .15s}
-.drop.hover{border-color:var(--accent)}
-.drop h3{margin:0 0 4px;font-size:16px}
-.drop .mut{font-size:13px;color:var(--mut)}
-.drop-out{margin-top:12px;font-size:14.5px}
-.badge-t{display:inline-block;font-weight:800;padding:3px 12px;border-radius:999px;font-size:14px}
-.badge-t.ok{background:var(--pass-bg);color:var(--pass)}
-.badge-t.bad{background:var(--fail-bg);color:var(--fail)}
-.kv{display:grid;grid-template-columns:150px 1fr;gap:4px 10px;font-family:var(--font-mono);font-size:13px;margin-top:8px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(178px,1fr));gap:11px}
+.cards a{background:var(--paper);border:1px solid var(--edge);border-radius:11px;padding:14px 16px;text-decoration:none;transition:transform .12s,border-color .12s}
+.cards a:hover{transform:translateY(-2px);border-color:var(--brand)}
+.cards b{display:block;font-size:14.5px}
+.cards span{color:var(--mut);font-size:12.5px}
+
+.tbl{width:100%;border-collapse:collapse;background:var(--paper);border:1px solid var(--edge);border-radius:12px;overflow:hidden}
+.tbl th,.tbl td{padding:12px 15px;text-align:left;border-bottom:1px dashed var(--rule);vertical-align:top;font-size:14px}
+.tbl th{font-family:var(--mono);color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.07em;font-weight:700}
+.tbl tr:last-child td{border-bottom:0}
+.tbl td b{font-family:var(--mono);font-size:13.5px}
+
+.try{display:grid;grid-template-columns:1fr 1fr;gap:13px;margin:22px auto 0;max-width:760px;text-align:left}
+@media(max-width:680px){.try{grid-template-columns:1fr}}
+.try .card{background:var(--paper);border:1px solid var(--edge);border-radius:14px;padding:16px 17px}
+.try h3{margin:0 0 3px;font-size:14.5px}
+.try .mut{color:var(--mut);font-size:12px;line-height:1.5}
+.try label{display:block;font-family:var(--mono);font-size:10.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin:11px 0 4px}
+.try input,.try textarea{width:100%;background:var(--desk-2);border:1px solid var(--edge);border-radius:8px;padding:9px 11px;font-family:var(--mono);font-size:12.5px;color:var(--ink)}
+.try textarea{min-height:60px;resize:vertical;line-height:1.5}
+.try input:focus-visible,.try textarea:focus-visible{outline:2px solid var(--brand);outline-offset:1px;border-color:transparent}
+.try .go{margin-top:11px;background:var(--ink);color:var(--paper);border:0;border-radius:8px;padding:9px 18px;font-family:var(--mono);font-size:13px;font-weight:700;cursor:pointer}
+.try .go:hover{background:var(--brand)}
+.out{margin-top:11px;font-size:13.5px;line-height:1.55}
+.out .v{font-weight:700}
+.src{margin-top:8px;background:var(--desk-2);border:1px solid var(--edge);border-radius:8px;padding:9px 11px;font-family:var(--mono);font-size:12px;color:var(--mut);line-height:1.65}
+.src mark{background:#ffe9a8;color:var(--ink);border-radius:3px;padding:0 2px}
+.drop{border:2px dashed var(--rule);border-radius:12px;padding:14px;margin-top:10px;text-align:center;transition:border-color .12s,background .12s;cursor:pointer}
+.drop.hover{border-color:var(--brand);background:var(--red-bg)}
+.kv{display:grid;grid-template-columns:120px 1fr;gap:3px 10px;font-family:var(--mono);font-size:12px;margin-top:9px}
 .kv .k{color:var(--mut)}
-.scn{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:14px}
-.scn .c{background:var(--bg-raised);border:1px solid var(--border);border-radius:12px;padding:14px 16px;border-left:3px solid var(--fail)}
-.scn .c.rec{border-left-color:var(--warn)}
-.scn b{display:block;font-size:15px;margin-bottom:4px}
-.scn p{color:var(--mut);font-size:13.5px;margin:0 0 8px}
-.res{display:inline-block;font-weight:800;font-size:12px;padding:2px 10px;border-radius:999px}
-.res.blk{background:var(--fail-bg);color:var(--fail)}
-.res.rec{background:#9a670014;color:var(--warn)}
-.who{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:14px}
-.who .c{background:var(--bg-raised);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
-.who b{display:block;font-size:15px}
-.who p{color:var(--mut);font-size:13.5px;margin:6px 0 0}
-.notl li{margin:8px 0;font-size:15.5px}
-.notl b{color:var(--fail)}
+
+pre{background:var(--term);color:var(--term-fg);padding:16px 18px;border-radius:12px;overflow-x:auto;
+  font-family:var(--mono);font-size:12.5px;line-height:1.7;margin:0}
+pre .c{color:var(--term-mut)}pre .g{color:var(--term-g)}pre .r{color:var(--term-r)}pre .y{color:var(--term-y)}
+.scroll{overflow-x:auto}
+
+.notl{list-style:none;padding:0;margin:0;display:grid;gap:11px}
+.notl li{font-size:15px;padding-left:26px;position:relative;line-height:1.5}
+.notl li::before{content:"✗";position:absolute;left:0;top:0;color:var(--red);font-family:var(--mono);font-weight:800}
+.notl li.is::before{content:"✓";color:var(--green)}
+.notl li b{color:var(--ink)}
+.notl li.is b{color:var(--green)}
+
+details{background:var(--paper);border:1px solid var(--edge);border-radius:11px;padding:13px 16px;margin-bottom:9px}
+summary{cursor:pointer;font-weight:650;font-size:14.5px;list-style:none}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"+ ";font-family:var(--mono);color:var(--brand);font-weight:800}
+details[open] summary::before{content:"– "}
+details p{color:var(--mut);font-size:14px;margin:9px 0 0;line-height:1.6}
+
+footer{text-align:center;padding:34px 0 46px;color:var(--mut);font-size:13px;position:relative}
+footer::before{content:"";position:absolute;top:0;left:0;right:0;border-top:2px dashed var(--rule)}
+footer .tag{font-family:var(--mono);letter-spacing:.06em;margin-top:6px}
+footer a{color:var(--brand);text-decoration:none}
+code{font-family:var(--mono);font-size:.9em;background:var(--paper-2);border:1px solid var(--edge);border-radius:5px;padding:1px 5px}
+
+@media(prefers-reduced-motion:reduce){.receipt{animation:none}*{transition:none!important}}
 </style>
 </head>
 <body>
 <nav>
   <a class="brand" href="/en">agent-receipt</a>
-  <a class="on" href="/en">Home</a>
-  <a href="/en/#cost">Cost</a>
-  <a href="/en/playground">Playground</a>
-  <a href="/demo">Evidence Browser demo</a>
-  <a href="https://github.com/koscom2023-beep/agent-receipt">GitHub</a>
-  <a class="lang" href="/" title="Korean version">한국어</a>
+  <a class="lk hide" href="/en/#cost">Cost</a>
+  <a class="lk hide" href="/en/#prevents">Prevents</a>
+  <a class="lk" href="/en/playground">Playground</a>
+  <a class="lk hide" href="/demo">Demo</a>
+  <a class="lk" href="https://github.com/koscom2023-beep/agent-receipt">GitHub</a>
+  <span class="sp"></span>
+  <span class="ver">v0.15.2</span>
+  <a class="en" href="/" title="Korean version">한국어</a>
 </nav>
+
 <div class="wrap">
-
 <header>
+  <div class="eyebrow">local-first · no account · no server</div>
   <h1>agent-receipt</h1>
-  <div class="tag"><b>AI coding: what this session cost · where it's leaking · whether it did only what you asked — locally.</b></div>
-  <div class="tag2">Shows each session's <b>real token cost</b> from the local transcript (Anthropic's own usage data — an estimate, not an invoice), <b>signals waste</b> (same-file rereads, context bloat, scope drift), and <b>verifies</b> the AI's evidence and changes when you need it — no account, no server. <br><span style="color:var(--mut);font-size:13.5px">Honestly: it does not cut your bill directly. It shows you exactly where the money goes and signals when to stop or start a fresh session — you act on it.</span></div>
+  <div class="thesis">AI coding: <b>what this session cost</b> · <b>where it's leaking</b> · <b>whether it did only what you asked</b> — locally.</div>
+  <div class="sub-hero">Reads each session's <span class="h">real token cost</span> from the local transcript, <span class="h">signals waste</span>, and <span class="h">verifies</span> the AI's evidence and changes when you need it. Honestly: it does not cut your bill directly — it shows where the money goes and signals when to stop.</div>
   <div class="btns">
-    <a class="btn primary" href="/en/playground">Catch one yourself, in your browser →</a>
-    <a class="btn ghost" href="/demo">Live Evidence Browser</a>
+    <a class="btn p" href="/en/playground">Catch a fabrication in your browser →</a>
+    <a class="btn g" href="/demo">Live Evidence Browser</a>
   </div>
-  <div style="margin-top:18px"><span class="install">npm install -g @promptia-labs/agent-receipt</span></div>
+  <div><span class="install">npm install -g @promptia-labs/agent-receipt</span></div>
 
-  <div class="hero-try">
-    <div style="font-weight:700;font-size:15px">Catch a fabrication right now <span style="color:var(--mut);font-weight:400;font-size:12.5px">(runs entirely in your browser — nothing is sent anywhere)</span></div>
-    <label>What the AI claimed (as a quote)</label>
-    <input id="h-quote" value="has passed a SOC 2 Type II audit" spellcheck="false">
-    <label>The source it cited</label>
-    <textarea id="h-source" spellcheck="false">Acme Cloud completed a SOC 2 Type I audit in March 2026. A Type II audit is scheduled for Q1 2027 but has not started.</textarea>
-    <button class="go" id="h-go">Verify ▸</button>
-    <div class="hero-out" id="h-out"></div>
+  <div class="receipt-stage">
+    <div class="receipt" role="img" aria-label="An example of agent-receipt cost output rendered as a printed receipt">
+      <div class="r-head">A G E N T · R E C E I P T</div>
+      <div class="r-sub">SESSION COST — LOCAL TRANSCRIPT</div>
+      <hr class="r-rule">
+      <div class="r-line"><span class="k">messages</span><span class="fill"></span><span>446</span></div>
+      <div class="r-line"><span class="k">output tokens</span><span class="fill"></span><span>646,271</span></div>
+      <div class="r-line"><span class="k">cache read</span><span class="fill"></span><span>151,355,505</span></div>
+      <hr class="r-rule">
+      <div class="r-line"><span class="k">claude-fable-5</span><span class="fill"></span><span>~$186.79</span></div>
+      <div class="r-line"><span class="k">claude-opus-4-8</span><span class="fill"></span><span>~$23.73</span></div>
+      <hr class="r-rule solid">
+      <div class="r-total"><span class="lab">TOTAL (est.)</span><span class="amt">~$241.77</span></div>
+      <hr class="r-rule">
+      <div class="r-warn">⚠ CONTEXT PEAK 670,951 — a fresh session lowers<br>the per-turn resend (cache read + re-caching) cost.</div>
+      <div class="r-today"><span>TODAY 2026-07-04</span><span>~$843.39 · 3 sessions</span></div>
+      <div class="r-barcode" aria-hidden="true"></div>
+      <div class="r-foot">estimate · list price · not an invoice · no discounts<br>zero upload · no values stored — counts only</div>
+    </div>
   </div>
+  <div class="hero-cap">↑ <code>agent-receipt cost</code> reads your local transcript (Anthropic's own usage) and prints this. Example session.</div>
 
-  <div class="drop" id="drop">
-    <h3>🧾 Someone sent you a receipt? Inspect it here — no install</h3>
-    <div class="mut">Drop a Verification Receipt (JSON) and its seal (contentHash · receiptId) is recomputed right here. The file never leaves your browser (zero upload). <a href="/sample-receipt.json" download style="color:var(--accent)">Download a sample receipt</a> → drop it → then edit one character and drop it again to watch tamper detection fire.</div>
-    <input type="file" id="drop-file" accept=".json" style="margin-top:10px">
-    <div class="drop-out" id="drop-out"></div>
+  <div class="try hero-try">
+    <div class="card">
+      <h3>🔎 Catch a fabrication right now</h3>
+      <div class="mut">Runs entirely in your browser — nothing is sent anywhere.</div>
+      <label>What the AI claimed (as a quote)</label>
+      <input id="h-quote" value="has passed a SOC 2 Type II audit" spellcheck="false">
+      <label>The source it cited</label>
+      <textarea id="h-source" spellcheck="false">Acme Cloud completed a SOC 2 Type I audit in March 2026. A Type II audit is scheduled for Q1 2027 but has not started.</textarea>
+      <button class="go" id="h-go">Verify ▸</button>
+      <div class="out" id="h-out"></div>
+    </div>
+    <div class="card">
+      <h3>🧾 Someone sent you a receipt? Inspect it — no install</h3>
+      <div class="mut">Drop a Verification Receipt (JSON) and its seal (contentHash · receiptId) is recomputed right here. The file never leaves your browser — zero upload. <a href="/sample-receipt.json" download style="color:var(--brand)">Download a sample</a> → drop it → then edit one character and drop it again to watch tamper detection fire.</div>
+      <div class="drop" id="drop">
+        <div style="font-family:var(--mono);font-size:12.5px;color:var(--mut)">Drop a <b>.json</b> here<br>or click to choose</div>
+        <input type="file" id="drop-file" accept=".json" style="display:none">
+      </div>
+      <div class="out" id="drop-out"></div>
+    </div>
   </div>
 </header>
 
 <section id="cost">
+  <div class="eyebrow-s">§ Cost</div>
   <h2>What this session cost — in real numbers</h2>
-  <p class="sub">Claude Code writes each session to local disk, and that transcript carries <b>Anthropic's own usage data</b> (per-message tokens + model). agent-receipt reads it and applies list pricing — nothing sent to a server, no values stored (counts only).</p>
-<pre style="font-size:12.5px">$ agent-receipt cost
-
-This session (estimate, list price, <span class="y">not an invoice</span>): ~$241.77
-446 messages · 646,271 output tokens · 151,355,505 cache read · 3,985,111 cache creation
-  claude-fable-5: ~$186.79
-  claude-opus-4-8: ~$23.73
-<span class="y">⚠️ context peaked at 670,951 tokens — a fresh session would lower the per-turn resend cost.</span>
-<span class="g">today (2026-07-03) so far: ~$843.39 · 3 sessions</span></pre>
-  <p class="sub" style="margin-top:10px"><b>In a long session the money isn't the new code — it's re-sending the growing context every turn</b> (80% of the session above). Seeing it tells you when to start fresh. <b>Today's running total</b> sums every session in the project today — a pure count that shows what you're spending now, before the month-end bill. <span style="color:var(--mut)">High cache-read is NOT waste — the cache saved you 90%. We show measured numbers, never a made-up "savings" figure.</span></p>
+  <p class="sub">Claude Code writes each session to local disk, and that transcript carries <b>Anthropic's own usage data</b> (per-message tokens + model). agent-receipt reads it and applies list pricing — nothing sent to a server, no values stored.</p>
+  <p class="sub" style="margin-top:-6px"><b>In a long session the money isn't the new code — it's re-sending the growing context every turn</b> (80% of the session above). Seeing it tells you when to start fresh. <b>Today's running total</b> sums every session in the project today — a pure count that shows what you're spending now, before the month-end bill. <span style="color:var(--mut)">High cache-read is NOT waste — the cache saved you 90%. We show measured numbers, never a made-up "savings" figure.</span></p>
 </section>
 
 <section id="prevents">
+  <div class="eyebrow-s">§ Incident log</div>
   <h2>What it prevents</h2>
-  <p class="sub">Not a feature list — the incidents that actually happen. Badges state exactly what the machine does: <span class="res blk">BLOCKED</span> = command fails (exit 1) or the commit is refused · <span class="res rec">RECORDED</span> = kept as evidence (not blocked).</p>
+  <p class="sub">Not a feature list — the incidents that actually happen. Badges state exactly what the machine does: <span class="stamp blk">blocked</span> = command fails (exit 1) or the commit is refused · <span class="stamp rec">recorded</span> = kept as evidence (not blocked).</p>
   <div class="scn">
     <div class="c"><b>📋 The AI wrote "passed SOC 2 Type II" — only Type I was completed</b>
       <p>Quotes are deterministically checked against the source — a sentence that isn't there fails on the spot.</p>
-      <span class="res blk">BLOCKED in CI (exit 1)</span></div>
-    <div class="c"><b>🔀 The AI wrote "commit abc modified payment.ts" — the history says otherwise</b>
+      <div class="badges"><span class="stamp blk">blocked in CI · exit 1</span></div></div>
+    <div class="c"><b>🔀 The AI wrote "commit abc modified payment.ts" — history says otherwise</b>
       <p>Commit existence, changed files, even diff contents — checked against actual git history.</p>
-      <span class="res blk">BLOCKED in CI (exit 1)</span></div>
+      <div class="badges"><span class="stamp blk">blocked in CI · exit 1</span></div></div>
     <div class="c"><b>📁 The AI modified files outside the agreed scope</b>
-      <p>The contract's allowed paths are compared against the real diff — the pre-commit gate refuses, and even a bypass (--no-verify) still leaves an evidence receipt. New in 0.14: with <code>guard: block</code>, forbidden-path writes are stopped <b>before the tool runs</b> — the agent sees why and backs off without retry loops (the denied attempt is chain-recorded too).</p>
-      <span class="res blk">BLOCKED IN REAL TIME (opt-in)</span> <span class="res blk">GATE BLOCKED</span> <span class="res rec">RECEIPT RECORDED</span></div>
+      <p>The contract's allowed paths are compared against the real diff — the pre-commit gate refuses, and even a bypass (<code>--no-verify</code>) still leaves an evidence receipt. With <code>guard: block</code>, forbidden-path writes are stopped <b>before the tool runs</b> — the agent sees why and backs off (the denied attempt is chain-recorded too).</p>
+      <div class="badges"><span class="stamp blk">real-time block · opt-in</span> <span class="stamp rec">receipt recorded</span></div></div>
     <div class="c rec"><b>🔑 The AI tried to read .env (and failed), then tried to phone home</b>
-      <p>Invisible to git — failed attempts and permission-denied attempts are kept as action classes (values never stored). Reads and network calls stay record-only: real-time blocking covers forbidden-path <i>writes</i>, nothing more (honest scope).</p>
-      <span class="res rec">RECORDED — not blocked</span>
-<pre style="margin:10px 0 0;font-size:12px">  <span class="y">⚠️ READ_SECRET_FILE  .env  (failed attempt)</span>
-  <span class="y">⚠️ EXTERNAL_NETWORK_CALL  api.exfil.example</span></pre></div>
+      <p>Invisible to git — failed and permission-denied attempts are kept as <b>action classes only</b> (values never stored). Reads and network calls stay record-only; real-time blocking covers forbidden-path <i>writes</i>, nothing more (honest scope).</p>
+      <div class="scroll"><pre style="font-size:11.5px"><span class="y">⚠ READ_SECRET_FILE   .env  (failed attempt)</span>
+<span class="y">⚠ EXTERNAL_NETWORK_CALL   api.exfil.example</span></pre></div>
+      <div class="badges" style="margin-top:9px"><span class="stamp rec">recorded — not blocked</span></div></div>
     <div class="c rec"><b>🔁 The AI re-read the same file 11 times and re-ran the same test 4 times</b>
-      <p>Recomputed from the capture log: rereads with no edit in between · duplicate commands (fingerprint only — the command body is never stored) · the same failure repeating. It may be legitimate double-checking, so the human judges — which is why we show measured counts only, and never convert them into token/time "savings" (unmeasurable numbers don't get displayed).</p>
-      <span class="res rec">RECORDED &amp; REPORTED — not blocked</span></div>
-  </div>
-</section>
-
-<section id="who">
-  <h2>Who this is for</h2>
-  <div class="who">
-    <div class="c"><b>🏗 Agencies & contractors shipping AI-assisted work</b><p>Prove — without a dispute — whether the AI stayed inside the contract and what it actually changed. Hand the client a self-contained proof HTML (share-proof).</p></div>
-    <div class="c"><b>📊 Teams whose decisions consume AI research</b><p>Fabricated citations, numbers, versions and commit facts get blocked in CI before they reach a decision. What passes accumulates as receipts.</p></div>
-    <div class="c"><b>🔐 Internal dev teams under security/audit requirements</b><p>Sensitive-file reads, exfiltration attempts and change scope — evidenced locally, no server, no account, third-party sealable (Rekor).</p></div>
+      <p>Recomputed from the capture log: rereads with no edit in between · duplicate commands (fingerprint only) · the same failure repeating. It may be legitimate double-checking, so the human judges — measured counts only, never converted into token/time "savings" (unmeasurable numbers aren't displayed).</p>
+      <div class="badges"><span class="stamp rec">reported — not blocked</span></div></div>
   </div>
 </section>
 
 <section id="tracks">
-  <h2>One layer, two audits</h2>
-  <p class="sub"><b>agent-receipt is a local audit layer that turns an AI agent's code work and report evidence into an independently verifiable trail.</b> Two subsystems underneath:</p>
-  <table>
+  <div class="eyebrow-s">§ One layer, two audits</div>
+  <h2>What the AI <i>did</i>, and what the AI <i>said</i></h2>
+  <p class="sub">agent-receipt is a local audit layer that turns an AI agent's code work and report evidence into an independently verifiable trail. Two subsystems underneath:</p>
+  <div class="scroll"><table class="tbl">
     <tr><th>Audit</th><th>Question it answers</th></tr>
-    <tr><td><b>AI Change Audit</b></td><td><b>What did the AI actually do to my repo?</b> Contract-scoped diff evidence, hash-chained ledger, third-party Rekor anchoring, beyond-git action capture (incl. failed & denied attempts) — plus an opt-in real-time guard that stops forbidden-path writes up front.</td></tr>
+    <tr><td><b>AI Change Audit</b></td><td><b>What did the AI actually do to my repo?</b> Contract-scoped diff evidence · hash-chained ledger · third-party Rekor anchoring · beyond-git action capture (incl. failed &amp; denied attempts) — plus an opt-in real-time guard that stops forbidden-path writes up front.</td></tr>
     <tr><td><b>AI Evidence Audit</b></td><td><b>Is what the AI said actually true?</b> 14 deterministic check kinds — no LLM judging LLMs. Same input, same verdict, every time.</td></tr>
-  </table>
+  </table></div>
+</section>
+
+<section id="who">
+  <div class="eyebrow-s">§ Who</div>
+  <h2>Who this is for</h2>
+  <div class="who">
+    <div class="c"><b>🏗 Agencies &amp; contractors shipping AI-assisted work</b><p>Prove — without a dispute — whether the AI stayed inside the contract and what it actually changed. Hand the client a self-contained proof HTML (<code>share-proof</code>).</p></div>
+    <div class="c"><b>📊 Teams whose decisions consume AI research</b><p>Fabricated citations, numbers, versions and commit facts get blocked in CI before they reach a decision. What passes accumulates as receipts.</p></div>
+    <div class="c"><b>🔐 Internal dev teams under security/audit needs</b><p>Sensitive-file reads, exfiltration attempts and change scope — evidenced locally, no server, no account, third-party sealable (Rekor).</p></div>
+  </div>
 </section>
 
 <section id="scenarios">
+  <div class="eyebrow-s">§ Workflow</div>
   <h2>How it's used</h2>
   <p class="sub">Workflows, not command menus.</p>
-<pre>
-<span class="c"># Scenario A — before an AI-written report reaches a decision</span>
+  <div class="scroll"><pre><span class="c"># Scenario A — before an AI-written report reaches a decision</span>
 agent-receipt research verify --file report.md --out vr/r1.json
 <span class="c">#   a single fabrication → exit 1 (CI stops it)</span>
 agent-receipt graph view --dir vr --out browser.html    <span class="c"># triage what accumulates</span>
-agent-receipt graph diff --base-dir vr-old --head-dir vr    <span class="c"># regression gate: NEW failures only</span>
-<span class="c"># GitHub Action (comment: "true") → receipt summary as a PR comment: failure reasons included · updates in place</span>
+agent-receipt graph diff --base-dir vr-old --head-dir vr <span class="c"># regression gate: NEW failures only</span>
 
 <span class="c"># Scenario B — before AI-assisted code ships</span>
-agent-receipt init --preset generic     <span class="c"># contract: what the agent may touch (+ optional change budget)</span>
-agent-receipt policy init --profile strict  <span class="c"># (optional) block forbidden-path writes before the tool runs</span>
-agent-receipt begin                     <span class="c"># baseline + paste-in agent instructions</span>
+agent-receipt init --preset generic       <span class="c"># contract: what the agent may touch (+ optional budget)</span>
+agent-receipt policy init --profile strict <span class="c"># (optional) block forbidden-path writes before the tool runs</span>
+agent-receipt begin                        <span class="c"># baseline + paste-in agent instructions</span>
 <span class="c">…the agent works…</span>
-agent-receipt done                      <span class="c"># verify + check + sealed Work Receipt (budget overrun → ⚠️)</span>
-agent-receipt capture show              <span class="c"># beyond git: guard blocks/warns · repeats (rereads, duplicate commands)</span>
-agent-receipt share-proof               <span class="c"># proof HTML for the client / audit team</span>
-</pre>
+agent-receipt done                         <span class="c"># verify + check + sealed Work Receipt</span>
+agent-receipt cost                         <span class="c"># this session's real token cost</span>
+agent-receipt share-proof                  <span class="c"># proof HTML for the client / audit team</span></pre></div>
 </section>
 
 <section id="kinds">
+  <div class="eyebrow-s">§ Kernel</div>
   <h2>14 deterministic checks</h2>
-  <p class="sub">One kernel registry — the code is the spec (<code style="font-family:var(--font-mono)">agent-receipt spec --format json</code>).</p>
-  <table>
+  <p class="sub">One kernel registry — the code is the spec (<code>agent-receipt spec --format json</code>).</p>
+  <div class="scroll"><table class="tbl">
     <tr><th>kind</th><th>verifies</th></tr>
     <tr><td><b>citation</b></td><td>the quote is literally in the cited source</td></tr>
     <tr><td><b>number</b></td><td>a stated number exists in the source, or matches a recomputation (sum/mean/ratio…)</td></tr>
@@ -235,36 +333,39 @@ agent-receipt share-proof               <span class="c"># proof HTML for the cli
     <tr><td><b>schema / version</b></td><td>JSON-Schema subset conformity · real semver-range satisfaction (^3.23.8 ⊨ 3.24.0)</td></tr>
     <tr><td><b>file / artifact</b></td><td>a claimed path exists · a build output matches declared shape constraints</td></tr>
     <tr><td><b>receipt</b></td><td>a cited receipt exists and its seal replays clean</td></tr>
-    <tr><td><b>link</b></td><td style="color:var(--mut);font-family:var(--font-mono);font-size:12.5px">URL well-formedness — advisory only</td></tr>
-  </table>
+    <tr><td><b>link</b></td><td style="color:var(--mut)">URL well-formedness — advisory only</td></tr>
+  </table></div>
 </section>
 
 <section id="gallery">
+  <div class="eyebrow-s">§ Gallery</div>
   <h2>Gallery of fabrications</h2>
   <p class="sub">Each opens live in the playground — the kernel judges it in your browser.</p>
   <div class="gal">
     <a href="/en/playground#p=soc2"><b>📋 The quiet upgrade</b><span>"Type I completed" → "Type II passed" — citation not-found</span></a>
     <a href="/en/playground#p=numdrift"><b>🔢 Number drift</b><span>source says 52%, claim says 58% — number mismatch</span></a>
     <a href="/en/playground#p=datedrift"><b>📅 Date drift</b><span>Mar 1 becomes Apr 1 — format-agnostic mismatch</span></a>
-    <a href="/en/playground#p=verdrift"><b>📦 Version drift</b><span>claimed 2.0.0 vs declared ^1.4.0 — real semver verdict</span></a>
-    <a href="/en/playground#p=schema"><b>🧩 Missing required field</b><span>config lacks a required key — mismatch with exact path</span></a>
+    <a href="/en/playground#p=verdrift"><b>📦 Version drift</b><span>claimed 2.0.0 vs declared ^1.4.0 — real semver</span></a>
+    <a href="/en/playground#p=schema"><b>🧩 Missing required field</b><span>config lacks a required key — exact path</span></a>
     <a href="/en/playground#p=sum"><b>🧮 Recomputed sum</b><span>11+14+16 really is 42 — verified, not trusted</span></a>
   </div>
 </section>
 
 <section id="not-list">
+  <div class="eyebrow-s">§ Honest scope</div>
   <h2>What this is not</h2>
   <ul class="notl">
     <li><b>Not a code-quality guarantee.</b> Static analysis, linting and tests are other tools' jobs.</li>
     <li><b>Not a legal-compliance guarantee.</b> It supplies evidence for review, nothing more.</li>
     <li><b>Not an LLM-reasoning evaluator.</b> It checks whether the evidence exists, not whether the conclusion is wise.</li>
     <li><b>Not total surveillance of everything an AI does.</b> What it can and cannot see is stated in the docs.</li>
-    <li><b>Not a bill-cutter.</b> It shows your real cost from actual usage data, but it never promises a "save 30%" figure — it points to where the money leaks and signals when to stop; you act on it.</li>
-    <li>Instead — <b style="color:var(--pass)">it shows what this session cost, signals waste and drift, and leaves a verifiable trail for AI work and AI evidence.</b></li>
+    <li><b>Not a bill-cutter.</b> It shows your real cost from actual usage data, but never promises a "save 30%" figure — it points to where the money leaks and signals when to stop; you act on it.</li>
+    <li class="is"><b>Instead — it shows what this session cost, signals waste and drift, and leaves a verifiable trail for AI work and AI evidence.</b></li>
   </ul>
 </section>
 
 <section id="faq">
+  <div class="eyebrow-s">§ FAQ</div>
   <h2>FAQ</h2>
   <details><summary>Why not just have another LLM check the first LLM?</summary>
     <p>A model checking a model can hallucinate its own "yes, that's accurate." Every verdict here is recomputable arithmetic/string/crypto — same input, same answer, on any machine. That's also why it works as a CI gate: exit codes don't have moods.</p></details>
@@ -275,22 +376,23 @@ agent-receipt share-proof               <span class="c"># proof HTML for the cli
 </section>
 
 <section id="links">
-  <h2>Docs & links</h2>
+  <div class="eyebrow-s">§ Docs</div>
+  <h2>Docs &amp; links</h2>
   <div class="cards">
-    <a class="card" href="https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/QUICKSTART.md"><b>Quickstart (one page)</b><span>contract → guard → receipt → PR comment</span></a>
-    <a class="card" href="https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/EVIDENCE_SPEC.md"><b>Evidence Spec</b><span>the claim/check format others can adopt</span></a>
-    <a class="card" href="https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/SDK.md"><b>SDK</b><span>import the same functions the CLI runs</span></a>
-    <a class="card" href="https://github.com/koscom2023-beep/agent-receipt"><b>GitHub</b><span>source · 400+ tests · MIT</span></a>
-    <a class="card" href="https://www.npmjs.com/package/@promptia-labs/agent-receipt"><b>npm</b><span>@promptia-labs/agent-receipt</span></a>
+    <a href="https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/QUICKSTART.md"><b>Quickstart (1p)</b><span>contract → guard → receipt → PR comment</span></a>
+    <a href="https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/EVIDENCE_SPEC.md"><b>Evidence Spec</b><span>the claim/check format others can adopt</span></a>
+    <a href="https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/SDK.md"><b>SDK</b><span>import the same functions the CLI runs</span></a>
+    <a href="https://github.com/koscom2023-beep/agent-receipt"><b>GitHub</b><span>source · 400+ tests · MIT</span></a>
+    <a href="https://www.npmjs.com/package/@promptia-labs/agent-receipt"><b>npm</b><span>@promptia-labs/agent-receipt</span></a>
   </div>
 </section>
+</div>
 
 <footer>
   <div><b>agent-receipt</b> · MIT · a <a href="https://github.com/koscom2023-beep">Promptia Labs</a> project</div>
-  <div style="margin-top:6px">local-first · no account · no server — let the receipts speak for themselves</div>
+  <div class="tag">— local-first · no account · no server · let the receipts speak —</div>
 </footer>
 
-</div>
 <script type="module">
 import { evaluateClaim } from "/kernel.js";
 import { replayLite } from "/replay-lite.js";
@@ -303,38 +405,38 @@ function heroRun() {
   if (!q) { $("h-out").innerHTML = '<span class="v" style="color:var(--mut)">enter a quote first</span>'; return; }
   const ev = evaluateClaim({ quotedText: q }, src.trim() === "" ? null : src);
   let h = "";
-  if (ev.citation === "verified") h += '<span class="v" style="color:var(--pass)">✓ verified — the quote exists in the source</span>';
-  else if (ev.citation === "not-found") h += '<span class="v" style="color:var(--fail)">✗ FAIL · not-found — this sentence is not in the source (fabricated/altered)</span>';
-  else h += '<span class="v" style="color:var(--mut)">· no-source — the source is empty</span>';
+  if (ev.citation === "verified") h += '<span class="stamp ok">✓ verified</span> <span class="v" style="color:var(--green)">the quote exists in the source</span>';
+  else if (ev.citation === "not-found") h += '<span class="stamp blk">✗ not-found</span> <span class="v" style="color:var(--red)">this sentence is not in the source (fabricated/altered)</span>';
+  else h += '<span class="stamp rec">· no-source</span> <span class="v" style="color:var(--mut)">the source is empty</span>';
   const idx = src.indexOf(q);
-  if (idx >= 0) h += '<div class="hero-src">' + esc(src.slice(0, idx)) + "<mark>" + esc(q) + "</mark>" + esc(src.slice(idx + q.length)) + "</div>";
-  else if (src.trim()) h += '<div class="hero-src">' + esc(src) + '<div style="margin-top:6px;color:var(--fail)">↑ the claimed sentence appears nowhere in this text</div></div>';
-  h += '<div style="margin-top:8px;font-size:13px;color:var(--mut)">More: <a href="/en/playground" style="color:var(--accent)">Playground →</a> (paste mode · shareable verdict links)</div>';
+  if (idx >= 0) h += '<div class="src">' + esc(src.slice(0, idx)) + "<mark>" + esc(q) + "</mark>" + esc(src.slice(idx + q.length)) + "</div>";
+  else if (src.trim()) h += '<div class="src">' + esc(src) + '<div style="margin-top:6px;color:var(--red)">↑ the claimed sentence appears nowhere in this text</div></div>';
+  h += '<div style="margin-top:8px;font-size:12.5px;color:var(--mut)">More: <a href="/en/playground" style="color:var(--brand)">Playground →</a></div>';
   $("h-out").innerHTML = h;
 }
-$("h-go").onclick = heroRun;
+$("h-go").onclick = heroRun; heroRun();
 
-// receipt drop-zone inspector — file stays in browser memory, zero upload
 async function inspect(file) {
   let obj;
   try { obj = JSON.parse(await file.text()); }
-  catch { $("drop-out").innerHTML = '<span class="badge-t bad">not JSON</span> <span class="mut">drop a receipt file (JSON)</span>'; return; }
+  catch { $("drop-out").innerHTML = '<span class="stamp blk">not JSON</span> <span style="color:var(--mut)">drop a receipt file (JSON)</span>'; return; }
   const r = await replayLite(obj);
-  if (!r.ok) { $("drop-out").innerHTML = '<span class="badge-t bad">not a verification receipt</span> <span class="mut">this inspects kind=verification-receipt files (Work-Receipt packs are re-verified by the CLI: replay --pack)</span>'; return; }
+  if (!r.ok) { $("drop-out").innerHTML = '<span class="stamp blk">not a verification receipt</span> <span style="color:var(--mut)">only kind=verification-receipt files (Work Receipt replay is CLI replay --pack)</span>'; return; }
   let h = r.tampered
-    ? '<span class="badge-t bad">✗ TAMPERED — seal recomputation mismatch (contents changed after sealing)</span>'
-    : '<span class="badge-t ok">✓ intact — seal recomputes cleanly</span>';
+    ? '<span class="stamp blk">✗ TAMPERED — seal recompute mismatch</span>'
+    : '<span class="stamp ok">✓ INTACT — seal recomputes clean</span>';
   h += '<div class="kv">'
-    + '<span class="k">contentHash</span><span>' + (r.contentHashOk ? '<span style="color:var(--pass)">✓ match</span>' : '<span style="color:var(--fail)">✗ mismatch</span>') + '</span>'
-    + '<span class="k">receiptId</span><span>' + (r.receiptIdOk ? '<span style="color:var(--pass)">✓ match</span>' : '<span style="color:var(--fail)">✗ mismatch</span>') + '</span>'
+    + '<span class="k">contentHash</span><span>' + (r.contentHashOk ? '<span style="color:var(--green)">✓ match</span>' : '<span style="color:var(--red)">✗ mismatch</span>') + '</span>'
+    + '<span class="k">receiptId</span><span>' + (r.receiptIdOk ? '<span style="color:var(--green)">✓ match</span>' : '<span style="color:var(--red)">✗ mismatch</span>') + '</span>'
     + '<span class="k">subject</span><span>' + esc(r.subject.slice(0, 60)) + '</span>'
-    + '<span class="k">verdict / surface</span><span>' + esc(r.verdict) + ' · ' + esc(r.surface) + ' · ' + r.resultCount + ' claim(s)</span>'
+    + '<span class="k">verdict / surface</span><span>' + esc(r.verdict) + ' · ' + esc(r.surface) + ' · ' + r.resultCount + ' claims</span>'
     + '<span class="k">verifiedAt</span><span>' + esc(r.verifiedAt) + ' <span style="color:var(--mut)">(self-reported)</span></span>'
     + '</div>'
-    + '<div class="mut" style="margin-top:8px;font-size:12.5px">Scope: integrity only (has this file changed since sealing) — truth of contents, input re-hash and commit re-check belong to the CLI: <code>replay --receipt</code>.</div>';
+    + '<div class="mut" style="margin-top:8px;font-size:12px">Scope: only whether this file changed since it was sealed (integrity) — truth of contents, input re-hash and commit re-lookup are CLI <code>replay --receipt</code>.</div>';
   $("drop-out").innerHTML = h;
 }
 const dz = $("drop");
+dz.onclick = () => $("drop-file").click();
 dz.addEventListener("dragover", (e) => { e.preventDefault(); dz.classList.add("hover"); });
 dz.addEventListener("dragleave", () => dz.classList.remove("hover"));
 dz.addEventListener("drop", (e) => { e.preventDefault(); dz.classList.remove("hover"); const f = e.dataTransfer.files[0]; if (f) inspect(f); });
