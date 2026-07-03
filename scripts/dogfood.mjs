@@ -25,7 +25,8 @@ const prevDir = join(outDir, "..", "vreceipts-prev-snapshot");
 const run = (args) => {
   // verify 는 fail 픽스처에서 exit 1 이 정상 — 캡처하고 계속.
   try {
-    return { out: execFileSync("node", [cli, ...args], { cwd: root, encoding: "utf8" }), code: 0 };
+    // maxBuffer: 축적된 vreceipts 가 자라 graph 출력이 1MB(기본)를 넘어도 안 잘리게(발-멜빵).
+    return { out: execFileSync("node", [cli, ...args], { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }), code: 0 };
   } catch (e) {
     return { out: String(e.stdout ?? "") + String(e.stderr ?? ""), code: typeof e.status === "number" ? e.status : -1 };
   }

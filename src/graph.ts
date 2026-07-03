@@ -2,6 +2,7 @@ import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { claimFingerprintV1, CHECK_KINDS } from "./evidencekernel.js";
 import { replayVerificationReceipt } from "./vreceipt.js";
+import { printSync } from "./stdout.js";
 
 const line = "─".repeat(56);
 
@@ -101,7 +102,7 @@ export function runGraphQuery(dirArg: string | undefined, f: GraphFilters, forma
   const agg = aggregate(rows);
 
   if (format === "json") {
-    console.log(JSON.stringify({ dir, fileCount: allRaw.length, total: rows.length, matched: rows.length, rows, aggregate: agg }, null, 2));
+    printSync(JSON.stringify({ dir, fileCount: allRaw.length, total: rows.length, matched: rows.length, rows, aggregate: agg }, null, 2));
     process.exit(0);
   }
 
@@ -372,7 +373,7 @@ export function runGraphSubjects(dirArg: string | undefined, format?: string): n
   const rows = buildViewData(dir);
   const subs = buildSubjects(rows);
   if (format === "json") {
-    console.log(JSON.stringify({ dir, fileCount: rows.length, total: foldReceipts(rows).length, subjects: subs, note: "receipts=고유 결과(접힘 후)·판단 아님·증감은 graph diff 의 bySubject·시각=verifiedAt(자가보고)" }, null, 2));
+    printSync(JSON.stringify({ dir, fileCount: rows.length, total: foldReceipts(rows).length, subjects: subs, note: "receipts=고유 결과(접힘 후)·판단 아님·증감은 graph diff 의 bySubject·시각=verifiedAt(자가보고)" }, null, 2));
     process.exit(0);
   }
   console.log("");
@@ -840,7 +841,7 @@ export function runGraphView(dirArg: string | undefined, outArg: string | undefi
       writeFileSync(outP, out + "\n");
       console.log(`Evidence Graph JSON: ${outArg}  (파일 ${data.length}개 중 고유 ${foldReceipts(data).length}건${baseNote} · 소비자 API · summary+indexes+graph{nodes,edges}+failures+receipts)`);
     } else {
-      console.log(out);
+      printSync(out);
     }
     process.exit(0);
   }
@@ -850,7 +851,7 @@ export function runGraphView(dirArg: string | undefined, outArg: string | undefi
     writeFileSync(outP, html);
     console.log(`Evidence Browser: ${outArg}  (파일 ${data.length}개 중 고유 ${foldReceipts(data).length}건${baseNote} · Failure-first · 자체완결 정적 HTML · 서버 0 · 브라우저로 열기)`);
   } else {
-    console.log(html);
+    printSync(html);
   }
   process.exit(0);
 }
@@ -928,7 +929,7 @@ export function runGraphFailures(dirArg: string | undefined, f: FailureFilters, 
     } else {
       body.events = shown;
     }
-    console.log(JSON.stringify(body, null, 2));
+    printSync(JSON.stringify(body, null, 2));
     process.exit(0);
   }
 
@@ -1068,7 +1069,7 @@ export function runGraphDiff(
   const d = buildGraphDiff(baseRows, headRows, { sealed: o.sealed, match: o.match as DiffMatchMode | undefined });
 
   if (o.format === "json") {
-    console.log(JSON.stringify({
+    printSync(JSON.stringify({
       base: { label: baseLabel, receipts: baseRows.length },
       head: { label: headLabel, receipts: headRows.length },
       sealedOnly: !!o.sealed,
@@ -1224,7 +1225,7 @@ export function runGraphHistory(dirArg: string | undefined, sel: { claim?: strin
   const relEdges = g.edges.filter((e) => e.type === "same_input" || e.type === "same_commit" || e.type === "reverifies");
 
   if (format === "json") {
-    console.log(JSON.stringify({
+    printSync(JSON.stringify({
       dir, mode: h.mode, key: h.key, receipts: h.timeline.length,
       note: "시간축=verifiedAt(자가보고)·해소=그 시점 실패 없음(고침의 증명 아님)·fingerprint v1=텍스트 기반",
       timeline: h.timeline, relatedEdges: relEdges,

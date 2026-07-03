@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { execFileSync } from "node:child_process";
 import { loadReceipts, queryReceipts, buildViewData, buildGraphHtml, buildSummary, buildFailures, buildIndexes, buildGraph, buildFailureEvents, filterFailureEvents, buildGraphDiff, buildHistory, resolveFingerprintPrefix, buildSubjects, foldReceipts, foldVRRows, EXCEPTION_KINDS, failureKey } from "../dist/graph.js";
 import { evaluateClaim, SCHEMA_VERSION, claimFingerprintV1 } from "../dist/index.js"; // SDK 배럴(L7 씨앗)
 
@@ -630,6 +631,26 @@ check("SDK: evaluateClaim import 동작", () => {
   assert.equal(e.verified, true);
 });
 check("SDK: SCHEMA_VERSION export", () => assert.equal(SCHEMA_VERSION, "evidence/1"));
+
+// ── 회귀(2026-07-03 실측): graph view 대용량 출력이 파이프/캡처로 안 잘리는가 ──
+// console.log(대용량)+process.exit 는 비동기 stdout 이 flush 되기 전 종료돼 파이프 소비자가 잘린
+// JSON 을 받았다(실측 888KB → 파이프 64KB·execFileSync 212KB). printSync(동기 전량 write)로 수리.
+check("graph view --format json: 대용량도 파이프/캡처 완전 출력·파싱(절단 회귀 방지)", () => {
+  const CLI = join(process.cwd(), "dist", "cli.js");
+  const bigDir = mkdtempSync(join(tmpdir(), "argraph-big-"));
+  const pad = "x".repeat(4000);
+  for (let i = 0; i < 120; i++) {
+    writeFileSync(join(bigDir, `r${i}.json`), JSON.stringify({
+      kind: "verification-receipt", receiptId: `big-${i}`, subject: `S${i} ${pad}`,
+      verdict: i % 2 ? "fail" : "pass", surface: "research",
+      input: { sha256: `sha${i}` }, provenance: { reported: { model: "claude", commit: `c${i}` } },
+    }));
+  }
+  const out = execFileSync("node", [CLI, "graph", "view", "--dir", bigDir, "--format", "json"], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  rmSync(bigDir, { recursive: true, force: true });
+  assert.ok(out.length > 300 * 1024, `그래프가 절단역치(파이프 64KB·캡처 212KB)를 넘어야 버그 실증 — 받음 ${out.length}`);
+  assert.doesNotThrow(() => JSON.parse(out), "완전 출력이면 파싱 성공(절단이면 Unterminated string)");
+});
 
 rmSync(dir, { recursive: true, force: true });
 
