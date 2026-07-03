@@ -24,6 +24,9 @@ const PolicySchema = z.object({
   maxUntrackedAllowed: z.number().optional(),
   // 실시간 가드 모드(guard.ts) — warn(기본): capture 레코드에 표시만 / block: PreToolUse 에서 금지 경로 쓰기를 도구 실행 전 차단.
   guard: z.enum(["warn", "block"]).default("warn"),
+  // 루프 개입(council 2026-07-03 L1~L2) — 같은 test/build/lint 명령이 *사이 파일변경 0*으로 N회째 재실행될 때
+  // guard 모드에 따라 warn/deny. 미설정=완전 off(디스크 스캔조차 안 함). strict 프로필에도 미포함(별도 명시 opt-in).
+  loop_repeat_threshold: z.number().int().min(2).optional(),
 });
 
 // 0.9: 모드별 self-report 체크리스트(도구는 git diff 만 봄 — 의미 위반은 자동검출 불가, 사람/AI self-report).

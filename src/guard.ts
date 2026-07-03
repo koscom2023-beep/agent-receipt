@@ -1,4 +1,5 @@
-import { isAbsolute, relative, sep } from "node:path";
+import { readFileSync } from "node:fs";
+import { isAbsolute, join, relative, sep } from "node:path";
 import { minimatch } from "minimatch";
 import { loadPolicySafe } from "./policy.js";
 import { discoverContract } from "./discover.js";
@@ -70,5 +71,70 @@ export function evalGuard(t: GuardTarget, cwd: string = process.cwd()): GuardVer
     return { action: "none" };
   } catch {
     return { action: "none" }; // fail-open(상단 주석) — 가드 내부 오류가 도구 실행을 막으면 안 됨.
+  }
+}
+
+// ── 루프 개입 (council 2026-07-03 L1~L2) ──
+// 신호: *같은 세션*에서 동일 명령(cmdHash)이 사이 파일 쓰기/삭제 0으로 재실행 — 입력이 안 변했으니 결과도
+// 같을 공산이 큼. 보수적 휴리스틱임을 자백한다(시간/네트워크/env 의존 명령은 다를 수 있음 — D 반례·dissent 기록).
+// 그래서: 대상 test/build/lint 한정 · 이중 opt-in(loop_repeat_threshold 설정 + 행동은 guard 모드) · 기본 warn.
+// 성능: 임계 미설정/비대상이면 디스크 안 읽음. 스캔은 뒤에서 앞으로, cmdHash·write 문자열 prefilter 후에만 파싱.
+const LOOP_KINDS = new Set(["test", "build", "lint"]);
+
+export interface LoopTarget {
+  op: string;
+  cmdHash?: string;
+  cmdKind?: string;
+}
+
+export function evalLoopGuard(t: LoopTarget, sessionId: string | undefined, cwd: string = process.cwd()): GuardVerdict {
+  try {
+    if (t.op !== "command" || !t.cmdHash || !t.cmdKind || !LOOP_KINDS.has(t.cmdKind)) return { action: "none" };
+    if (!sessionId) return { action: "none" }; // 세션 격리 불가면 개입 안 함(교차세션 오탐 방지 — 보수적)
+    const { policy } = loadPolicySafe(cwd);
+    const threshold = policy?.loop_repeat_threshold;
+    if (!threshold) return { action: "none" };
+    // 경로 기준은 cwd(policy/contract 와 동일 프레임) — 실훅은 프로젝트 루트에서 돌아 repoRoot 과 일치.
+    const f = join(cwd, ".agent-guard", "capture.jsonl");
+    let raw = "";
+    try {
+      raw = readFileSync(f, "utf8");
+    } catch {
+      return { action: "none" };
+    }
+    const lines = raw.split("\n");
+    let prior = 0; // 마지막 파일변경 이후, 같은 세션의 동일 명령 실행 수(pre 만 — pre/post 이중기록 dedupe)
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const line = lines[i];
+      if (!line) continue;
+      const maybeWrite = line.includes('"op":"write"') || line.includes('"op":"delete"');
+      if (!maybeWrite && !line.includes(t.cmdHash)) continue; // prefilter — 무관 라인은 파싱 안 함
+      let r: { phase?: string; op?: string; cmdHash?: string; sessionId?: string };
+      try {
+        r = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      if (r.sessionId !== sessionId) continue; // 다른 세션은 카운트도 경계도 아님
+      if (r.op === "write" || r.op === "delete") break; // 파일변경 = 창 경계(그 뒤 재실행은 정당)
+      if (r.phase === "pre" && r.op === "command" && r.cmdHash === t.cmdHash) prior += 1;
+    }
+    if (prior + 1 < threshold) return { action: "none" };
+    const n = prior + 1;
+    const rule = `loop:${t.cmdKind}x${n}-no-change`;
+    if (policy?.guard === "block") {
+      return {
+        action: "deny",
+        rule,
+        reason:
+          `[agent-receipt guard] this exact ${t.cmdKind} command already ran ${prior}x in this session with no file changes in between — ` +
+          `rerunning without changing anything will likely repeat the result. This is a conservative heuristic ` +
+          `(time/network/env-dependent commands can legitimately differ). Change something first, or ask the human. ` +
+          `(lift: remove loop_repeat_threshold or set \`guard: warn\` in .agent-guard/policy.yaml)`,
+      };
+    }
+    return { action: "warn", rule };
+  } catch {
+    return { action: "none" }; // fail-open — 루프 판정 오류가 도구 실행을 막으면 안 됨
   }
 }

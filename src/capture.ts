@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import { redactText, REDACT_NOTE } from "./redact.js";
 import { withFileLock, writeFileAtomic } from "./lock.js";
 import { isToolOutput } from "./session.js";
-import { evalGuard } from "./guard.js";
+import { evalGuard, evalLoopGuard } from "./guard.js";
 import * as g from "./git.js";
 
 // ── capture (alpha) — git 너머 '측정' 행위 추적 ──
@@ -333,6 +333,22 @@ export function wasteLinesFromDisk(): string[] {
   }
 }
 
+/** done 등 형제 표면용 가드/반복 1줄(전부 0이면 null → 출력 불변·골든 안전). 상세는 capture show. */
+export function guardWasteSummaryLine(): string | null {
+  try {
+    const records = readRecords();
+    if (!records.length) return null;
+    const deny = records.filter((r) => r.guard === "deny").length;
+    const warn = records.filter((r) => r.guard === "warn").length;
+    const w = analyzeWaste(records);
+    const signals = w.rereads.length + w.repeatedCommands.length + w.repeatedFailures.length;
+    if (!deny && !warn && !signals) return null;
+    return `가드/반복: 차단 ${deny} · 경고 ${warn} · 반복신호 ${signals} (참고·판단은 사람 몫 — 상세: agent-receipt capture show)`;
+  } catch {
+    return null;
+  }
+}
+
 function capFile(): string {
   const root = g.repoRoot() ?? process.cwd();
   return join(root, ".agent-guard", "capture.jsonl");
@@ -596,10 +612,11 @@ export function runCaptureIngest(event: string | undefined): never {
   let denyReason: string | undefined;
   if (ph === "pre") {
     for (const r of recs) {
-      const v = evalGuard(r);
+      // 경로 가드(write/delete)와 루프 개입(command)은 상호배타 — op 로 분기. 둘 다 fail-open.
+      const v = r.op === "command" ? evalLoopGuard(r, env.sessionId) : evalGuard(r);
       if (v.action === "none") continue;
       r.guard = v.action === "deny" ? "deny" : "warn";
-      if (v.rule) r.guardRule = `${v.origin}:${v.rule}`;
+      if (v.rule) r.guardRule = v.origin ? `${v.origin}:${v.rule}` : v.rule;
       if (v.action === "deny" && !denyReason) denyReason = v.reason;
     }
   }

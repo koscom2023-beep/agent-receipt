@@ -5,6 +5,7 @@ import { buildReceipt, writeReceiptFile } from "./receipt.js";
 import { claimVerify } from "./auditpack.js";
 import { appendLedger, ledgerEntryFromReceipt } from "./ledger.js";
 import { listReceipts, approvalsCountFor } from "./receiptStore.js";
+import { guardWasteSummaryLine } from "./capture.js";
 import { LIMIT_NOTE } from "./disclosure.js";
 
 const line = "─".repeat(56);
@@ -41,6 +42,8 @@ export function runDone(
   console.log(`변경: touched ${r.touched.length}, untracked ${r.untracked.length}, denied ${r.deniedHits.length}, outOfScope ${r.outOfScope.length}`);
   const failedChecks = r.checks.filter((c) => !c.ok).length;
   console.log(`검사: ${r.checks.length ? `${r.checks.length - failedChecks}/${r.checks.length} 통과` : "명령 없음(통과 처리)"}`);
+  const gw = guardWasteSummaryLine(); // 가드/반복 1줄(council L3) — capture 없거나 전부 0이면 null=출력 불변
+  if (gw) console.log(gw);
   const crit = r.criticalPaths.filter((c) => c.touched.length);
   if (crit.length) console.log(`⚠️ 고위험 경로: ${crit.map((c) => c.glob).join(", ")}`);
   if (r.policy?.forbidAlwaysHits.length) console.log(`⛔ 상시금지(policy): ${r.policy.forbidAlwaysHits.join(", ")}`);

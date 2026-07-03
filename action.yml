@@ -24,7 +24,7 @@ inputs:
   version:
     description: "agent-receipt version to run (pinned for reproducibility)"
     required: false
-    default: "0.13.0"
+    default: "0.14.0"
   comment:
     description: "Post/update a PR comment with the receipt summary (mechanical projection of the sealed receipt — the receipt stays the source of truth). Opt-in; needs a pull_request event and a token that can write issues. Failure is non-blocking."
     required: false
