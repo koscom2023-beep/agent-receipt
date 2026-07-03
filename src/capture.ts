@@ -5,12 +5,13 @@ import { createHash } from "node:crypto";
 import { redactText, REDACT_NOTE } from "./redact.js";
 import { withFileLock, writeFileAtomic } from "./lock.js";
 import { isToolOutput } from "./session.js";
+import { evalGuard } from "./guard.js";
 import * as g from "./git.js";
 
 // ── capture (alpha) — git 너머 '측정' 행위 추적 ──
 // 4차 council Decision #1: 에이전트가 git diff 에 안 남기는 행위(.env 읽기·외부 호출·생성후삭제 등)를
 // Claude Code PreToolUse/PostToolUse 훅 stdin(JSON)에서 받아 마스킹 후 append-only 로 기록한다.
-// 원칙: 값 저장 0(경로/호스트/행위분류만·redact 경유) · 차단 안 함(증거지 게이트 아님) · 새 의존성 0.
+// 원칙: 값 저장 0(경로/호스트/행위분류만·redact 경유) · 기본은 차단 안 함(증거 우선 — 실시간 차단은 policy `guard: block` opt-in 시 guard.ts) · 새 의존성 0.
 // 한계(alpha): 어댑터=Claude Code 단일(중립 '지향'). gitVisible 은 캡처된 경로 ∩ git 변경집합 휴리스틱
 //   — 영수증 14키 사이드카 임베드(actions[])는 다음 iteration(골든 바이트불변 검증 동반).
 
@@ -36,6 +37,8 @@ export interface CaptureRecord {
   source?: string; // 행위 주체 에이전트(claude-code/codex/copilot/cursor) — 자기신고 라벨(증거 아님). 7차 council.
   prevHash?: string; // 직전 레코드의 entryHash(체인).
   entryHash?: string; // 이 레코드의 무결성 해시(entryHash 자신 제외, prevHash 포함).
+  guard?: "warn" | "deny"; // 실시간 가드 판정(pre·write/delete 만) — warn=표시만, deny=차단 방출됨(policy guard: block). guard.ts
+  guardRule?: string; // 매칭 근거 "origin:glob" (예: policy.forbidAlways:.env*)
 }
 
 export interface CaptureChainResult {
@@ -352,6 +355,8 @@ export function captureEntryHash(r: CaptureRecord): string {
     prevHash: r.prevHash ?? null,
   };
   if (r.source) o.source = r.source; // 신규 필드는 *있을 때만* 포함 → source 없는 기존 체인 레코드의 해시는 불변.
+  if (r.guard) o.guard = r.guard; // 동일 원칙(present-only) — 가드 판정도 변조 탐지 대상에 포함.
+  if (r.guardRule) o.guardRule = r.guardRule;
   return "sha256:" + createHash("sha256").update(JSON.stringify(o)).digest("hex");
 }
 
@@ -499,12 +504,32 @@ export function runCaptureIngest(event: string | undefined): never {
   // 7차 council: 벤더중립 정규화 토대 — 다양한 에이전트 envelope 를 공통 모양으로(추정 0·passthrough+단순 alias).
   const env = normalizeEnvelope(payload);
   const recs = classifyEvent(env, phase, now);
+  // ── 실시간 가드(council 2026-07-03·스모크 4/4): pre 단계 write/delete 만 대조. 기록이 먼저, deny 방출은 그 다음(증거 우선). ──
+  let denyReason: string | undefined;
+  if (ph === "pre") {
+    for (const r of recs) {
+      const v = evalGuard(r);
+      if (v.action === "none") continue;
+      r.guard = v.action === "deny" ? "deny" : "warn";
+      if (v.rule) r.guardRule = `${v.origin}:${v.rule}`;
+      if (v.action === "deny" && !denyReason) denyReason = v.reason;
+    }
+  }
   if (recs.length) {
     try {
       appendCapture(recs, env.sessionId, env.source);
     } catch {
       markDegraded(ph, now, "capture 락 획득 실패(동시 훅 경합 또는 stale)"); // 정직 마커(비차단)·silent 누락 금지
     }
+  }
+  if (denyReason) {
+    // Claude Code PreToolUse 훅 계약(2026-07-03 헤드리스 스모크 실측): stdout 의 permissionDecision=deny →
+    // 도구 미실행 + 이유가 에이전트에 노출 + 재시도 없이 진행. 기록 실패와 무관하게 차단은 유지(위 markDegraded 가 갭 증거).
+    console.log(
+      JSON.stringify({
+        hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: denyReason },
+      }),
+    );
   }
   process.exit(0);
 }
@@ -528,6 +553,9 @@ export function runCaptureShow(json: boolean): never {
   for (const a of notable) console.log(`  ⚠️ ${a.flag}  ${a.path ?? a.host ?? ""}${a.failed ? "  (실패 시도)" : ""}${a.denied ? "  (권한 거부됨)" : ""}`);
   if (mutedCount) console.log(`  · 그 외 일반 read/command ${mutedCount}건 (기록됨·접힘)`);
   console.log(`\n  git 가 보는 것: ${s.gitVisible}  ⟷  주목 행위: ${notable.length}  (전체 기록 ${s.total})`);
+  const guardDeny = records.filter((r) => r.guard === "deny").length;
+  const guardWarn = records.filter((r) => r.guard === "warn").length;
+  if (guardDeny || guardWarn) console.log(`  가드(금지 경로 쓰기): 차단 ${guardDeny} · 경고 ${guardWarn} — 근거는 capture.jsonl guardRule`); // present-only(없으면 출력 불변)
   // 대사(11차 council): git 변경 ↔ capture write 교차대조 + 잔차 분류(자동 cleared 금지·미설명은 남김).
   const recon = reconcileCapture(records, gitChanged);
   const degraded = records.filter((r) => r.op === "capture-degraded").length;

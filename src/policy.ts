@@ -22,6 +22,8 @@ const PolicySchema = z.object({
   forbidAlways: z.array(z.string()).default([]),
   protectAlways: z.array(z.string()).default([]),
   maxUntrackedAllowed: z.number().optional(),
+  // 실시간 가드 모드(guard.ts) — warn(기본): capture 레코드에 표시만 / block: PreToolUse 에서 금지 경로 쓰기를 도구 실행 전 차단.
+  guard: z.enum(["warn", "block"]).default("warn"),
 });
 
 // 0.9: 모드별 self-report 체크리스트(도구는 git diff 만 봄 — 의미 위반은 자동검출 불가, 사람/AI self-report).
@@ -111,6 +113,14 @@ export const POLICY_PROFILES: Record<string, string> = {
     `requireApprovalFor:\n  - "package-lock.json"\n  - "pnpm-lock.yaml"\n  - "supabase/migrations/**"\n  - "vercel.json"\n  - ".vercel/**"\n` +
     `protectAlways:\n  - "exports/**"\n  - "docs/arch/json/**"\n` +
     `maxUntrackedAllowed: 0\n`,
+  strict:
+    `# agent-receipt policy — strict (실시간 가드 block: 금지 경로 쓰기를 도구 실행 전에 차단)\n` +
+    `# 기본 프로필들은 guard: warn(기록만). 이 프로필만 block — 오탐 시 guard: warn 으로 즉시 해제.\n` +
+    `guard: block\n` +
+    `requireReceipt: true\nrequireClaims: false\nrequireCheck: false\n` +
+    `forbidAlways:\n  - ".env*"\n  - "secrets/**"\n  - "**/*.pem"\n  - "**/id_rsa*"\n` +
+    `requireApprovalFor:\n  - "package-lock.json"\n  - "supabase/migrations/**"\n` +
+    `protectAlways: []\n`,
   promptia:
     `# agent-receipt policy — promptia (본진 상시 규칙)\n` +
     `requireReceipt: true\nrequireClaims: false\nrequireCheck: false\n` +
@@ -159,6 +169,7 @@ function runPolicyShow(cwd: string): never {
   console.log("agent-receipt policy (상시 규칙 — contract 와 별개)");
   console.log(line);
   if (policy.mode !== "standard") console.log(`mode           : ${policy.mode}`);
+  if (policy.guard !== "warn") console.log(`guard          : ${policy.guard} (금지 경로 쓰기 실시간 차단)`); // 기본(warn)은 미표시 — 기존 출력 불변
   console.log(`requireReceipt : ${policy.requireReceipt}`);
   console.log(`requireClaims  : ${policy.requireClaims}`);
   console.log(`requireCheck   : ${policy.requireCheck}`);
