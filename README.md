@@ -2,12 +2,20 @@
 
 > npm **`@promptia-labs/agent-receipt`** · CLI **`agent-receipt`** · local-first, no account, no server
 
-**Receipts for AI work — two independent tracks:**
+**For solo AI coding: see what this session cost, where it's leaking, and whether the AI did only what you asked — all local, no account, no server.**
+
+```bash
+agent-receipt cost      # this session's real token cost from the local transcript (Anthropic's own usage data)
+```
+
+On top of that, two verification tracks:
 
 | Track | Question it answers | Receipt it produces |
 |---|---|---|
 | **Work Receipt** | *What did the AI actually do to my git repo?* — did it stay inside the contract, what landed, what was bypassed | `schemaVersion: "1.0"` — git-measured, tamper-evident |
 | **Verification Engine** | *Is what the AI **said** actually true?* — quotes, numbers, dates, git facts, versions, cited receipts… **14 deterministic check kinds, no LLM judging LLMs** | `kind: "verification-receipt"` (`evidence/1`) |
+
+> **Honest scope on cost:** `cost` reads Claude Code's local transcript (real per-message usage) and applies list pricing — an **estimate, not an invoice** (no discounts/intro). It shows where the money goes and signals when a fresh session would be cheaper; it does **not** cut your bill directly, and it never shows a made-up "savings" number. High cache-read is not waste — the cache saved you ~90%.
 
 > **agent-receipt proves — and, if you opt in, prevents.**
 > Its core job is mechanical, after-the-fact **evidence** — of what landed in git, and of whether stated evidence matches its sources (**git-based evidence for compliance review — not a compliance guarantee**). On top of that, an opt-in **real-time scope guard** (`policy guard: block`) stops writes to contract/policy-forbidden paths *before the tool runs* — the denied attempt itself becomes chained evidence. Default stays warn-only: nothing blocks unless you ask it to.

@@ -107,6 +107,7 @@ footer a{color:var(--accent);text-decoration:none}
 <nav>
   <a class="brand" href="/">agent-receipt</a>
   <a class="on" href="/">홈</a>
+  <a href="/#cost">비용</a>
   <a href="/playground">플레이그라운드</a>
   <a href="/demo">증거 브라우저 데모</a>
   <a href="https://github.com/koscom2023-beep/agent-receipt">GitHub</a>
@@ -116,8 +117,8 @@ footer a{color:var(--accent);text-decoration:none}
 
 <header>
   <h1>agent-receipt</h1>
-  <div class="tag"><b>AI가 한 일과 AI가 한 말을, 나중에 독립적으로 검증할 수 있게 만드세요.</b></div>
-  <div class="tag2">에이전트가 저장소에서 실제로 무엇을 바꿨는지, 보고서 속 인용·숫자·git 사실이 진짜인지 — 로컬에서 영수증(receipt)으로 남기고, 날조는 CI에서 막습니다(exit 1). 0.14부터는 원하면 사전 차단까지: 금지 경로 쓰기를 도구 실행 <i>전에</i> 멈추는 실시간 가드(opt-in).</div>
+  <div class="tag"><b>AI 코딩, 이 세션에 얼마 썼고 · 어디서 새고 · 시킨 것만 했는지 — 로컬에서.</b></div>
+  <div class="tag2">매 세션의 <b>실제 토큰 비용</b>을 로컬 기록에서 보여주고(Anthropic 자신의 usage·추정·청구서 아님), 같은 파일 재독·컨텍스트 팽창·범위 이탈 같은 <b>낭비를 신호</b>하고, 필요하면 AI의 근거·변경을 <b>검증</b>까지 — 계정·서버 없이. <br><span style="color:var(--mut);font-size:13.5px">정직하게: 돈을 직접 깎아주는 도구가 아닙니다. 어디서 새는지 정확히 짚고, 멈출·새 세션 시작할 시점을 신호할 뿐입니다.</span></div>
   <div class="btns">
     <a class="btn primary" href="/playground">브라우저에서 직접 잡아보기 →</a>
     <a class="btn ghost" href="/demo">증거 브라우저(Evidence Browser) 데모</a>
@@ -141,6 +142,19 @@ footer a{color:var(--accent);text-decoration:none}
     <div class="drop-out" id="drop-out"></div>
   </div>
 </header>
+
+<section id="cost">
+  <h2>이 세션에 얼마 썼나 — 진짜 숫자로</h2>
+  <p class="sub">Claude Code는 세션 기록을 로컬 디스크에 남기고, 거기엔 <b>Anthropic 자신의 usage 데이터</b>(메시지별 토큰·모델)가 들어 있습니다. agent-receipt는 그걸 읽어 리스트 가격으로 환산합니다 — 서버 전송 0·값 저장 0(숫자만).</p>
+<pre style="font-size:12.5px">$ agent-receipt cost
+
+이 세션 비용(추정·리스트가·<span class="y">청구서 아님</span>): ~$210.51
+메시지 446 · 출력 646,271 토큰 · 캐시읽기 151,355,505 · 캐시생성 3,985,111
+  claude-fable-5: ~$186.79
+  claude-opus-4-8: ~$23.73
+<span class="y">⚠️ 컨텍스트 정점 625,898 토큰 — 새 세션이 매 턴 재전송 비용을 낮출 수 있습니다.</span></pre>
+  <p class="sub" style="margin-top:10px"><b>긴 세션의 돈은 새 코드가 아니라 매 턴 커지는 컨텍스트를 다시 태우는 데서 나갑니다</b>(위 세션의 80%). 그게 보이면 언제 새 세션을 시작할지 알 수 있습니다. <span style="color:var(--mut)">캐시읽기가 커도 낭비가 아닙니다 — 캐시가 90% 아껴준 것입니다. 지어낸 "절감액" 대신 실측 숫자만 보여줍니다.</span></p>
+</section>
 
 <section id="prevents">
   <h2>무엇을 막아주는가</h2>
@@ -244,8 +258,8 @@ agent-receipt share-proof               <span class="c"># 클라이언트/감사
     <li><b>법적 컴플라이언스를 보증하는 도구가 아닙니다.</b> 검토에 쓸 증거를 제공할 뿐입니다.</li>
     <li><b>LLM의 추론 품질을 평가하는 도구가 아닙니다.</b> 결론이 옳은지가 아니라 근거가 실재하는지를 봅니다.</li>
     <li><b>AI의 모든 행동을 완벽히 감시하는 도구가 아닙니다.</b> 보는 범위와 못 보는 범위를 문서에 명시합니다.</li>
-    <li><b>토큰·시간 절감액을 계산해주는 도구가 아닙니다.</b> 관측 가능한 횟수(차단·재독·반복)만 셉니다 — 측정 불가한 숫자는 표시하지 않습니다.</li>
-    <li>대신 — <b style="color:var(--pass)">AI 작업과 AI 근거에 대해 "검증 가능한 증적"을 남깁니다.</b></li>
+    <li><b>돈을 직접 깎아주는 도구가 아닙니다.</b> 비용은 실제 usage 데이터로 정확히 보여주지만, "이거 켜면 30% 절약" 같은 절감액은 약속하지 않습니다 — 어디서 새는지 짚고 멈출 시점을 신호할 뿐, 행동은 사람이 합니다.</li>
+    <li>대신 — <b style="color:var(--pass)">이 세션에 얼마 썼는지 보여주고, 낭비·이탈을 신호하고, AI 작업과 근거의 "검증 가능한 증적"을 남깁니다.</b></li>
   </ul>
 </section>
 

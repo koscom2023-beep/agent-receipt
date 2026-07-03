@@ -107,6 +107,7 @@ footer a{color:var(--accent);text-decoration:none}
 <nav>
   <a class="brand" href="/en">agent-receipt</a>
   <a class="on" href="/en">Home</a>
+  <a href="/en/#cost">Cost</a>
   <a href="/en/playground">Playground</a>
   <a href="/demo">Evidence Browser demo</a>
   <a href="https://github.com/koscom2023-beep/agent-receipt">GitHub</a>
@@ -116,8 +117,8 @@ footer a{color:var(--accent);text-decoration:none}
 
 <header>
   <h1>agent-receipt</h1>
-  <div class="tag"><b>Make what your AI did — and what it said — independently verifiable, after the fact.</b></div>
-  <div class="tag2">What the agent actually changed in your repo; whether the citations, numbers and git facts in its reports are real — sealed into local receipts, blocked in CI when fabricated (exit 1). Since 0.14, optionally preventive too: a real-time guard (opt-in) that stops forbidden-path writes <i>before</i> the tool runs.</div>
+  <div class="tag"><b>AI coding: what this session cost · where it's leaking · whether it did only what you asked — locally.</b></div>
+  <div class="tag2">Shows each session's <b>real token cost</b> from the local transcript (Anthropic's own usage data — an estimate, not an invoice), <b>signals waste</b> (same-file rereads, context bloat, scope drift), and <b>verifies</b> the AI's evidence and changes when you need it — no account, no server. <br><span style="color:var(--mut);font-size:13.5px">Honestly: it does not cut your bill directly. It shows you exactly where the money goes and signals when to stop or start a fresh session — you act on it.</span></div>
   <div class="btns">
     <a class="btn primary" href="/en/playground">Catch one yourself, in your browser →</a>
     <a class="btn ghost" href="/demo">Live Evidence Browser</a>
@@ -141,6 +142,19 @@ footer a{color:var(--accent);text-decoration:none}
     <div class="drop-out" id="drop-out"></div>
   </div>
 </header>
+
+<section id="cost">
+  <h2>What this session cost — in real numbers</h2>
+  <p class="sub">Claude Code writes each session to local disk, and that transcript carries <b>Anthropic's own usage data</b> (per-message tokens + model). agent-receipt reads it and applies list pricing — nothing sent to a server, no values stored (counts only).</p>
+<pre style="font-size:12.5px">$ agent-receipt cost
+
+This session (estimate, list price, <span class="y">not an invoice</span>): ~$210.51
+446 messages · 646,271 output tokens · 151,355,505 cache read · 3,985,111 cache creation
+  claude-fable-5: ~$186.79
+  claude-opus-4-8: ~$23.73
+<span class="y">⚠️ context peaked at 625,898 tokens — a fresh session would lower the per-turn resend cost.</span></pre>
+  <p class="sub" style="margin-top:10px"><b>In a long session the money isn't the new code — it's re-sending the growing context every turn</b> (80% of the session above). Seeing it tells you when to start fresh. <span style="color:var(--mut)">High cache-read is NOT waste — the cache saved you 90%. We show measured numbers, never a made-up "savings" figure.</span></p>
+</section>
 
 <section id="prevents">
   <h2>What it prevents</h2>
@@ -244,8 +258,8 @@ agent-receipt share-proof               <span class="c"># proof HTML for the cli
     <li><b>Not a legal-compliance guarantee.</b> It supplies evidence for review, nothing more.</li>
     <li><b>Not an LLM-reasoning evaluator.</b> It checks whether the evidence exists, not whether the conclusion is wise.</li>
     <li><b>Not total surveillance of everything an AI does.</b> What it can and cannot see is stated in the docs.</li>
-    <li><b>Not a token/time-savings calculator.</b> It counts what is observable (blocks, rereads, repeats) — unmeasurable numbers are never displayed.</li>
-    <li>Instead — <b style="color:var(--pass)">it leaves a verifiable trail for AI work and AI evidence.</b></li>
+    <li><b>Not a bill-cutter.</b> It shows your real cost from actual usage data, but it never promises a "save 30%" figure — it points to where the money leaks and signals when to stop; you act on it.</li>
+    <li>Instead — <b style="color:var(--pass)">it shows what this session cost, signals waste and drift, and leaves a verifiable trail for AI work and AI evidence.</b></li>
   </ul>
 </section>
 
