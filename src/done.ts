@@ -7,6 +7,7 @@ import { appendLedger, ledgerEntryFromReceipt } from "./ledger.js";
 import { listReceipts, approvalsCountFor } from "./receiptStore.js";
 import { guardWasteSummaryLine } from "./capture.js";
 import { collectRedFlags, redFlagLine } from "./reviewfocus.js";
+import { sessionCostLine } from "./cost.js";
 import { LIMIT_NOTE } from "./disclosure.js";
 
 const line = "─".repeat(56);
@@ -47,6 +48,8 @@ export function runDone(
   if (gw) console.log(gw);
   const rf = redFlagLine(collectRedFlags(r.touched, r.untracked)); // 확인 신호(council R2) — 없으면 null=출력 불변
   if (rf) console.log(rf);
+  const cl = sessionCostLine(); // 세션 비용 1줄(council 화폐화) — transcript 없으면 null=출력 불변
+  if (cl) console.log(cl);
   const crit = r.criticalPaths.filter((c) => c.touched.length);
   if (crit.length) console.log(`⚠️ 고위험 경로: ${crit.map((c) => c.glob).join(", ")}`);
   if (r.policy?.forbidAlwaysHits.length) console.log(`⛔ 상시금지(policy): ${r.policy.forbidAlwaysHits.join(", ")}`);
