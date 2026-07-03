@@ -25,6 +25,14 @@ inputs:
     description: "agent-receipt version to run (pinned for reproducibility)"
     required: false
     default: "0.13.0"
+  comment:
+    description: "Post/update a PR comment with the receipt summary (mechanical projection of the sealed receipt — the receipt stays the source of truth). Opt-in; needs a pull_request event and a token that can write issues. Failure is non-blocking."
+    required: false
+    default: "false"
+  github-token:
+    description: "Token for the PR comment (defaults to the workflow's github.token). Fork PRs with read-only tokens degrade gracefully (warning, no comment)."
+    required: false
+    default: ""
 runs:
   using: "composite"
   steps:
@@ -38,3 +46,29 @@ runs:
       shell: bash
       run: |
         npx -y @promptia-labs/agent-receipt@${{ inputs.version }} graph diff --base-dir "${{ inputs.base-dir }}" --head-dir "$(dirname "${{ inputs.out }}")"
+    # PR 영수증 코멘트(council 2026-07-03 결정 4) — always(): 검증 실패(exit 1)일 때야말로 코멘트가 필요.
+    # 본문은 scripts/pr-comment-body.mjs 가 봉인 영수증을 기계 투영(자유 텍스트 0)·MARKER 로 기존 코멘트 갱신(도배 방지).
+    # 어떤 실패(fork 읽기전용 토큰·API 오류)도 job 을 깨지 않음 — 게이트는 위 두 스텝, 코멘트는 표시일 뿐.
+    - name: PR receipt comment (opt-in · non-blocking · updates in place)
+      if: ${{ always() && inputs.comment == 'true' && github.event_name == 'pull_request' }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token != '' && inputs.github-token || github.token }}
+        RECEIPT_OUT: ${{ inputs.out }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        REPO: ${{ github.repository }}
+      run: |
+        set +e
+        if [ ! -f "$RECEIPT_OUT" ]; then echo "::warning::agent-receipt: no sealed receipt at $RECEIPT_OUT — skipping comment (non-blocking)"; exit 0; fi
+        BODY_FILE="$(mktemp)"
+        node "${{ github.action_path }}/scripts/pr-comment-body.mjs" "$RECEIPT_OUT" > "$BODY_FILE"
+        if [ $? -ne 0 ]; then echo "::warning::agent-receipt: comment body build failed — skipping (non-blocking; receipt still sealed at $RECEIPT_OUT)"; exit 0; fi
+        MARKER='<!-- agent-receipt-verify -->'
+        CID=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate --jq ".[] | select(.body | startswith(\"$MARKER\")) | .id" 2>/dev/null | head -1)
+        if [ -n "$CID" ]; then
+          gh api -X PATCH "repos/$REPO/issues/comments/$CID" -f body="$(cat "$BODY_FILE")" >/dev/null
+        else
+          gh api -X POST "repos/$REPO/issues/$PR_NUMBER/comments" -f body="$(cat "$BODY_FILE")" >/dev/null
+        fi
+        if [ $? -ne 0 ]; then echo "::warning::agent-receipt: PR comment failed (fork PR read-only token?) — non-blocking; sealed receipt remains at $RECEIPT_OUT"; fi
+        exit 0
