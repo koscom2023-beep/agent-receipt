@@ -1,0 +1,17 @@
+# PR 영수증 코멘트 실전 검증용 데모 워크플로(테스트 브랜치 전용 — main 병합 안 함).
+name: pr-verify-demo
+on: pull_request
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: koscom2023-beep/agent-receipt@v0.1-verify-check-split
+        with:
+          report: docs/demo-claims.md
+          version: "0.14.0"
+          comment: "true"
