@@ -1,0 +1,7 @@
+{
+  "conversation_id": "cursor-fixture-c1",
+  "tool_name": "Write",
+  "tool_input": {
+    "file_path": "\\\\wsl.localhost\\Ubuntu\\home\\sah4444\\agent-receipt\\secrets\\token.txt"
+  }
+}

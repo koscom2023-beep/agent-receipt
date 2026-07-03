@@ -1,0 +1,7 @@
+{
+  "conversation_id": "cursor-fixture-c3",
+  "tool_name": "Shell",
+  "tool_input": {
+    "command": "curl https://api.example.com/x"
+  }
+}

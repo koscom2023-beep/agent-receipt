@@ -1,0 +1,5 @@
+{
+  "conversation_id": "cursor-fixture-c2",
+  "hook_event_name": "afterFileEdit",
+  "file_path": "\\\\wsl.localhost\\Ubuntu\\home\\sah4444\\agent-receipt\\src\\cli.ts"
+}

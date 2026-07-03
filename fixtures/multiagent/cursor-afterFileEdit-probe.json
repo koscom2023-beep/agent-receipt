@@ -1,0 +1,11 @@
+{
+  "conversation_id": "47762974-727c-4279-b53c-ac66a5e3ea52",
+  "generation_id": "8c24db14-c27a-43b1-97be-839aba320853",
+  "model": "composer-2.5",
+  "file_path": "\\\\wsl.localhost\\Ubuntu\\home\\sah4444\\agent-receipt\\src\\example.ts",
+  "edits": [{ "old_string": "a", "new_string": "b" }],
+  "session_id": "47762974-727c-4279-b53c-ac66a5e3ea52",
+  "hook_event_name": "afterFileEdit",
+  "cursor_version": "3.9.16",
+  "workspace_roots": ["/Ubuntu/home/sah4444"]
+}

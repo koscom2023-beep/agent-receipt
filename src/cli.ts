@@ -50,7 +50,7 @@ import { runInstallHooks, runUninstallHooks } from "./hooks.js";
 import { runSelftest } from "./selftest.js";
 import { runIndex } from "./receiptindex.js";
 import { runGenClaim } from "./genclaim.js";
-import { runCaptureIngest, runCaptureShow, runCaptureReset, runCaptureInstall, runCaptureUninstall, runCaptureVerify } from "./capture.js";
+import { runCaptureIngest, runCaptureShow, runCaptureReset, runCaptureInstall, runCaptureUninstall, runCaptureVerify, runCaptureInstallCursor } from "./capture.js";
 import { runShareProof, runShareProofFromSaved, latestReceiptExists } from "./shareproof.js";
 import { runResearchVerify } from "./research.js";
 import { runCouncilVerify } from "./council.js";
@@ -170,7 +170,7 @@ agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
 ■ 연동(experimental — 미리보기, 전송 없음):
   export --format <slack|json|github-pr|otel|langfuse> --receipt <p>
   gen-claim --transcript <jsonl> [--out <claim.json>]   에이전트 transcript → claim.json(이후 claims 로 대조)
-  capture [--event pre|post|fail] / show [--json] / verify / reset / install [--write] [--global] / uninstall   git 너머 행위 추적(훅 stdin·값 미저장·체인 검증·alpha)
+  capture [--event pre|post|fail] / show [--json] / verify / reset / install [--write] [--global] / install-cursor [--write] / uninstall   git 너머 행위 추적(훅 stdin·값 미저장·체인 검증·alpha)
 
 ■ 기타: run
 
@@ -377,8 +377,12 @@ function main(): void {
     if (sub === "verify") runCaptureVerify();
     if (sub === "reset") runCaptureReset();
     if (sub === "install") runCaptureInstall(hasFlag("--write"), hasFlag("--global"));
+    if (sub === "install-cursor") runCaptureInstallCursor(hasFlag("--write"));
     if (sub === "uninstall") runCaptureUninstall(hasFlag("--write"), hasFlag("--global"));
-    runCaptureIngest(getArg("--event"));
+    const vendorArg = getArg("--vendor");
+    const vendor =
+      vendorArg === "cursor" || vendorArg === "claude" ? vendorArg : ("auto" as const);
+    runCaptureIngest(getArg("--event"), vendor);
   }
   // share-proof: --receipt 또는 저장된 receipt 가 있으면 그걸 렌더(계약 불필요·done 시점 그대로).
   // 둘 다 없으면 아래 switch 에서 현재 상태로 fresh build(계약 필요).

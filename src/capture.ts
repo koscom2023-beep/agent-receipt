@@ -6,6 +6,8 @@ import { redactText, REDACT_NOTE } from "./redact.js";
 import { withFileLock, writeFileAtomic } from "./lock.js";
 import { isToolOutput } from "./session.js";
 import { evalGuard, evalLoopGuard } from "./guard.js";
+import { adaptCursorHookPayload, parseHookStdin } from "./cursor-hook.js";
+import { formatGuardDeny, inferHookVendor, type HookVendor } from "./hook-deny.js";
 import * as g from "./git.js";
 
 // ── capture (alpha) — git 너머 '측정' 행위 추적 ──
@@ -161,7 +163,7 @@ export interface NormalizedEnvelope {
  */
 export function normalizeEnvelope(payload: unknown): NormalizedEnvelope {
   const o = (payload ?? {}) as Record<string, unknown>;
-  const tool_name = String(o.tool_name ?? o.tool ?? o.toolName ?? "");
+  let tool_name = String(o.tool_name ?? o.tool ?? o.toolName ?? "");
   const ti = o.tool_input ?? o.input ?? o.toolArgs;
   const tool_input = ti && typeof ti === "object" ? (ti as Record<string, unknown>) : {};
   const sid = o.session_id ?? o.sessionId ?? o.conversation_id;
@@ -169,6 +171,13 @@ export function normalizeEnvelope(payload: unknown): NormalizedEnvelope {
   const src = o.source ?? o.agent;
   const source = typeof src === "string" ? src : undefined;
   return { tool_name, tool_input, sessionId, source };
+}
+
+/** Cursor 훅 적용 후 normalizeEnvelope — source 기본 cursor. */
+export function normalizeCursorEnvelope(payload: unknown): NormalizedEnvelope {
+  const adapted = adaptCursorHookPayload(payload);
+  const base = normalizeEnvelope(adapted ?? payload);
+  return { ...base, source: base.source ?? "cursor" };
 }
 
 // 명령 종류 분류(정규식·본문 미저장) — 반복 낭비 표시용. 확신 없으면 other(추정 승격 금지).
@@ -584,7 +593,7 @@ function markDegraded(phase: "pre" | "post" | "fail" | "denied", ts: string, rea
 }
 
 /** `agent-receipt capture [--event pre|post]` — 훅 stdin(JSON) 1건을 분류·마스킹·체인 append. 항상 통과(비차단). */
-export function runCaptureIngest(event: string | undefined): never {
+export function runCaptureIngest(event: string | undefined, vendor: HookVendor | "auto" = "auto"): never {
   // 명시 파싱(Phase9): 미지 이벤트를 post 로 강하시키면 "실패/거부가 성공으로 오기록"되는 함정(fail 때 실증) —
   // 이제 미지 값은 degraded 갭 마커로 남긴다(사라짐 아님·오기록 아님·DA③ 수용).
   const KNOWN = { pre: "pre", post: "post", fail: "fail", denied: "denied" } as const;
@@ -595,18 +604,22 @@ export function runCaptureIngest(event: string | undefined): never {
   const now = new Date().toISOString();
   let raw = "";
   try {
-    raw = readFileSync(0, "utf8");
+    // wsl.exe 경유 Cursor 훅 payload 는 선두에 UTF-8 BOM 이 붙어 온다(실측) → 벗기지 않으면
+    // JSON.parse 가 터져 실제 payload 가 100% degraded 로 떨어진다. 선두 BOM 만 제거(내용 불변).
+    raw = readFileSync(0, "utf8").replace(/^\uFEFF/, "");
   } catch {
     markDegraded(ph, now, "stdin 읽기 실패");
   }
   let payload: unknown;
   try {
-    payload = JSON.parse(raw);
+    // 엄격 파싱 우선(클린 payload 는 기존과 byte-불변) → 실패 시에만 전송손상 복구 폴백(BOM·CRLF·홑백슬래시).
+    payload = parseHookStdin(raw);
   } catch {
     markDegraded(ph, now, "stdin JSON 파싱 실패");
   }
   // 7차 council: 벤더중립 정규화 토대 — 다양한 에이전트 envelope 를 공통 모양으로(추정 0·passthrough+단순 alias).
-  const env = normalizeEnvelope(payload);
+  const hookVendor: HookVendor = vendor === "auto" ? inferHookVendor(payload) : vendor;
+  const env = hookVendor === "cursor" ? normalizeCursorEnvelope(payload) : normalizeEnvelope(payload);
   const recs = classifyEvent(env, phase, now);
   // ── 실시간 가드(council 2026-07-03·스모크 4/4): pre 단계 write/delete 만 대조. 기록이 먼저, deny 방출은 그 다음(증거 우선). ──
   let denyReason: string | undefined;
@@ -628,13 +641,7 @@ export function runCaptureIngest(event: string | undefined): never {
     }
   }
   if (denyReason) {
-    // Claude Code PreToolUse 훅 계약(2026-07-03 헤드리스 스모크 실측): stdout 의 permissionDecision=deny →
-    // 도구 미실행 + 이유가 에이전트에 노출 + 재시도 없이 진행. 기록 실패와 무관하게 차단은 유지(위 markDegraded 가 갭 증거).
-    console.log(
-      JSON.stringify({
-        hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: denyReason },
-      }),
-    );
+    console.log(formatGuardDeny(hookVendor, denyReason));
   }
   process.exit(0);
 }
@@ -858,5 +865,97 @@ export function runCaptureUninstall(write: boolean, global: boolean): never {
   }
   writeFileSync(p, JSON.stringify(merged, null, 2) + "\n");
   console.log(`✅ capture 훅 제거: ${p}`);
+  process.exit(0);
+}
+
+// ── Cursor IDE 훅 자동배선 (capture install-cursor) — ~/.cursor/hooks.json ──
+export interface CursorHooksShape {
+  version?: number;
+  hooks?: Record<string, Array<{ command?: string; matcher?: string; type?: string; timeout?: number }>>;
+  [k: string]: unknown;
+}
+
+const CURSOR_HOOK_MATCHER = "Shell|Read|Write|Edit|MultiEdit|NotebookEdit|NotebookRead|WebFetch|WebSearch|Task|MCP:";
+const cursorCaptureCmd = (phase: "pre" | "post" | "fail" | "denied"): string =>
+  `agent-receipt capture --event ${phase} --vendor cursor`;
+
+/** 순수함수: Cursor hooks.json 에 capture 훅 멱등 추가. */
+export function mergeCursorCaptureHooks(input: CursorHooksShape): { merged: CursorHooksShape; changed: boolean } {
+  const merged: CursorHooksShape = JSON.parse(JSON.stringify(input ?? {}));
+  if (merged.version === undefined) merged.version = 1;
+  if (!merged.hooks || typeof merged.hooks !== "object") merged.hooks = {};
+  let changed = false;
+  const phases: Array<["preToolUse" | "postToolUse" | "postToolUseFailure", "pre" | "post" | "fail"]> = [
+    ["preToolUse", "pre"],
+    ["postToolUse", "post"],
+    ["postToolUseFailure", "fail"],
+  ];
+  for (const [key, phase] of phases) {
+    const cmd = cursorCaptureCmd(phase);
+    const arr = Array.isArray(merged.hooks[key]) ? merged.hooks[key] : [];
+    const ours = arr.find((e) => e?.command === cmd);
+    if (!ours) {
+      arr.push({ command: cmd, matcher: CURSOR_HOOK_MATCHER });
+      changed = true;
+    } else if (ours.matcher !== CURSOR_HOOK_MATCHER) {
+      ours.matcher = CURSOR_HOOK_MATCHER;
+      changed = true;
+    }
+    merged.hooks[key] = arr;
+  }
+  return { merged, changed };
+}
+
+export function removeCursorCaptureHooks(input: CursorHooksShape): { merged: CursorHooksShape; changed: boolean } {
+  const merged: CursorHooksShape = JSON.parse(JSON.stringify(input ?? {}));
+  let changed = false;
+  if (merged.hooks && typeof merged.hooks === "object") {
+    for (const key of ["preToolUse", "postToolUse", "postToolUseFailure"] as const) {
+      const arr = merged.hooks[key];
+      if (!Array.isArray(arr)) continue;
+      const kept = arr.filter((e) => {
+        const ours = typeof e?.command === "string" && e.command.startsWith("agent-receipt capture") && e.command.includes("--vendor cursor");
+        if (ours) changed = true;
+        return !ours;
+      });
+      if (kept.length) merged.hooks[key] = kept;
+      else delete merged.hooks[key];
+    }
+  }
+  return { merged, changed };
+}
+
+function cursorSettingsPath(): string {
+  return join(homedir(), ".cursor", "hooks.json");
+}
+
+/** `agent-receipt capture install-cursor [--write]` — ~/.cursor/hooks.json 미리보기/병합. */
+export function runCaptureInstallCursor(write: boolean): never {
+  const p = cursorSettingsPath();
+  if (!write) {
+    const { merged } = mergeCursorCaptureHooks({});
+    console.log("\n# ~/.cursor/hooks.json 에 병합할 hooks (기존 설정·프로브 훅 보존 — 수동 병합 권장):");
+    console.log(JSON.stringify(merged, null, 2));
+    console.log("\n자동 병합: agent-receipt capture install-cursor --write");
+    process.exit(0);
+  }
+  let existing: CursorHooksShape = {};
+  if (existsSync(p)) {
+    try {
+      existing = JSON.parse(readFileSync(p, "utf8")) as CursorHooksShape;
+    } catch {
+      console.error(`✗ ${p} 파싱 실패 — 자동 수정 거부. install-cursor(--write 없이) snippet 으로 직접 병합하세요.`);
+      process.exit(2);
+    }
+  }
+  const { merged, changed } = mergeCursorCaptureHooks(existing);
+  if (!changed) {
+    console.log(`이미 설치됨(멱등): ${p}`);
+    process.exit(0);
+  }
+  mkdirSync(dirname(p), { recursive: true });
+  writeFileSync(p, JSON.stringify(merged, null, 2) + "\n");
+  console.log(`✅ Cursor capture 훅 설치: ${p} (기존 항목 보존·우리 command 만 추가)`);
+  console.log("Cursor 재시작 또는 Reload Window 후 적용. 프로브(~/.cursor-hook-probe)와 공존 가능.");
   process.exit(0);
 }
