@@ -148,12 +148,13 @@ footer a{color:var(--accent);text-decoration:none}
   <p class="sub">Claude Code는 세션 기록을 로컬 디스크에 남기고, 거기엔 <b>Anthropic 자신의 usage 데이터</b>(메시지별 토큰·모델)가 들어 있습니다. agent-receipt는 그걸 읽어 리스트 가격으로 환산합니다 — 서버 전송 0·값 저장 0(숫자만).</p>
 <pre style="font-size:12.5px">$ agent-receipt cost
 
-이 세션 비용(추정·리스트가·<span class="y">청구서 아님</span>): ~$210.51
+이 세션 비용(추정·리스트가·<span class="y">청구서 아님</span>): ~$241.77
 메시지 446 · 출력 646,271 토큰 · 캐시읽기 151,355,505 · 캐시생성 3,985,111
   claude-fable-5: ~$186.79
   claude-opus-4-8: ~$23.73
-<span class="y">⚠️ 컨텍스트 정점 625,898 토큰 — 새 세션이 매 턴 재전송 비용을 낮출 수 있습니다.</span></pre>
-  <p class="sub" style="margin-top:10px"><b>긴 세션의 돈은 새 코드가 아니라 매 턴 커지는 컨텍스트를 다시 태우는 데서 나갑니다</b>(위 세션의 80%). 그게 보이면 언제 새 세션을 시작할지 알 수 있습니다. <span style="color:var(--mut)">캐시읽기가 커도 낭비가 아닙니다 — 캐시가 90% 아껴준 것입니다. 지어낸 "절감액" 대신 실측 숫자만 보여줍니다.</span></p>
+<span class="y">⚠️ 컨텍스트 정점 670,951 토큰 — 새 세션이 매 턴 재전송 비용을 낮출 수 있습니다.</span>
+<span class="g">오늘(2026-07-03) 누적: ~$843.39 · 세션 3개</span></pre>
+  <p class="sub" style="margin-top:10px"><b>긴 세션의 돈은 새 코드가 아니라 매 턴 커지는 컨텍스트를 다시 태우는 데서 나갑니다</b>(위 세션의 80%). 그게 보이면 언제 새 세션을 시작할지 알 수 있습니다. <b>오늘 누적</b>은 프로젝트의 오늘 세션을 전부 더한 순수 합산 — 월말 청구서가 오기 전에 지금 얼마 쓰고 있는지 보여줍니다. <span style="color:var(--mut)">캐시읽기가 커도 낭비가 아닙니다 — 캐시가 90% 아껴준 것입니다. 지어낸 "절감액" 대신 실측 숫자만 보여줍니다.</span></p>
 </section>
 
 <section id="prevents">

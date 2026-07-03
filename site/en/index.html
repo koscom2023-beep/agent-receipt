@@ -148,12 +148,13 @@ footer a{color:var(--accent);text-decoration:none}
   <p class="sub">Claude Code writes each session to local disk, and that transcript carries <b>Anthropic's own usage data</b> (per-message tokens + model). agent-receipt reads it and applies list pricing — nothing sent to a server, no values stored (counts only).</p>
 <pre style="font-size:12.5px">$ agent-receipt cost
 
-This session (estimate, list price, <span class="y">not an invoice</span>): ~$210.51
+This session (estimate, list price, <span class="y">not an invoice</span>): ~$241.77
 446 messages · 646,271 output tokens · 151,355,505 cache read · 3,985,111 cache creation
   claude-fable-5: ~$186.79
   claude-opus-4-8: ~$23.73
-<span class="y">⚠️ context peaked at 625,898 tokens — a fresh session would lower the per-turn resend cost.</span></pre>
-  <p class="sub" style="margin-top:10px"><b>In a long session the money isn't the new code — it's re-sending the growing context every turn</b> (80% of the session above). Seeing it tells you when to start fresh. <span style="color:var(--mut)">High cache-read is NOT waste — the cache saved you 90%. We show measured numbers, never a made-up "savings" figure.</span></p>
+<span class="y">⚠️ context peaked at 670,951 tokens — a fresh session would lower the per-turn resend cost.</span>
+<span class="g">today (2026-07-03) so far: ~$843.39 · 3 sessions</span></pre>
+  <p class="sub" style="margin-top:10px"><b>In a long session the money isn't the new code — it's re-sending the growing context every turn</b> (80% of the session above). Seeing it tells you when to start fresh. <b>Today's running total</b> sums every session in the project today — a pure count that shows what you're spending now, before the month-end bill. <span style="color:var(--mut)">High cache-read is NOT waste — the cache saved you 90%. We show measured numbers, never a made-up "savings" figure.</span></p>
 </section>
 
 <section id="prevents">
