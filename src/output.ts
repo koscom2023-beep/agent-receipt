@@ -6,6 +6,29 @@ import { LIMIT_NOTE } from "./disclosure.js";
 
 const line = "─".repeat(56);
 
+// 변경량 예산 관찰(council 2026-07-03 증분2) — 표시 전용 warn: 판정(ok)/exit/--json 14키에 영향 없음·차단 아님.
+// budget 미설정이면 [] → 기존 출력 byte-invariant. touched=변경 파일 수·untracked=새 파일 수(둘 다 verify 실측).
+export function budgetLines(r: Pick<VerifyResult, "touched" | "untracked">, contract?: Contract): string[] {
+  const b = contract?.budget;
+  if (!b || (b.max_touched_files == null && b.max_new_files == null)) return [];
+  const L: string[] = [];
+  if (b.max_touched_files != null) {
+    L.push(
+      r.touched.length > b.max_touched_files
+        ? `⚠️ 변경 파일 ${r.touched.length}개 > 예산 ${b.max_touched_files}개 — 변경 반경 확인(차단 아님·판정 불변)`
+        : `✓ 변경 파일 ${r.touched.length}개 ≤ 예산 ${b.max_touched_files}개`,
+    );
+  }
+  if (b.max_new_files != null) {
+    L.push(
+      r.untracked.length > b.max_new_files
+        ? `⚠️ 새 파일 ${r.untracked.length}개 > 예산 ${b.max_new_files}개 — 신규 생성 확인(차단 아님·판정 불변)`
+        : `✓ 새 파일 ${r.untracked.length}개 ≤ 예산 ${b.max_new_files}개`,
+    );
+  }
+  return L;
+}
+
 // verify FAIL 시 "다음 조치" 힌트(표시 전용 — 판정/exit/--json 에 영향 없음, 자동 revert 안 함).
 // 계약의 git.* 플래그로 실제 위반 카테고리만 정확히 짚는다.
 export function recoveryHints(r: VerifyResult, contract: Contract): string[] {
@@ -79,6 +102,14 @@ export function printReport(r: VerifyResult, contract?: Contract): void {
     console.log("");
     console.log("상시 규칙(policy):");
     for (const x of tw) console.log(`   ${x}`);
+  }
+
+  // 변경량 예산(budget) 관찰 — 계약에 budget 있을 때만(없으면 출력 불변·golden 안전). 차단 아님.
+  const bl = budgetLines(r, contract);
+  if (bl.length) {
+    console.log("");
+    console.log("예산(budget):");
+    for (const x of bl) console.log(`   ${x}`);
   }
 
   // 다음 조치 hint (FAIL + contract 있을 때만 — 표시 전용, 자동 revert 안 함).

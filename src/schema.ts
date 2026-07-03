@@ -28,6 +28,14 @@ export const ContractSchema = z.object({
 
   forbidden_actions: z.array(z.string()).default([]),
 
+  // 변경량 예산(council 2026-07-03 증분2) — *관찰 warn 전용*(차단 아님·verify --json 14키 불변). 미설정=출력 byte-invariant.
+  budget: z
+    .object({
+      max_touched_files: z.number().int().positive().optional(),
+      max_new_files: z.number().int().positive().optional(),
+    })
+    .optional(),
+
   required_checks: z
     .object({
       nul: z.object({ paths: z.array(z.string()).default([]) }).optional(),
