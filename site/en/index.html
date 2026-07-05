@@ -185,7 +185,7 @@ code{font-family:var(--mono);font-size:.9em;background:var(--paper-2);border:1px
   <a class="lk hide" href="/demo">Demo</a>
   <a class="lk" href="https://github.com/koscom2023-beep/agent-receipt">GitHub</a>
   <span class="sp"></span>
-  <span class="ver">v0.15.2</span>
+  <span class="ver">v0.15.3</span>
   <a class="en" href="/" title="Korean version">한국어</a>
 </nav>
 
@@ -287,6 +287,21 @@ code{font-family:var(--mono);font-size:.9em;background:var(--paper-2);border:1px
     <tr><td><b>AI Change Audit</b></td><td><b>What did the AI actually do to my repo?</b> Contract-scoped diff evidence · hash-chained ledger · third-party Rekor anchoring · beyond-git action capture (incl. failed &amp; denied attempts) — plus an opt-in real-time guard that stops forbidden-path writes up front.</td></tr>
     <tr><td><b>AI Evidence Audit</b></td><td><b>Is what the AI said actually true?</b> 14 deterministic check kinds — no LLM judging LLMs. Same input, same verdict, every time.</td></tr>
   </table></div>
+</section>
+
+<section id="vendors">
+  <div class="eyebrow-s">§ Tools</div>
+  <h2>Not just Claude Code — Cursor too</h2>
+  <p class="sub">agent-receipt isn't tied to a single tool. It captures Claude Code and Cursor edits the same way, into one ledger — whether the tool runs on Windows or inside WSL.</p>
+  <div class="scroll"><pre><span class="c"># Bridge Cursor (Windows) to agent-receipt (WSL) — one line</span>
+agent-receipt capture install-cursor <span class="y">--wsl-bridge</span>
+<span class="c">#   Cursor (Windows) ─ afterFileEdit ─▶ wsl.exe ─▶ 🧾 agent-receipt (WSL)</span>
+<span class="c">#   garbled in transit (BOM / encoding)? it recovers on its own</span></pre></div>
+  <div class="who" style="margin-top:14px">
+    <div class="c"><b>🖱 Wire up Cursor hooks directly</b><p>Every time Cursor saves a file, that action flows into agent-receipt. One install command and the wiring is done.</p></div>
+    <div class="c"><b>🪟 A bridge across Windows and WSL</b><p>Cursor on Windows, the tool in WSL — no problem. <code>--wsl-bridge</code> connects them, and even if the payload is mangled in transit it's recovered and recorded.</p></div>
+    <div class="c"><b>🧩 Vendor-neutral by design</b><p>Each tool's envelope is normalized to one shape. Add more tools and the audit stays the same.</p></div>
+  </div>
 </section>
 
 <section id="who">
