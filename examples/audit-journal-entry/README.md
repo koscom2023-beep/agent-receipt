@@ -41,7 +41,7 @@ agent-receipt replay --receipt examples/audit-journal-entry/receipt.json
 - **봉인·해시체인** = 감사증적(Audit Trail)과 변조탐지(Tamper-evidence).
 - **exit 1** = 예방·탐지 통제가 결산 마감/커밋 전에 오류를 막는 게이트.
 
-곧, KPMG 직무기술의 *"AI Agent 기반 연결조정 및 분개 검증 자동화"* 와 *"내부통제(IC)·SOX 영역 AI 솔루션"* 이 하는 일을, 결정론 커널 위에서 시연한 것이다.
+곧 *"AI Agent 기반 연결조정·분개 검증 자동화"* 와 *"내부통제(IC)·SOX 영역 AI 솔루션"* 이 하려는 일을, 결정론 커널 위에서 시연한 것이다. 검사와 어사션의 전체 대응은 [`docs/AUDIT-ASSERTIONS.md`](../../docs/AUDIT-ASSERTIONS.md) 참고.
 
 ## 정직한 경계
 
