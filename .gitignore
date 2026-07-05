@@ -7,3 +7,6 @@ agent-guard-report-*.md
 docs/launch/
 .vercel/
 .vercel
+
+# audit-demo 실행 산출물(런타임 생성)
+examples/**/receipt.json
