@@ -133,6 +133,27 @@ This repo also dogfoods its own verification engine: every `npm test` run verifi
 
 ---
 
+## Examples — see it work in 30 seconds
+
+Three runnable examples show the verification engine catching real problems — each exits `1` on a fabricated claim, so it drops straight into CI:
+
+- **[`examples/ai-coding-audit`](examples/ai-coding-audit)** — verify what an AI coding agent (Cursor / Claude Code / Copilot) *claimed* it changed against real git history. Catches scope violations and hallucinated commits.
+  ```bash
+  agent-receipt research verify --file examples/ai-coding-audit/agent-report.md
+  ```
+- **[`examples/rag-grounding`](examples/rag-grounding)** — verify that a RAG answer's claims are literally grounded in the retrieved context (deterministic faithfulness — no LLM judge).
+  ```bash
+  agent-receipt research verify --file examples/rag-grounding/answer-claims.md
+  ```
+- **[`examples/audit-journal-entry`](examples/audit-journal-entry)** — verify AI-generated accounting entries by recomputing debit = credit balance and checking the cited evidence.
+  ```bash
+  agent-receipt research verify --file examples/audit-journal-entry/entries.md
+  ```
+
+Each prints per-claim `verified` / `FAIL` with the deterministic evidence (expected ↔ actual), and seals the result into a receipt you can `replay` to detect tampering.
+
+---
+
 ## Why this exists
 
 When an AI agent edits your repo, "it said it only changed the auth module" is a claim, not a fact. agent-receipt turns the claim into a checkable receipt:
