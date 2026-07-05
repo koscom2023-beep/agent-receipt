@@ -174,15 +174,16 @@ check("inspectHookParse — 홑백슬래시 손상: 폴백 필요(게이트 미�
 });
 
 // ── DP3: Windows-Cursor → WSL 브리지 커맨드/hooks (순수함수·결정론) ──
-check("cursorWslBridgeCommand — 직접 node+cli 절대경로(로그인셸/PATH 불필요)", () => {
-  const cmd = cursorWslBridgeCommand({ distro: "Ubuntu", nodePath: "/n/node", cliPath: "/c/cli.js" });
-  assert.equal(cmd, "wsl.exe -d Ubuntu -e /n/node /c/cli.js capture --event post --vendor cursor");
+check("cursorWslBridgeCommand — 직접 node+cli 절대경로 + --cd(쓰기가능 CWD 고정)", () => {
+  const cmd = cursorWslBridgeCommand({ distro: "Ubuntu", nodePath: "/n/node", cliPath: "/c/cli.js", cwd: "/home/u" });
+  assert.equal(cmd, "wsl.exe -d Ubuntu --cd /home/u -e /n/node /c/cli.js capture --event post --vendor cursor");
   assert.ok(!cmd.includes("bash -lc")); // 프로필 로드/지연 회피
+  assert.ok(cmd.includes("--cd /home/u")); // wsl -e 기본 CWD(/mnt/c/Windows·쓰기불가) 회피 → capture 기록 보장
 });
 
 check("cursorWslBridgeCommand — --utf8 은 chcp 65001 래핑(옵트인)", () => {
-  const cmd = cursorWslBridgeCommand({ distro: "Ubuntu", nodePath: "/n/node", cliPath: "/c/cli.js", utf8: true });
-  assert.ok(cmd.startsWith('cmd /c "chcp 65001>nul && wsl.exe -d Ubuntu'));
+  const cmd = cursorWslBridgeCommand({ distro: "Ubuntu", nodePath: "/n/node", cliPath: "/c/cli.js", cwd: "/home/u", utf8: true });
+  assert.ok(cmd.startsWith('cmd /c "chcp 65001>nul && wsl.exe -d Ubuntu --cd /home/u'));
   assert.ok(cmd.endsWith('--vendor cursor"'));
 });
 

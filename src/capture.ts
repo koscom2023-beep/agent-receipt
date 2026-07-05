@@ -946,8 +946,10 @@ export function isValidWslDistro(name: string): boolean {
  * (프로브가 증명한 절대경로 패턴·exit0/지연 최적). --utf8: 부모 콘솔 코드페이지 UTF-8(옵트인·파이프
  * stdin 개선은 미검증·수집기가 어차피 BOM/손상 복구).
  */
-export function cursorWslBridgeCommand(opts: { distro: string; nodePath: string; cliPath: string; utf8?: boolean }): string {
-  const base = `wsl.exe -d ${opts.distro} -e ${opts.nodePath} ${opts.cliPath} capture --event post --vendor cursor`;
+export function cursorWslBridgeCommand(opts: { distro: string; nodePath: string; cliPath: string; cwd: string; utf8?: boolean }): string {
+  // --cd: wsl.exe -e 는 Windows 프로세스에서 호출되면 기본 CWD=/mnt/c/Windows(쓰기불가·실측 2026-07-05)라
+  //       capture 가 ./.agent-guard 를 못 써 기록이 유실된다. 쓰기가능 홈으로 고정 → <cwd>/.agent-guard/capture.jsonl.
+  const base = `wsl.exe -d ${opts.distro} --cd ${opts.cwd} -e ${opts.nodePath} ${opts.cliPath} capture --event post --vendor cursor`;
   return opts.utf8 ? `cmd /c "chcp 65001>nul && ${base}"` : base;
 }
 
@@ -1013,7 +1015,8 @@ function runCaptureInstallCursorWslBridge(opts: InstallCursorOpts): never {
   }
   const nodePath = process.execPath;
   const cliPath = process.argv[1] ?? "";
-  const command = cursorWslBridgeCommand({ distro, nodePath, cliPath, utf8: opts.utf8 });
+  const cwd = homedir();
+  const command = cursorWslBridgeCommand({ distro, nodePath, cliPath, cwd, utf8: opts.utf8 });
   const { merged } = buildCursorWslBridgeHooks(command);
 
   console.log("\n# Windows-Cursor → WSL 브리지");
@@ -1023,6 +1026,7 @@ function runCaptureInstallCursorWslBridge(opts: InstallCursorOpts): never {
   console.log("\n# 왜: node·cli 절대경로를 직접 호출 → WSL PATH/로그인셸 불필요. 편집 payload 의 인코딩 손상");
   console.log("#   (BOM·홑백슬래시 등)은 수집기가 복구합니다. --utf8 은 콘솔 코드페이지 UTF-8 실험(옵트인·파이프 개선 미검증).");
   console.log("# 이벤트: afterFileEdit 만 배선(실측된 이벤트·나머지는 실 payload 측정 후).");
+  console.log(`# 기록 위치: ${cwd}/.agent-guard/capture.jsonl (wsl -e 기본 CWD 는 쓰기불가라 --cd 로 홈 고정).`);
   console.log("# 주의: node 버전이 바뀌면(nvm) 경로가 달라지니 이 명령을 다시 실행하세요.");
   console.log("\n# 확인: Cursor 재시작 → 파일 1회 저장 → `agent-receipt capture show` 로 그 파일이 Write 로 잡히면 성공.");
   console.log("# ⚠️ BOM/CR/엄격파싱 게이트의 최종 통과는 실제 Cursor 저장으로만 확정됩니다(자동 '통과' 아님).");
