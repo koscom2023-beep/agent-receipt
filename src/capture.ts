@@ -929,14 +929,58 @@ function cursorSettingsPath(): string {
   return join(homedir(), ".cursor", "hooks.json");
 }
 
-/** `agent-receipt capture install-cursor [--write]` — ~/.cursor/hooks.json 미리보기/병합. */
-export function runCaptureInstallCursor(write: boolean): never {
+// ── Windows-Cursor → WSL 브리지 (capture install-cursor --wsl-bridge) ──
+// 실측(2026-07-05): Cursor 는 Windows 에서 실행되어 C:\Users\<user>\.cursor\hooks.json 만 읽는다.
+// WSL 측 ~/.cursor/hooks.json 의 맨 커맨드(agent-receipt …)는 Windows-Cursor 가 안 읽고 실행도 불가.
+// 브리지 = Windows hooks.json 이 `wsl.exe -e <node절대> <cli절대>` 를 호출 → WSL 의 수집기로 payload 전달.
+// 이벤트는 실측된 afterFileEdit 만 배선(beforeShellExecution 등은 실 payload 측정 후·발명 금지).
+
+/** WSL distro 명 검증 — 방출 셸 커맨드에 보간되는 유일 변수(인젝션 차단). */
+const WSL_DISTRO_RE = /^[A-Za-z0-9._-]+$/;
+export function isValidWslDistro(name: string): boolean {
+  return WSL_DISTRO_RE.test(name);
+}
+
+/**
+ * Windows hooks.json 의 afterFileEdit `command`. node·cli 절대경로를 직접 실행 → 로그인셸/PATH 불필요
+ * (프로브가 증명한 절대경로 패턴·exit0/지연 최적). --utf8: 부모 콘솔 코드페이지 UTF-8(옵트인·파이프
+ * stdin 개선은 미검증·수집기가 어차피 BOM/손상 복구).
+ */
+export function cursorWslBridgeCommand(opts: { distro: string; nodePath: string; cliPath: string; utf8?: boolean }): string {
+  const base = `wsl.exe -d ${opts.distro} -e ${opts.nodePath} ${opts.cliPath} capture --event post --vendor cursor`;
+  return opts.utf8 ? `cmd /c "chcp 65001>nul && ${base}"` : base;
+}
+
+/** Windows Cursor hooks.json(실측 이벤트 afterFileEdit 만) 멱등 병합. 순수함수·기존 이벤트 보존. */
+export function buildCursorWslBridgeHooks(command: string, existing?: CursorHooksShape): { merged: CursorHooksShape; changed: boolean } {
+  const merged: CursorHooksShape = JSON.parse(JSON.stringify(existing ?? {}));
+  if (merged.version === undefined) merged.version = 1;
+  if (!merged.hooks || typeof merged.hooks !== "object") merged.hooks = {};
+  const arr = Array.isArray(merged.hooks.afterFileEdit) ? merged.hooks.afterFileEdit : [];
+  const changed = !arr.find((e) => e?.command === command);
+  if (changed) arr.push({ command });
+  merged.hooks.afterFileEdit = arr;
+  return { merged, changed };
+}
+
+export interface InstallCursorOpts {
+  write: boolean;
+  wslBridge?: boolean;
+  distro?: string;
+  windowsHooks?: string;
+  utf8?: boolean;
+}
+
+/** `agent-receipt capture install-cursor [--write] [--wsl-bridge [--distro N] [--windows-hooks P] [--utf8]]` */
+export function runCaptureInstallCursor(opts: InstallCursorOpts): never {
+  if (opts.wslBridge) return runCaptureInstallCursorWslBridge(opts);
   const p = cursorSettingsPath();
-  if (!write) {
+  if (!opts.write) {
     const { merged } = mergeCursorCaptureHooks({});
     console.log("\n# ~/.cursor/hooks.json 에 병합할 hooks (기존 설정·프로브 훅 보존 — 수동 병합 권장):");
     console.log(JSON.stringify(merged, null, 2));
     console.log("\n자동 병합: agent-receipt capture install-cursor --write");
+    console.log("Windows 에서 Cursor 를 쓰고 WSL 로 브리지하려면: agent-receipt capture install-cursor --wsl-bridge");
     process.exit(0);
   }
   let existing: CursorHooksShape = {};
@@ -957,5 +1001,53 @@ export function runCaptureInstallCursor(write: boolean): never {
   writeFileSync(p, JSON.stringify(merged, null, 2) + "\n");
   console.log(`✅ Cursor capture 훅 설치: ${p} (기존 항목 보존·우리 command 만 추가)`);
   console.log("Cursor 재시작 또는 Reload Window 후 적용. 프로브(~/.cursor-hook-probe)와 공존 가능.");
+  process.exit(0);
+}
+
+/** --wsl-bridge: Windows-side hooks.json 방출(기본 인쇄전용·경로 자동추정 안 함). */
+function runCaptureInstallCursorWslBridge(opts: InstallCursorOpts): never {
+  const distro = opts.distro?.trim() || process.env.WSL_DISTRO_NAME || "Ubuntu";
+  if (!isValidWslDistro(distro)) {
+    console.error(`✗ --distro 값이 유효하지 않습니다(허용 문자: 영숫자 . _ -): ${distro}`);
+    process.exit(2);
+  }
+  const nodePath = process.execPath;
+  const cliPath = process.argv[1] ?? "";
+  const command = cursorWslBridgeCommand({ distro, nodePath, cliPath, utf8: opts.utf8 });
+  const { merged } = buildCursorWslBridgeHooks(command);
+
+  console.log("\n# Windows-Cursor → WSL 브리지");
+  console.log("# Cursor 는 Windows 에서 실행되어 C:\\Users\\<당신의-Windows-사용자명>\\.cursor\\hooks.json 만 읽습니다.");
+  console.log("# 아래를 그 파일에 병합하세요(기존 hooks 보존):");
+  console.log(JSON.stringify(merged, null, 2));
+  console.log("\n# 왜: node·cli 절대경로를 직접 호출 → WSL PATH/로그인셸 불필요. 편집 payload 의 인코딩 손상");
+  console.log("#   (BOM·홑백슬래시 등)은 수집기가 복구합니다. --utf8 은 콘솔 코드페이지 UTF-8 실험(옵트인·파이프 개선 미검증).");
+  console.log("# 이벤트: afterFileEdit 만 배선(실측된 이벤트·나머지는 실 payload 측정 후).");
+  console.log("# 주의: node 버전이 바뀌면(nvm) 경로가 달라지니 이 명령을 다시 실행하세요.");
+  console.log("\n# 확인: Cursor 재시작 → 파일 1회 저장 → `agent-receipt capture show` 로 그 파일이 Write 로 잡히면 성공.");
+  console.log("# ⚠️ BOM/CR/엄격파싱 게이트의 최종 통과는 실제 Cursor 저장으로만 확정됩니다(자동 '통과' 아님).");
+
+  if (opts.windowsHooks) {
+    let existing: CursorHooksShape = {};
+    if (existsSync(opts.windowsHooks)) {
+      try {
+        existing = JSON.parse(readFileSync(opts.windowsHooks, "utf8")) as CursorHooksShape;
+      } catch {
+        console.error(`\n✗ ${opts.windowsHooks} 파싱 실패 — 자동 수정 거부. 위 JSON 을 직접 병합하세요.`);
+        process.exit(2);
+      }
+    }
+    const { merged: m2, changed } = buildCursorWslBridgeHooks(command, existing);
+    if (!changed) {
+      console.log(`\n이미 설치됨(멱등): ${opts.windowsHooks}`);
+      process.exit(0);
+    }
+    mkdirSync(dirname(opts.windowsHooks), { recursive: true });
+    writeFileSync(opts.windowsHooks, JSON.stringify(m2, null, 2) + "\n");
+    console.log(`\n✅ Windows hooks.json 에 브리지 설치: ${opts.windowsHooks} (기존 보존·afterFileEdit 만 추가)`);
+  } else {
+    console.log("\n# 파일로 직접 쓰려면(경로 명시·자동추정 안 함):");
+    console.log("#   agent-receipt capture install-cursor --wsl-bridge --windows-hooks '/mnt/c/Users/<사용자명>/.cursor/hooks.json'");
+  }
   process.exit(0);
 }

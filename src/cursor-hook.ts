@@ -84,6 +84,41 @@ export function parseHookStdin(raw: string): unknown {
   }
 }
 
+/** 선두 UTF-8 BOM 1회 제거 — 훅 stdin 의 유일 승인 정규화(capture 진입점과 동일 규칙). 내용 불변. */
+export function stripLeadingBom(raw: string): string {
+  return raw.replace(/^﻿/, "");
+}
+
+/** inspectHookParse 결과 — 진단/게이트(D4)용. */
+export interface HookParseReport {
+  ok: boolean; // 최종적으로 파싱됐나
+  usedFallback: boolean; // BOM 스트립 후 엄격 파싱이 실패해 sanitize 폴백이 필요했나
+  hadBom: boolean;
+  hadCr: boolean;
+}
+
+/**
+ * 진단 전용(비-핫패스): 훅 stdin 원문이 **BOM 스트립 후 엄격 파싱 첫 시도**로 사는지, 아니면
+ * sanitizeLooseJson 폴백이 필요한지 계측한다. parseHookStdin 의 동작을 바꾸지 않는다(순수·관측만).
+ * 게이트(c) 재정의="BOM 스트립 후 폴백 없이 엄격 파싱"의 자동 판정에 쓴다.
+ */
+export function inspectHookParse(raw: string): HookParseReport {
+  const hadBom = raw.charCodeAt(0) === 0xfeff;
+  const hadCr = raw.includes("\r");
+  const stripped = stripLeadingBom(raw);
+  try {
+    JSON.parse(stripped);
+    return { ok: true, usedFallback: false, hadBom, hadCr };
+  } catch {
+    try {
+      JSON.parse(sanitizeLooseJson(raw));
+      return { ok: true, usedFallback: true, hadBom, hadCr };
+    } catch {
+      return { ok: false, usedFallback: true, hadBom, hadCr };
+    }
+  }
+}
+
 function pickPath(o: Record<string, unknown>, input: Record<string, unknown>): string | undefined {
   const candidates = [
     input.file_path,

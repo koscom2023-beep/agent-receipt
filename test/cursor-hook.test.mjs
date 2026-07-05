@@ -1,14 +1,14 @@
 // Cursor 훅 어댑터 + deny stdout (멀티벤더) — fixtures/multiagent/*.json
 // `node test/cursor-hook.test.mjs`
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
-import { normalizeAgentPath, adaptCursorHookPayload, parseHookStdin, sanitizeLooseJson } from "../dist/cursor-hook.js";
+import { normalizeAgentPath, adaptCursorHookPayload, parseHookStdin, sanitizeLooseJson, inspectHookParse } from "../dist/cursor-hook.js";
 import { formatGuardDeny, inferHookVendor } from "../dist/hook-deny.js";
-import { normalizeCursorEnvelope, classifyEvent } from "../dist/capture.js";
+import { normalizeCursorEnvelope, classifyEvent, cursorWslBridgeCommand, buildCursorWslBridgeHooks, isValidWslDistro } from "../dist/capture.js";
 
 const FIX = join(process.cwd(), "fixtures", "multiagent");
 const CLI = join(process.cwd(), "dist", "cli.js");
@@ -148,6 +148,90 @@ check("CLI capture pre --vendor cursor — 손상 payload도 file_path 추출·�
   assert.equal(r.status, 0, r.stderr);
   const out = JSON.parse(r.stdout.trim());
   assert.equal(out.permission, "deny"); // 복구 없으면 파싱실패→degraded→deny 안 나옴
+});
+
+// ── D4 게이트 계측: inspectHookParse (BOM 스트립 후 폴백 필요 여부) ──
+check("inspectHookParse — 클린 payload: 폴백 불필요·게이트(c) 통과", () => {
+  const clean = JSON.stringify({ conversation_id: "c", tool_name: "Write", tool_input: { file_path: "a.ts" } });
+  const r = inspectHookParse(clean);
+  assert.deepEqual(r, { ok: true, usedFallback: false, hadBom: false, hadCr: false });
+});
+
+check("inspectHookParse — BOM만: 스트립 후 엄격파싱 성공(폴백 불필요)", () => {
+  const clean = JSON.stringify({ tool_name: "Write", tool_input: { file_path: "a.ts" } });
+  const r = inspectHookParse("﻿" + clean);
+  assert.equal(r.ok, true);
+  assert.equal(r.hadBom, true);
+  assert.equal(r.usedFallback, false); // 게이트(c): BOM 스트립 후엔 폴백 없이 통과
+});
+
+check("inspectHookParse — 홑백슬래시 손상: 폴백 필요(게이트 미달 신호)", () => {
+  const broken = String.raw`{"tool_name":"Write","tool_input":{"file_path":"\\\\wsl.localhost\\Ubuntu\\home\\u\\a.ts"},"transcript_path":"C:\Users\test\.cursor\x"}`;
+  const r = inspectHookParse("﻿" + broken);
+  assert.equal(r.ok, true); // 결국 B 가 복구
+  assert.equal(r.hadBom, true);
+  assert.equal(r.usedFallback, true); // 홑백슬래시 때문에 sanitize 필요 → 게이트(c) 미달(원천 개선 여지)
+});
+
+// ── DP3: Windows-Cursor → WSL 브리지 커맨드/hooks (순수함수·결정론) ──
+check("cursorWslBridgeCommand — 직접 node+cli 절대경로(로그인셸/PATH 불필요)", () => {
+  const cmd = cursorWslBridgeCommand({ distro: "Ubuntu", nodePath: "/n/node", cliPath: "/c/cli.js" });
+  assert.equal(cmd, "wsl.exe -d Ubuntu -e /n/node /c/cli.js capture --event post --vendor cursor");
+  assert.ok(!cmd.includes("bash -lc")); // 프로필 로드/지연 회피
+});
+
+check("cursorWslBridgeCommand — --utf8 은 chcp 65001 래핑(옵트인)", () => {
+  const cmd = cursorWslBridgeCommand({ distro: "Ubuntu", nodePath: "/n/node", cliPath: "/c/cli.js", utf8: true });
+  assert.ok(cmd.startsWith('cmd /c "chcp 65001>nul && wsl.exe -d Ubuntu'));
+  assert.ok(cmd.endsWith('--vendor cursor"'));
+});
+
+check("buildCursorWslBridgeHooks — afterFileEdit 만·멱등(발명 금지)", () => {
+  const cmd = "wsl.exe -d Ubuntu -e /n/node /c/cli.js capture --event post --vendor cursor";
+  const first = buildCursorWslBridgeHooks(cmd);
+  assert.equal(first.changed, true);
+  assert.equal(first.merged.version, 1);
+  assert.deepEqual(Object.keys(first.merged.hooks), ["afterFileEdit"]); // 실측 이벤트만
+  assert.equal(first.merged.hooks.afterFileEdit[0].command, cmd);
+  const again = buildCursorWslBridgeHooks(cmd, first.merged);
+  assert.equal(again.changed, false); // 멱등
+  assert.equal(again.merged.hooks.afterFileEdit.length, 1);
+});
+
+check("buildCursorWslBridgeHooks — 기존 hooks 보존", () => {
+  const cmd = "wsl.exe -d Ubuntu -e /n/node /c/cli.js capture --event post --vendor cursor";
+  const existing = { version: 1, hooks: { stop: [{ command: "keep-me" }], afterFileEdit: [{ command: "user-hook" }] } };
+  const { merged, changed } = buildCursorWslBridgeHooks(cmd, existing);
+  assert.equal(changed, true);
+  assert.equal(merged.hooks.stop[0].command, "keep-me"); // 무관 이벤트 보존
+  assert.equal(merged.hooks.afterFileEdit.length, 2); // 기존 user-hook + 우리 것
+  assert.ok(merged.hooks.afterFileEdit.some((e) => e.command === "user-hook"));
+});
+
+check("isValidWslDistro — 정상 통과·셸 인젝션 거부", () => {
+  assert.equal(isValidWslDistro("Ubuntu"), true);
+  assert.equal(isValidWslDistro("Ubuntu-22.04"), true);
+  assert.equal(isValidWslDistro("; rm -rf /"), false);
+  assert.equal(isValidWslDistro("a && b"), false);
+  assert.equal(isValidWslDistro(""), false);
+});
+
+// ── AC4 결정론 코어: 브리지가 방출하는 커맨드 본체(afterFileEdit payload → capture 1건 append·exit0) ──
+check("CLI capture post --vendor cursor(브리지 본체) — afterFileEdit → capture 1건·exit0", () => {
+  const d = mkdtempSync(join(tmpdir(), "ar-cursor-bridge-"));
+  mkdirSync(join(d, ".agent-guard"), { recursive: true });
+  const raw = { conversation_id: "c-bridge", hook_event_name: "afterFileEdit", file_path: "\\\\wsl.localhost\\Ubuntu\\home\\u\\edited.ts" };
+  const r = spawnSync("node", [CLI, "capture", "--event", "post", "--vendor", "cursor"], {
+    cwd: d,
+    input: "﻿" + JSON.stringify(raw), // 실측 선두 BOM 재현
+    encoding: "utf8",
+  });
+  assert.equal(r.status, 0, r.stderr);
+  const logp = join(d, ".agent-guard", "capture.jsonl");
+  assert.ok(existsSync(logp), "capture.jsonl 생성");
+  const lines = readFileSync(logp, "utf8").trim().split("\n").filter(Boolean);
+  assert.equal(lines.length, 1);
+  assert.ok(JSON.stringify(JSON.parse(lines[0])).includes("edited.ts"));
 });
 
 if (fail.length) {

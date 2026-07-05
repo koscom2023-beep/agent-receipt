@@ -172,7 +172,7 @@ agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
 ■ 연동(experimental — 미리보기, 전송 없음):
   export --format <slack|json|github-pr|otel|langfuse> --receipt <p>
   gen-claim --transcript <jsonl> [--out <claim.json>]   에이전트 transcript → claim.json(이후 claims 로 대조)
-  capture [--event pre|post|fail] / show [--json] / verify / reset / install [--write] [--global] / install-cursor [--write] / uninstall   git 너머 행위 추적(훅 stdin·값 미저장·체인 검증·alpha)
+  capture [--event pre|post|fail] / show [--json] / verify / reset / install [--write] [--global] / install-cursor [--write] [--wsl-bridge] / uninstall   git 너머 행위 추적(훅 stdin·값 미저장·체인 검증·alpha)
 
 ■ 기타: run
 
@@ -379,7 +379,14 @@ function main(): void {
     if (sub === "verify") runCaptureVerify();
     if (sub === "reset") runCaptureReset();
     if (sub === "install") runCaptureInstall(hasFlag("--write"), hasFlag("--global"));
-    if (sub === "install-cursor") runCaptureInstallCursor(hasFlag("--write"));
+    if (sub === "install-cursor")
+      runCaptureInstallCursor({
+        write: hasFlag("--write"),
+        wslBridge: hasFlag("--wsl-bridge"),
+        distro: getArg("--distro"),
+        windowsHooks: getArg("--windows-hooks"),
+        utf8: hasFlag("--utf8"),
+      });
     if (sub === "uninstall") runCaptureUninstall(hasFlag("--write"), hasFlag("--global"));
     const vendorArg = getArg("--vendor");
     const vendor =
