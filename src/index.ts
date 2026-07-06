@@ -20,13 +20,16 @@ export {
   claimSchema,
   evaluateClaim,
 } from "./evidencekernel.js";
-export type { ClaimEvaluation, EvalClaimInput } from "./evidencekernel.js";
+export type { ClaimEvaluation, EvalClaimInput, Grade } from "./evidencekernel.js";
+export { CHECK_GRADES, GRADE_RANK } from "./evidencekernel.js";
 
 // Verification Receipt 생산/재검증
 export { buildVerificationReceipt, tierProvenance, replayVerificationReceipt } from "./vreceipt.js";
 export type { VReceiptInput } from "./vreceipt.js";
 export { runBench, scoreClaim, computeMetrics, verdictOf } from "./bench.js";
 export type { Verdict, BenchClaim, ClaimScore, BenchMetrics } from "./bench.js";
+export { leafHash, nodeHash, merkleRoot, merkleRootHex, inclusionProof, verifyInclusion, consistencyProof, verifyConsistency, runMerkle } from "./merkle.js";
+export { buildClaimVerificationStatement, claimVerificationPredicateSchema, CLAIM_VERIFICATION_PREDICATE_TYPE, runPredicate } from "./predicate.js";
 
 // 로딩 → 그래프/집계/triage/diff/이력/상태판 (CLI graph 표면과 같은 함수)
 export {

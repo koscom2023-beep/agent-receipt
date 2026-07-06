@@ -457,6 +457,8 @@ export interface ClaimEvaluation {
   evidence: Record<string, CheckEvidence>; // 실패 check 별 expected/actual(결정론·증명)
   failed: boolean; // 어느 근거든 불일치(not-found/mismatch/invalid)
   verified: boolean; // 실증된 근거 1+ 이고 불일치 0
+  assuranceGrade: Grade | null; // R2: 실증된 positive check 중 가장 강한 등급(없으면 null) — 실제 도달한 보증 강도
+  abstain: boolean; // R2: 판정 보류 — 실증 근거도 불일치도 없음(no basis·미검증 경계)
 }
 
 function parseStated(v: unknown): number | null {
@@ -472,28 +474,34 @@ function parseStated(v: unknown): number | null {
 // 새 검증기 = descriptor 한 줄 등록. 엔진(evaluateClaim)은 불변. run 이 null 이면 그 주장엔 미적용.
 // 정직: 이건 플러그인/레지스트리 디스패치지 VM(DSL·opcode·실행컨텍스트·상태)이 아니다. "VM"은 미래 목표.
 // positive=이 검증이 verified 이면 "실증 근거"로 침(link 는 well-formedness 라 positive=false·advisory).
+// 증거 등급(R2·감사 증거 위계): A=커널이 답을 재계산(수치=operands·해시/서명=content — 출처 수치를 안 믿음)
+//   · B=resolved 사실/부분문자열 대조(출처·git 진실성에 의존) · C=well-formedness(link). 재계산 > 대조 > 형식.
+export type Grade = "A" | "B" | "C";
+export const GRADE_RANK: Record<Grade, number> = { A: 3, B: 2, C: 1 };
 export interface CheckDescriptor {
   kind: string;
   positive: boolean;
+  grade: Grade;
   run: (c: EvalClaimInput, source: string | null) => string | null;
 }
 export const CHECK_REGISTRY: CheckDescriptor[] = [
-  { kind: "citation", positive: true, run: (c, s) => (typeof c.quotedText === "string" && c.quotedText ? citationStatus(c.quotedText, s) : null) },
-  { kind: "number", positive: true, run: (c, s) => (c.statedValue !== undefined ? numberStatus(parseStated(c.statedValue), { source: s, op: c.op, operands: Array.isArray(c.operands) ? (c.operands as number[]) : undefined, eps: typeof c.eps === "number" ? c.eps : undefined }) : null) },
-  { kind: "date", positive: true, run: (c, s) => (c.statedDate !== undefined ? dateStatus(typeof c.statedDate === "string" ? c.statedDate : null, s) : null) },
-  { kind: "hash", positive: true, run: (c) => (c.statedHash !== undefined ? hashStatus(typeof c.statedHash === "string" ? c.statedHash : null, typeof c.content === "string" ? c.content : null, typeof c.algo === "string" ? c.algo : "sha256") : null) },
-  { kind: "signature", positive: true, run: (c) => (c.signature !== undefined || c.publicKey !== undefined ? signatureStatus(typeof c.content === "string" ? c.content : null, typeof c.signature === "string" ? c.signature : null, typeof c.publicKey === "string" ? c.publicKey : null) : null) },
-  { kind: "link", positive: false, run: (c) => (typeof c.link === "string" ? linkStatus(c.link) : null) },
-  { kind: "commit", positive: true, run: (c) => (typeof c.statedCommit === "string" ? commitStatus(c.statedCommit, typeof c.commitExists === "boolean" ? c.commitExists : null) : null) },
-  { kind: "fileChanged", positive: true, run: (c) => (typeof c.statedChangedFile === "string" ? fileChangedStatus(c.statedChangedFile, typeof c.changedFiles === "string" ? c.changedFiles : null) : null) },
-  { kind: "diffContains", positive: true, run: (c) => (typeof c.statedDiffText === "string" ? diffContainsStatus(c.statedDiffText, typeof c.diffText === "string" ? c.diffText : null) : null) },
-  { kind: "schema", positive: true, run: (c) => (c.schemaData !== undefined && c.schemaDef !== undefined ? schemaStatus(c.schemaData, c.schemaDef) : null) },
-  { kind: "version", positive: true, run: (c) => (typeof c.statedPackage === "string" ? versionStatus(c.statedPackage, typeof c.statedPackageVersion === "string" ? c.statedPackageVersion : null, c.dependencyMap && typeof c.dependencyMap === "object" ? (c.dependencyMap as Record<string, unknown>) : null) : null) },
-  { kind: "file", positive: true, run: (c) => (typeof c.statedFile === "string" ? fileStatus(c.statedFile, typeof c.fileExists === "boolean" ? c.fileExists : null) : null) },
-  { kind: "receipt", positive: true, run: (c) => (typeof c.statedReceiptId === "string" ? receiptStatus(c.statedReceiptId, c.receiptFacts && typeof c.receiptFacts === "object" ? (c.receiptFacts as ReceiptFacts) : null) : null) },
-  { kind: "artifact", positive: true, run: (c) => (typeof c.statedArtifact === "string" ? artifactStatus(c.statedArtifact, { minBytes: typeof c.artifactMinBytes === "number" ? c.artifactMinBytes : undefined, maxBytes: typeof c.artifactMaxBytes === "number" ? c.artifactMaxBytes : undefined, sha256: typeof c.artifactSha256 === "string" ? c.artifactSha256 : undefined }, c.artifactFacts && typeof c.artifactFacts === "object" ? (c.artifactFacts as ArtifactFacts) : null) : null) },
+  { kind: "citation", positive: true, grade: "B", run: (c, s) => (typeof c.quotedText === "string" && c.quotedText ? citationStatus(c.quotedText, s) : null) },
+  { kind: "number", positive: true, grade: "A", run: (c, s) => (c.statedValue !== undefined ? numberStatus(parseStated(c.statedValue), { source: s, op: c.op, operands: Array.isArray(c.operands) ? (c.operands as number[]) : undefined, eps: typeof c.eps === "number" ? c.eps : undefined }) : null) },
+  { kind: "date", positive: true, grade: "B", run: (c, s) => (c.statedDate !== undefined ? dateStatus(typeof c.statedDate === "string" ? c.statedDate : null, s) : null) },
+  { kind: "hash", positive: true, grade: "A", run: (c) => (c.statedHash !== undefined ? hashStatus(typeof c.statedHash === "string" ? c.statedHash : null, typeof c.content === "string" ? c.content : null, typeof c.algo === "string" ? c.algo : "sha256") : null) },
+  { kind: "signature", positive: true, grade: "A", run: (c) => (c.signature !== undefined || c.publicKey !== undefined ? signatureStatus(typeof c.content === "string" ? c.content : null, typeof c.signature === "string" ? c.signature : null, typeof c.publicKey === "string" ? c.publicKey : null) : null) },
+  { kind: "link", positive: false, grade: "C", run: (c) => (typeof c.link === "string" ? linkStatus(c.link) : null) },
+  { kind: "commit", positive: true, grade: "B", run: (c) => (typeof c.statedCommit === "string" ? commitStatus(c.statedCommit, typeof c.commitExists === "boolean" ? c.commitExists : null) : null) },
+  { kind: "fileChanged", positive: true, grade: "B", run: (c) => (typeof c.statedChangedFile === "string" ? fileChangedStatus(c.statedChangedFile, typeof c.changedFiles === "string" ? c.changedFiles : null) : null) },
+  { kind: "diffContains", positive: true, grade: "B", run: (c) => (typeof c.statedDiffText === "string" ? diffContainsStatus(c.statedDiffText, typeof c.diffText === "string" ? c.diffText : null) : null) },
+  { kind: "schema", positive: true, grade: "B", run: (c) => (c.schemaData !== undefined && c.schemaDef !== undefined ? schemaStatus(c.schemaData, c.schemaDef) : null) },
+  { kind: "version", positive: true, grade: "B", run: (c) => (typeof c.statedPackage === "string" ? versionStatus(c.statedPackage, typeof c.statedPackageVersion === "string" ? c.statedPackageVersion : null, c.dependencyMap && typeof c.dependencyMap === "object" ? (c.dependencyMap as Record<string, unknown>) : null) : null) },
+  { kind: "file", positive: true, grade: "B", run: (c) => (typeof c.statedFile === "string" ? fileStatus(c.statedFile, typeof c.fileExists === "boolean" ? c.fileExists : null) : null) },
+  { kind: "receipt", positive: true, grade: "B", run: (c) => (typeof c.statedReceiptId === "string" ? receiptStatus(c.statedReceiptId, c.receiptFacts && typeof c.receiptFacts === "object" ? (c.receiptFacts as ReceiptFacts) : null) : null) },
+  { kind: "artifact", positive: true, grade: "B", run: (c) => (typeof c.statedArtifact === "string" ? artifactStatus(c.statedArtifact, { minBytes: typeof c.artifactMinBytes === "number" ? c.artifactMinBytes : undefined, maxBytes: typeof c.artifactMaxBytes === "number" ? c.artifactMaxBytes : undefined, sha256: typeof c.artifactSha256 === "string" ? c.artifactSha256 : undefined }, c.artifactFacts && typeof c.artifactFacts === "object" ? (c.artifactFacts as ArtifactFacts) : null) : null) },
 ];
 export const CHECK_KINDS: string[] = CHECK_REGISTRY.map((d) => d.kind);
+export const CHECK_GRADES: Record<string, Grade> = Object.fromEntries(CHECK_REGISTRY.map((d) => [d.kind, d.grade]));
 const FAILED_STATUSES = new Set(["not-found", "mismatch", "invalid"]);
 
 // 실패 check 의 evidence(expected/actual) 생산 — 결정론(커널이 이미 가진 입력·재계산으로). 추정 없음.
@@ -584,11 +592,15 @@ export function evaluateClaim(c: EvalClaimInput, source: string | null): ClaimEv
   const results: Record<string, string | null> = {};
   let failed = false;
   let positiveVerified = false;
+  let bestGrade: Grade | null = null;
   for (const d of CHECK_REGISTRY) {
     const st = d.run(c, source);
     results[d.kind] = st;
     if (st && FAILED_STATUSES.has(st)) failed = true;
-    if (d.positive && st === "verified") positiveVerified = true;
+    if (d.positive && st === "verified") {
+      positiveVerified = true;
+      if (bestGrade === null || GRADE_RANK[d.grade] > GRADE_RANK[bestGrade]) bestGrade = d.grade;
+    }
   }
   return {
     citation: (results.citation as CitationStatus) ?? null,
@@ -609,6 +621,8 @@ export function evaluateClaim(c: EvalClaimInput, source: string | null): ClaimEv
     evidence: evidenceFor(c, source, results),
     failed,
     verified: !failed && positiveVerified,
+    assuranceGrade: positiveVerified ? bestGrade : null,
+    abstain: !failed && !positiveVerified,
   };
 }
 

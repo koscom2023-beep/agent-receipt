@@ -30,6 +30,12 @@ assert.ok(Math.abs(m.f1 - (2 * (5 / 6) * 1) / (5 / 6 + 1)) < 1e-9, "F1 정확");
 assert.ok(Math.abs(m.accuracy - 11 / 12) < 1e-9, "정확도 = 11/12 ≈ 91.7%");
 assert.deepEqual(m.byVerdict, { verified: 5, failed: 6, advisory: 1 }, "predicted 분포");
 
+// R2: 보증 등급 분포 — 정합 인용 5건 중 number(A)·hash(A)=2, citation·date·schema(B)=3, 나머지 근거없음/실패=7
+assert.deepEqual(m.byGrade, { A: 2, B: 3, C: 0, none: 7 }, "assuranceGrade 분포");
+assert.equal(scores[6].assuranceGrade, "A", "수치 재계산=A");
+assert.equal(scores[5].assuranceGrade, "B", "인용 대조=B");
+assert.equal(scores[11].assuranceGrade, null, "근거 없음(보류)=등급 null");
+
 // verdictOf 매핑(코어 의미론)
 assert.equal(verdictOf({ failed: true, verified: false }), "failed");
 assert.equal(verdictOf({ failed: false, verified: true }), "verified");

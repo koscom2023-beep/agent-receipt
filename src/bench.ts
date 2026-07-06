@@ -10,7 +10,7 @@
 import { readFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { evaluateOfflineClaim, parseMarkdownReport, type ResearchClaim } from "./research.js";
-import { claimFingerprintV1, type ClaimEvaluation } from "./evidencekernel.js";
+import { claimFingerprintV1, type ClaimEvaluation, type Grade } from "./evidencekernel.js";
 import { writeVerificationReceipt, tierProvenance } from "./vreceipt.js";
 
 export type Verdict = "verified" | "failed" | "advisory";
@@ -33,6 +33,7 @@ export interface ClaimScore {
   identical: boolean; // runs 회 전부 (판정+지문) 동일 = 재현
   correct: boolean | null; // expected 있을 때만
   fingerprint: string; // 시간축 동일성 키(커널 SSOT)
+  assuranceGrade: Grade | null; // R2: 실증된 positive check 중 최강 등급(없으면 null)
 }
 
 // 한 주장을 repeat 회 평가 — 판정+지문이 매회 동일한지(재현성) 측정. predicted=1회차(결정론이면 전 회차 동일).
@@ -40,6 +41,7 @@ export function scoreClaim(claim: BenchClaim, repeat: number): ClaimScore {
   const reps = Number.isFinite(repeat) && repeat >= 1 ? Math.floor(repeat) : 1;
   let firstV: Verdict | null = null;
   let firstFp = "";
+  let firstGrade: Grade | null = null;
   let identical = true;
   const stmt = typeof claim.statement === "string" ? claim.statement : "";
   const url = typeof claim.sourceUrl === "string" ? claim.sourceUrl : null;
@@ -54,6 +56,7 @@ export function scoreClaim(claim: BenchClaim, repeat: number): ClaimScore {
     if (firstV === null) {
       firstV = v;
       firstFp = fp;
+      firstGrade = ev.assuranceGrade;
     } else if (v !== firstV || fp !== firstFp) {
       identical = false;
     }
@@ -68,6 +71,7 @@ export function scoreClaim(claim: BenchClaim, repeat: number): ClaimScore {
     identical,
     correct: expected === null ? null : predicted === expected,
     fingerprint: firstFp,
+    assuranceGrade: firstGrade,
   };
 }
 
@@ -84,6 +88,7 @@ export interface BenchMetrics {
   f1: number | null;
   accuracy: number | null;
   byVerdict: { verified: number; failed: number; advisory: number }; // predicted 분포
+  byGrade: { A: number; B: number; C: number; none: number }; // R2: assuranceGrade 분포
   reproducible: boolean; // 모든 주장이 runs 회 전부 동일
   identicalClaims: number;
   runsPerClaim: number;
@@ -93,8 +98,11 @@ export interface BenchMetrics {
 export function computeMetrics(scores: ClaimScore[]): BenchMetrics {
   let tp = 0, fp = 0, fn = 0, tn = 0, labeled = 0, correct = 0, identicalClaims = 0, runsPerClaim = 0, totalEvaluations = 0;
   const byVerdict = { verified: 0, failed: 0, advisory: 0 };
+  const byGrade = { A: 0, B: 0, C: 0, none: 0 };
   for (const s of scores) {
     byVerdict[s.predicted]++;
+    if (s.assuranceGrade) byGrade[s.assuranceGrade]++;
+    else byGrade.none++;
     if (s.identical) identicalClaims++;
     if (s.runs > runsPerClaim) runsPerClaim = s.runs;
     totalEvaluations += s.runs;
@@ -115,7 +123,7 @@ export function computeMetrics(scores: ClaimScore[]): BenchMetrics {
   const accuracy = labeled > 0 ? correct / labeled : null;
   return {
     total: scores.length, labeled, tp, fp, fn, tn, precision, recall, f1, accuracy,
-    byVerdict, reproducible: identicalClaims === scores.length, identicalClaims, runsPerClaim, totalEvaluations,
+    byVerdict, byGrade, reproducible: identicalClaims === scores.length, identicalClaims, runsPerClaim, totalEvaluations,
   };
 }
 
@@ -179,12 +187,14 @@ export function runBench(fileArg: string | undefined, opts: { repeat?: number; o
     const mark = s.expected === null ? "·" : s.correct ? "✓" : "✗";
     const lab = s.expected ? `gold ${s.expected}` : "unlabeled";
     const rep = s.identical ? `${s.runs}/${s.runs} 동일` : `⚠ 비결정(${s.runs}회 중 불일치)`;
+    const gr = s.assuranceGrade ? ` [등급 ${s.assuranceGrade}]` : "";
     const st = s.statement.length > 46 ? s.statement.slice(0, 43) + "..." : s.statement;
-    console.log(`[${i + 1}] ${mark} predicted ${s.predicted} · ${lab} · ${rep}  ${st}`);
+    console.log(`[${i + 1}] ${mark} predicted ${s.predicted}${gr} · ${lab} · ${rep}  ${st}`);
   }
   console.log(line);
   console.log(`재현성: ${m.identicalClaims}/${m.total} 주장이 ${repeat}회 전부 동일 (${m.totalEvaluations} 평가) → ${m.reproducible ? "✅ 완전 재현" : "❌ 비결정 발견"}`);
-  console.log(`predicted 분포: verified ${m.byVerdict.verified} · failed ${m.byVerdict.failed} · advisory ${m.byVerdict.advisory}`);
+  console.log(`predicted 분포: verified ${m.byVerdict.verified} · failed ${m.byVerdict.failed} · abstain(보류) ${m.byVerdict.advisory}`);
+  console.log(`보증 등급(R2·assurance): A(재계산) ${m.byGrade.A} · B(대조) ${m.byGrade.B} · C(형식) ${m.byGrade.C} · 없음 ${m.byGrade.none}`);
   if (m.labeled > 0) {
     console.log(`혼동행렬(positive=failed·나쁜 주장 포착): TP ${m.tp} · FP ${m.fp} · FN ${m.fn} · TN ${m.tn}  (라벨 ${m.labeled}건)`);
     console.log(`정밀 ${pct(m.precision)} · 재현율 ${pct(m.recall)} · F1 ${pct(m.f1)} · 정확도 ${pct(m.accuracy)}`);
@@ -200,7 +210,7 @@ export function runBench(fileArg: string | undefined, opts: { repeat?: number; o
       inputRaw: raw,
       subject: query,
       provenance: tierProvenance(undefined),
-      results: scores.map((s) => ({ statement: s.statement, expected: s.expected, predicted: s.predicted, correct: s.correct, identical: s.identical, runs: s.runs, fingerprint: s.fingerprint })),
+      results: scores.map((s) => ({ statement: s.statement, expected: s.expected, predicted: s.predicted, assuranceGrade: s.assuranceGrade, correct: s.correct, identical: s.identical, runs: s.runs, fingerprint: s.fingerprint })),
       summary: { total: m.total, labeled: m.labeled, tp: m.tp, fp: m.fp, fn: m.fn, tn: m.tn, identicalClaims: m.identicalClaims, reproducible: m.reproducible ? 1 : 0 },
       verdict: m.reproducible ? "pass" : "fail",
       verifiedAt: new Date().toISOString(),

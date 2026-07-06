@@ -366,23 +366,25 @@ function parseStated(v) {
     }
     return null;
 }
+export const GRADE_RANK = { A: 3, B: 2, C: 1 };
 export const CHECK_REGISTRY = [
-    { kind: "citation", positive: true, run: (c, s) => (typeof c.quotedText === "string" && c.quotedText ? citationStatus(c.quotedText, s) : null) },
-    { kind: "number", positive: true, run: (c, s) => (c.statedValue !== undefined ? numberStatus(parseStated(c.statedValue), { source: s, op: c.op, operands: Array.isArray(c.operands) ? c.operands : undefined, eps: typeof c.eps === "number" ? c.eps : undefined }) : null) },
-    { kind: "date", positive: true, run: (c, s) => (c.statedDate !== undefined ? dateStatus(typeof c.statedDate === "string" ? c.statedDate : null, s) : null) },
-    { kind: "hash", positive: true, run: (c) => (c.statedHash !== undefined ? hashStatus(typeof c.statedHash === "string" ? c.statedHash : null, typeof c.content === "string" ? c.content : null, typeof c.algo === "string" ? c.algo : "sha256") : null) },
-    { kind: "signature", positive: true, run: (c) => (c.signature !== undefined || c.publicKey !== undefined ? signatureStatus(typeof c.content === "string" ? c.content : null, typeof c.signature === "string" ? c.signature : null, typeof c.publicKey === "string" ? c.publicKey : null) : null) },
-    { kind: "link", positive: false, run: (c) => (typeof c.link === "string" ? linkStatus(c.link) : null) },
-    { kind: "commit", positive: true, run: (c) => (typeof c.statedCommit === "string" ? commitStatus(c.statedCommit, typeof c.commitExists === "boolean" ? c.commitExists : null) : null) },
-    { kind: "fileChanged", positive: true, run: (c) => (typeof c.statedChangedFile === "string" ? fileChangedStatus(c.statedChangedFile, typeof c.changedFiles === "string" ? c.changedFiles : null) : null) },
-    { kind: "diffContains", positive: true, run: (c) => (typeof c.statedDiffText === "string" ? diffContainsStatus(c.statedDiffText, typeof c.diffText === "string" ? c.diffText : null) : null) },
-    { kind: "schema", positive: true, run: (c) => (c.schemaData !== undefined && c.schemaDef !== undefined ? schemaStatus(c.schemaData, c.schemaDef) : null) },
-    { kind: "version", positive: true, run: (c) => (typeof c.statedPackage === "string" ? versionStatus(c.statedPackage, typeof c.statedPackageVersion === "string" ? c.statedPackageVersion : null, c.dependencyMap && typeof c.dependencyMap === "object" ? c.dependencyMap : null) : null) },
-    { kind: "file", positive: true, run: (c) => (typeof c.statedFile === "string" ? fileStatus(c.statedFile, typeof c.fileExists === "boolean" ? c.fileExists : null) : null) },
-    { kind: "receipt", positive: true, run: (c) => (typeof c.statedReceiptId === "string" ? receiptStatus(c.statedReceiptId, c.receiptFacts && typeof c.receiptFacts === "object" ? c.receiptFacts : null) : null) },
-    { kind: "artifact", positive: true, run: (c) => (typeof c.statedArtifact === "string" ? artifactStatus(c.statedArtifact, { minBytes: typeof c.artifactMinBytes === "number" ? c.artifactMinBytes : undefined, maxBytes: typeof c.artifactMaxBytes === "number" ? c.artifactMaxBytes : undefined, sha256: typeof c.artifactSha256 === "string" ? c.artifactSha256 : undefined }, c.artifactFacts && typeof c.artifactFacts === "object" ? c.artifactFacts : null) : null) },
+    { kind: "citation", positive: true, grade: "B", run: (c, s) => (typeof c.quotedText === "string" && c.quotedText ? citationStatus(c.quotedText, s) : null) },
+    { kind: "number", positive: true, grade: "A", run: (c, s) => (c.statedValue !== undefined ? numberStatus(parseStated(c.statedValue), { source: s, op: c.op, operands: Array.isArray(c.operands) ? c.operands : undefined, eps: typeof c.eps === "number" ? c.eps : undefined }) : null) },
+    { kind: "date", positive: true, grade: "B", run: (c, s) => (c.statedDate !== undefined ? dateStatus(typeof c.statedDate === "string" ? c.statedDate : null, s) : null) },
+    { kind: "hash", positive: true, grade: "A", run: (c) => (c.statedHash !== undefined ? hashStatus(typeof c.statedHash === "string" ? c.statedHash : null, typeof c.content === "string" ? c.content : null, typeof c.algo === "string" ? c.algo : "sha256") : null) },
+    { kind: "signature", positive: true, grade: "A", run: (c) => (c.signature !== undefined || c.publicKey !== undefined ? signatureStatus(typeof c.content === "string" ? c.content : null, typeof c.signature === "string" ? c.signature : null, typeof c.publicKey === "string" ? c.publicKey : null) : null) },
+    { kind: "link", positive: false, grade: "C", run: (c) => (typeof c.link === "string" ? linkStatus(c.link) : null) },
+    { kind: "commit", positive: true, grade: "B", run: (c) => (typeof c.statedCommit === "string" ? commitStatus(c.statedCommit, typeof c.commitExists === "boolean" ? c.commitExists : null) : null) },
+    { kind: "fileChanged", positive: true, grade: "B", run: (c) => (typeof c.statedChangedFile === "string" ? fileChangedStatus(c.statedChangedFile, typeof c.changedFiles === "string" ? c.changedFiles : null) : null) },
+    { kind: "diffContains", positive: true, grade: "B", run: (c) => (typeof c.statedDiffText === "string" ? diffContainsStatus(c.statedDiffText, typeof c.diffText === "string" ? c.diffText : null) : null) },
+    { kind: "schema", positive: true, grade: "B", run: (c) => (c.schemaData !== undefined && c.schemaDef !== undefined ? schemaStatus(c.schemaData, c.schemaDef) : null) },
+    { kind: "version", positive: true, grade: "B", run: (c) => (typeof c.statedPackage === "string" ? versionStatus(c.statedPackage, typeof c.statedPackageVersion === "string" ? c.statedPackageVersion : null, c.dependencyMap && typeof c.dependencyMap === "object" ? c.dependencyMap : null) : null) },
+    { kind: "file", positive: true, grade: "B", run: (c) => (typeof c.statedFile === "string" ? fileStatus(c.statedFile, typeof c.fileExists === "boolean" ? c.fileExists : null) : null) },
+    { kind: "receipt", positive: true, grade: "B", run: (c) => (typeof c.statedReceiptId === "string" ? receiptStatus(c.statedReceiptId, c.receiptFacts && typeof c.receiptFacts === "object" ? c.receiptFacts : null) : null) },
+    { kind: "artifact", positive: true, grade: "B", run: (c) => (typeof c.statedArtifact === "string" ? artifactStatus(c.statedArtifact, { minBytes: typeof c.artifactMinBytes === "number" ? c.artifactMinBytes : undefined, maxBytes: typeof c.artifactMaxBytes === "number" ? c.artifactMaxBytes : undefined, sha256: typeof c.artifactSha256 === "string" ? c.artifactSha256 : undefined }, c.artifactFacts && typeof c.artifactFacts === "object" ? c.artifactFacts : null) : null) },
 ];
 export const CHECK_KINDS = CHECK_REGISTRY.map((d) => d.kind);
+export const CHECK_GRADES = Object.fromEntries(CHECK_REGISTRY.map((d) => [d.kind, d.grade]));
 const FAILED_STATUSES = new Set(["not-found", "mismatch", "invalid"]);
 // 실패 check 의 evidence(expected/actual) 생산 — 결정론(커널이 이미 가진 입력·재계산으로). 추정 없음.
 function evidenceFor(c, source, results) {
@@ -480,13 +482,17 @@ export function evaluateClaim(c, source) {
     const results = {};
     let failed = false;
     let positiveVerified = false;
+    let bestGrade = null;
     for (const d of CHECK_REGISTRY) {
         const st = d.run(c, source);
         results[d.kind] = st;
         if (st && FAILED_STATUSES.has(st))
             failed = true;
-        if (d.positive && st === "verified")
+        if (d.positive && st === "verified") {
             positiveVerified = true;
+            if (bestGrade === null || GRADE_RANK[d.grade] > GRADE_RANK[bestGrade])
+                bestGrade = d.grade;
+        }
     }
     return {
         citation: results.citation ?? null,
@@ -507,6 +513,8 @@ export function evaluateClaim(c, source) {
         evidence: evidenceFor(c, source, results),
         failed,
         verified: !failed && positiveVerified,
+        assuranceGrade: positiveVerified ? bestGrade : null,
+        abstain: !failed && !positiveVerified,
     };
 }
 // Evidence Specification: 레지스트리에서 기계판독 JSON Schema 생성(코드가 곧 스펙 — 남이 채택할 표면).

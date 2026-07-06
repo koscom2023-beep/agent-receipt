@@ -54,6 +54,8 @@ import { runCaptureIngest, runCaptureShow, runCaptureReset, runCaptureInstall, r
 import { runShareProof, runShareProofFromSaved, latestReceiptExists } from "./shareproof.js";
 import { runResearchVerify } from "./research.js";
 import { runBench } from "./bench.js";
+import { runMerkle } from "./merkle.js";
+import { runPredicate } from "./predicate.js";
 import { runCouncilVerify } from "./council.js";
 import { runSpec } from "./spec.js";
 import { runBadge } from "./badge.js";
@@ -142,6 +144,8 @@ agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
 
 ■ 회의 결정검증(결정↔근거 대조 — 회의 실행 아님·검증만·같은 Evidence Kernel):
   bench --file <dataset.json|.md> [--repeat N] [--out <p>]   라벨된 주장셋에서 검사기 정밀·재현율 + N회 재현성(결정론) 측정 · expected=verified|failed|advisory gold · 재현성 위반=exit 1 · --out=Verification Receipt
+  merkle <root|prove|consistency> (--file <jsonl>|--dir <d>) [--index N] [--old-size M] [--old-root <hex>]   RFC6962 Merkle 투명로그: root·포함증명·일관성증명(포크/개찬 탐지) · exit 1=불일치
+  predicate --receipt <verification-receipt.json> [--schema]   Verification Receipt 를 in-toto claim-verification/v1 Statement 로 명명·출력 · --schema=predicate JSON Schema · docs/PREDICATE.md
   council verify --file <decision.json> [--log <path>] [--out <p>]   결정의 근거(인용·수치·날짜·링크·해시·서명)를 대조 · --log=append-only DecisionLog · --out=Verification Receipt
 
 ■ Evidence Specification(검증 포맷의 표준 표면):
@@ -294,6 +298,18 @@ function main(): void {
     // bench 는 git 불필요 — 라벨된 주장셋에서 검사기 정밀·재현율 + N회 재현성 측정. 재현성 위반=exit 1(불변식 회귀가드).
     const r = getArg("--repeat");
     runBench(getArg("--file"), { repeat: r !== undefined ? Number(r) : undefined, out: getArg("--out") });
+  }
+  if (command === "merkle") {
+    // merkle 는 git 불필요 — RFC6962 투명로그: root / 포함증명(prove) / 일관성증명(consistency·포크 탐지).
+    const mnum = (f: string): number | undefined => {
+      const v = getArg(f);
+      return v !== undefined ? Number(v) : undefined;
+    };
+    runMerkle(process.argv[3], { file: getArg("--file"), dir: getArg("--dir"), index: mnum("--index"), oldSize: mnum("--old-size"), oldRoot: getArg("--old-root") });
+  }
+  if (command === "predicate") {
+    // predicate 는 git 불필요 — verification receipt 를 in-toto Statement(claim-verification/v1)로 명명·출력.
+    runPredicate(getArg("--receipt"), { schema: hasFlag("--schema") });
   }
   if (command === "council") {
     // council 은 회의를 실행하지 않는다(=소비자 컴파일러의 일). DecisionRecord 의 결정↔근거를 검증만.
