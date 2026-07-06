@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { isAbsolute, join } from "node:path";
 import {
   normalizeForCitation, verifyCitationInText, citationStatus, type CitationStatus,
-  evaluateClaim, claimFingerprintV1,
+  evaluateClaim, claimFingerprintV1, decomposeClaim,
   type EvalClaimInput, type ClaimEvaluation,
 } from "./evidencekernel.js";
 import { writeVerificationReceipt, tierProvenance } from "./vreceipt.js";
@@ -248,7 +248,7 @@ async function fetchSource(url: string, timeoutMs = 12000): Promise<string | nul
  */
 export async function runResearchVerify(
   fileArg: string | undefined,
-  opts: { fetch?: boolean; out?: string } = {},
+  opts: { fetch?: boolean; out?: string; decompose?: boolean } = {},
 ): Promise<never> {
   if (!fileArg) {
     console.error("research verify: --file <path> 가 필요합니다 (ResearchReport JSON).");
@@ -357,6 +357,10 @@ export async function runResearchVerify(
           ? "    ✓ verified — 근거가 출처와 정합"
           : "    · advisory — 검증할 근거 없음(미검증)",
     );
+    if (opts.decompose) {
+      // R6: 복합 주장을 원자 sub-claim 으로 — 각 assertion 의 등급·판정을 개별 표시(opt-in·기본 출력 불변).
+      for (const sc of decomposeClaim(ev)) console.log(`      ├ ${sc.kind} [등급 ${sc.grade}] → ${sc.verdict}`);
+    }
   }
   if (claims.length === 0) console.log("(검증할 주장 없음)");
 

@@ -517,6 +517,17 @@ export function evaluateClaim(c, source) {
         abstain: !failed && !positiveVerified,
     };
 }
+export function decomposeClaim(ev) {
+    const out = [];
+    for (const d of CHECK_REGISTRY) {
+        const st = ev.results[d.kind];
+        if (st == null)
+            continue; // 미적용 검사 = 이 주장의 assertion 아님
+        const verdict = FAILED_STATUSES.has(st) ? "failed" : st === "verified" ? "verified" : "abstain";
+        out.push({ kind: d.kind, positive: d.positive, grade: d.grade, status: st, verdict });
+    }
+    return out;
+}
 // Evidence Specification: 레지스트리에서 기계판독 JSON Schema 생성(코드가 곧 스펙 — 남이 채택할 표면).
 export function claimSchema() {
     return {

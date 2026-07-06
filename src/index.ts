@@ -20,8 +20,8 @@ export {
   claimSchema,
   evaluateClaim,
 } from "./evidencekernel.js";
-export type { ClaimEvaluation, EvalClaimInput, Grade } from "./evidencekernel.js";
-export { CHECK_GRADES, GRADE_RANK } from "./evidencekernel.js";
+export type { ClaimEvaluation, EvalClaimInput, Grade, SubClaim } from "./evidencekernel.js";
+export { CHECK_GRADES, GRADE_RANK, decomposeClaim } from "./evidencekernel.js";
 
 // Verification Receipt 생산/재검증
 export { buildVerificationReceipt, tierProvenance, replayVerificationReceipt } from "./vreceipt.js";

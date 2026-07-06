@@ -626,6 +626,25 @@ export function evaluateClaim(c: EvalClaimInput, source: string | null): ClaimEv
   };
 }
 
+// R6: 평가된 복합 주장을 원자 sub-claim 판정으로 분해 — 적용범위 claim→assertion. 재평가 없음(활성 검사만·results!=null).
+export interface SubClaim {
+  kind: string; // 검사 종류
+  positive: boolean; // 실증 근거인가(link 등 well-formedness=false)
+  grade: Grade; // R2 증거 등급
+  status: string; // 원시 검사 status(verified/not-found/mismatch/...)
+  verdict: "verified" | "failed" | "abstain"; // 정규화 3-값
+}
+export function decomposeClaim(ev: ClaimEvaluation): SubClaim[] {
+  const out: SubClaim[] = [];
+  for (const d of CHECK_REGISTRY) {
+    const st = ev.results[d.kind];
+    if (st == null) continue; // 미적용 검사 = 이 주장의 assertion 아님
+    const verdict = FAILED_STATUSES.has(st) ? "failed" : st === "verified" ? "verified" : "abstain";
+    out.push({ kind: d.kind, positive: d.positive, grade: d.grade, status: st, verdict });
+  }
+  return out;
+}
+
 // Evidence Specification: 레지스트리에서 기계판독 JSON Schema 생성(코드가 곧 스펙 — 남이 채택할 표면).
 export function claimSchema(): Record<string, unknown> {
   return {
