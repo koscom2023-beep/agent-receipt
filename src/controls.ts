@@ -133,6 +133,116 @@ export const ANCHOR_ENTRY: RegistryEntry = {
   doesNotProve: "A third party sealed that this receipt existed at this time — NOT a keyless identity proof.",
 };
 
+// ── R5: 검증 능력 → 규제 조항 크로스워크 (Work Receipt 신호와 별개·framework-agnostic·영수증 불필요) ──
+// 관계는 항상 'evidence relevant to'(준수 아님). confidence=조항 인용 정확도(실존)이지 만족이 아니다.
+// SoT: EU AI Act(Reg 2024/1689) 공개 조문·SOC 2 TSC 공개·ISO/IEC 42001 = likely(원문 대조 필요·ISO_NOTE).
+export const CROSSWALK_SOURCE = "verification capabilities → clauses · EU AI Act(2024/1689)·SOC 2 TSC confirmed; ISO/IEC 42001 likely(paywalled)";
+export const VERIFICATION_CROSSWALK: RegistryEntry[] = [
+  {
+    signal: "deterministicVerification",
+    label: "결정론·재현가능 근거 검사 14종 — 같은 입력→같은 판정(LLM 판단 0)",
+    controls: [
+      { framework: "EU AI Act", id: "Article 15", title: "Accuracy, robustness and cybersecurity", confidence: "confirmed" },
+      { framework: "SOC 2 TSC", id: "CC4.1", title: "Ongoing/separate evaluations of controls", confidence: "confirmed" },
+      { framework: "ISO/IEC 42001", id: "A.6.2.4", title: "AI system verification and validation", confidence: "likely" },
+    ],
+    doesNotProve: "Verifies that stated evidence is grounded/recomputable — does NOT establish the AI system's overall accuracy or that its conclusions are correct. Evidence relevant to an accuracy assessment, not a compliance claim.",
+  },
+  {
+    signal: "evidenceGrading",
+    label: "증거 등급 A(재계산)/B(대조)/C(형식) + 보류(abstain) — R2",
+    controls: [
+      { framework: "EU AI Act", id: "Article 15", title: "Accuracy, robustness and cybersecurity", confidence: "confirmed" },
+      { framework: "SOC 2 TSC", id: "CC4.1", title: "Ongoing/separate evaluations of controls", confidence: "confirmed" },
+      { framework: "ISO/IEC 42001", id: "A.6.2.4", title: "AI system verification and validation", confidence: "likely" },
+    ],
+    doesNotProve: "Grade reflects the STRENGTH of the check (recompute vs compare vs form), not real-world correctness. 'Abstain' marks the unverifiable, not the false.",
+  },
+  {
+    signal: "recordKeepingReceipt",
+    label: "봉인 Verification Receipt — 결정론 receiptId + 변조탐지 contentHash",
+    controls: [
+      { framework: "EU AI Act", id: "Article 12", title: "Record-keeping — automatic event logs", confidence: "confirmed" },
+      { framework: "EU AI Act", id: "Article 19", title: "Automatically generated logs — provider retention (>= 6 months)", confidence: "confirmed" },
+      { framework: "SOC 2 TSC", id: "CC7.2", title: "System monitoring / log integrity", confidence: "confirmed" },
+      { framework: "ISO/IEC 42001", id: "A.6.2.8", title: "AI system recording of event logs", confidence: "likely" },
+    ],
+    doesNotProve: "A local receipt is tamper-evident, not non-forgeable (can be regenerated wholesale). Retention (>= 6 months) is operational policy, not a tool feature.",
+  },
+  {
+    signal: "transparencyLog",
+    label: "Merkle 투명로그(RFC6962) — 포함증명 + 일관성증명(포크 탐지)·R3",
+    controls: [
+      { framework: "EU AI Act", id: "Article 12", title: "Record-keeping — automatic event logs", confidence: "confirmed" },
+      { framework: "EU AI Act", id: "Article 19", title: "Automatically generated logs — integrity/retention", confidence: "confirmed" },
+      { framework: "SOC 2 TSC", id: "CC7.2", title: "Log integrity — independently verifiable", confidence: "confirmed" },
+      { framework: "ISO/IEC 42001", id: "A.6.2.8", title: "AI system recording of event logs", confidence: "likely" },
+    ],
+    doesNotProve: "Consistency proofs detect a fork between two PUBLISHED roots. Without a public log operator + gossip this is a transparency data structure, not a live transparency service.",
+  },
+  {
+    signal: "provenanceTiering",
+    label: "provenance 계층화 — verified(실측) vs reported(자가보고) 분리",
+    controls: [
+      { framework: "EU AI Act", id: "Article 13", title: "Transparency and provision of information to deployers", confidence: "confirmed" },
+      { framework: "ISO/IEC 42001", id: "A.6.2.4", title: "AI system verification and validation", confidence: "likely" },
+    ],
+    doesNotProve: "'reported' provenance is self-asserted and unproven. Separation prevents self-report being laundered as verified fact — it does NOT prove the reported model/prompt was actually used.",
+  },
+  {
+    signal: "attestationPredicate",
+    label: "in-toto claim-verification/v1 predicate — 표준 공급망 증명·R4",
+    controls: [
+      { framework: "EU AI Act", id: "Article 12", title: "Record-keeping — automatic event logs", confidence: "confirmed" },
+      { framework: "SOC 2 TSC", id: "CC7.2", title: "System monitoring / log integrity", confidence: "confirmed" },
+      { framework: "ISO/IEC 42001", id: "A.6.2.8", title: "AI system recording of event logs", confidence: "likely" },
+    ],
+    doesNotProve: "predicateType is an interop type name, not a hosted registry. Local self-signing is tamper-evident, not non-forgeable — strong third-party assurance is delegated to Rekor.",
+  },
+  {
+    signal: "humanCheckable",
+    label: "주장 단위 판정 + 근거로 AI 출력을 사람이 검증 가능(LLM 심판 아님)",
+    controls: [
+      { framework: "EU AI Act", id: "Article 14", title: "Human oversight", confidence: "confirmed" },
+      { framework: "ISO/IEC 42001", id: "A.6.2.4", title: "AI system verification and validation", confidence: "likely" },
+    ],
+    doesNotProve: "Surfaces per-claim evidence for a human to judge — does not make the human decision or guarantee oversight is exercised.",
+  },
+];
+
+export function renderCrosswalkMd(): string {
+  const L: string[] = [];
+  L.push("# 검증 능력 → 규제 조항 크로스워크 (agent-receipt)");
+  L.push("");
+  L.push("> **관계는 'evidence relevant to' 이지 준수(compliance)가 아니다.** 각 검증 능력이 어느 조항의 *증거로 관련*되는지 보여줄 뿐, 규정 충족을 주장하지 않는다 — 감사인/평가자 판단이 필요하다.");
+  L.push(`> ${ISO_NOTE}`);
+  L.push("");
+  for (const e of VERIFICATION_CROSSWALK) {
+    L.push(`## ${e.label}`);
+    L.push(`\`${e.signal}\``);
+    L.push("");
+    L.push("| Framework | Clause | Title | Citation |");
+    L.push("|-----------|--------|-------|----------|");
+    for (const c of e.controls) L.push(`| ${c.framework} | ${c.id} | ${c.title} | ${c.confidence} |`);
+    L.push("");
+    L.push(`- **does NOT prove:** ${e.doesNotProve}`);
+    L.push("");
+  }
+  L.push(`_source: ${CROSSWALK_SOURCE}_`);
+  return L.join("\n");
+}
+export function renderCrosswalkJson(): string {
+  return JSON.stringify(
+    { kind: "verification-control-crosswalk", relationship: "evidence-relevant-to (NOT compliance)", isoNote: ISO_NOTE, source: CROSSWALK_SOURCE, entries: VERIFICATION_CROSSWALK },
+    null,
+    2,
+  );
+}
+export function runCrosswalk(format: string | undefined): never {
+  process.stdout.write((format === "json" ? renderCrosswalkJson() : renderCrosswalkMd()) + "\n");
+  process.exit(0);
+}
+
 export interface ControlMapResult {
   source: string;
   noVerification: boolean;

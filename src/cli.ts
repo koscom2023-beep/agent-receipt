@@ -35,7 +35,7 @@ import { runFinish } from "./finish.js";
 import { runLedger, runLedgerRebuild, runLedgerVerify } from "./ledger.js";
 import { runReplay } from "./replay.js";
 import { runAttest } from "./attest.js";
-import { runControls } from "./controls.js";
+import { runControls, runCrosswalk } from "./controls.js";
 import { runInsights } from "./insights.js";
 import { runRisk } from "./risk.js";
 import { runCost } from "./cost.js";
@@ -161,7 +161,7 @@ agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
 
 ■ 증빙 / 감사 묶음(git 증거):
   report [--type developer|client|audit] / receipt [--format ...] [--content] [--strict-redact] [--committed] [--agent <n>] [--model <m>] / receipts [--latest|--cat|--dir]
-  audit [--json] / insights [--since <n>] [--format md|json] / risk [--format md|json] / cost [--format md|json] / dashboard / index [--json] / ledger [--json] (rebuild|verify) / replay [--pack <dir>] [--receipt <p> [--fetch]] / attest / anchor [--upload] / controls [--format md|json] / incident
+  audit [--json] / insights [--since <n>] [--format md|json] / risk [--format md|json] / cost [--format md|json] / dashboard / index [--json] / ledger [--json] (rebuild|verify) / replay [--pack <dir>] [--receipt <p> [--fetch]] / attest / anchor [--upload] / controls [--format md|json] [--crosswalk] / incident
 
 ■ 서명 / 승인(로컬·ed25519):
   keys init / sign --receipt <p> / verify-signature --receipt <p> / approve --receipt <p> [--note <t>] / approvals / badge --receipt <p>   Rekor 앵커 영수증용 README 배지(클릭=공개 로그 검증·앵커 없으면 발급 거부)
@@ -274,6 +274,8 @@ function main(): void {
     runAttest(getArg("--receipt"), getArg("--pack"));
   }
   if (command === "controls") {
+    // --crosswalk: 검증 능력→규제 조항 크로스워크(R5·영수증 불필요·framework-agnostic). 아니면 영수증 기반 통제맵.
+    if (hasFlag("--crosswalk")) runCrosswalk(getArg("--format"));
     runControls(getArg("--receipt"), getArg("--format"), hasFlag("--redact"));
   }
   if (command === "insights") {
