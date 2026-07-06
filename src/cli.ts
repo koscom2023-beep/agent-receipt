@@ -38,7 +38,7 @@ import { runAttest } from "./attest.js";
 import { runControls, runCrosswalk } from "./controls.js";
 import { runInsights } from "./insights.js";
 import { runRisk } from "./risk.js";
-import { runCost } from "./cost.js";
+import { runCost, runSwapAudit } from "./cost.js";
 import { runAnchor, runAnchorUpload } from "./anchor.js";
 import { runIncident } from "./incident.js";
 import { runReport } from "./report.js";
@@ -163,7 +163,7 @@ agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
 
 ■ 증빙 / 감사 묶음(git 증거):
   report [--type developer|client|audit] / receipt [--format ...] [--content] [--strict-redact] [--committed] [--agent <n>] [--model <m>] / receipts [--latest|--cat|--dir]
-  audit [--json] / insights [--since <n>] [--format md|json] / risk [--format md|json] / cost [--format md|json] / dashboard / index [--json] / ledger [--json] (rebuild|verify) / replay [--pack <dir>] [--receipt <p> [--fetch]] / attest / anchor [--upload] / controls [--format md|json] [--crosswalk] / otel [--receipt <p>] [--format otlp|line] / gate [--receipt <p>] [--hook] / incident
+  audit [--json] / insights [--since <n>] [--format md|json] / risk [--format md|json] / cost [--format md|json] [--audit-swap --file <usage.json>] / dashboard / index [--json] / ledger [--json] (rebuild|verify) / replay [--pack <dir>] [--receipt <p> [--fetch]] / attest / anchor [--upload] / controls [--format md|json] [--crosswalk] / otel [--receipt <p>] [--format otlp|line] / gate [--receipt <p>] [--hook] / incident
 
 ■ 서명 / 승인(로컬·ed25519):
   keys init / sign --receipt <p> / verify-signature --receipt <p> / approve --receipt <p> [--note <t>] / approvals / badge --receipt <p>   Rekor 앵커 영수증용 README 배지(클릭=공개 로그 검증·앵커 없으면 발급 거부)
@@ -287,6 +287,8 @@ function main(): void {
     runRisk(getArg("--receipt"), getArg("--format"));
   }
   if (command === "cost") {
+    // --audit-swap: 모델치환 감사(R10·선언 vs 실제 모델 비용차). 아니면 세션 비용 요약.
+    if (hasFlag("--audit-swap")) runSwapAudit(getArg("--file"), getArg("--format"));
     runCost(getArg("--format"), getArg("--session"));
   }
   if (command === "research") {

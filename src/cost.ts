@@ -1,6 +1,8 @@
 import { summarizeCurrentSession, summarizeProjectToday, CONTEXT_BLOAT_TOKENS, type TranscriptSummary, type TodayTotal } from "./transcript.js";
-import { fmtUsd, PRICING_AS_OF } from "./pricing.js";
+import { fmtUsd, PRICING_AS_OF, priceFor, normalizeModelId, costOf, type UsageTokens } from "./pricing.js";
 import { LIMIT_NOTE } from "./disclosure.js";
+import { readFileSync } from "node:fs";
+import { isAbsolute, join } from "node:path";
 
 // 오늘(UTC) 날짜 — 런타임 CLI 경로에서만 호출(Date 격리는 순수 합산 함수 쪽). transcript 는 UTC 타임스탬프.
 function todayUtc(): string {
@@ -52,6 +54,116 @@ function toJson(s: TranscriptSummary): Record<string, unknown> {
 }
 
 /** `agent-receipt cost [--format md|json] [--session <file-id>]` — 현 세션 비용 요약. 읽기전용·exit 0. */
+// ── R10: 모델치환 감사 — 선언 모델 vs 실제 모델 대조 + 비용차 정량화 ──
+// 정직(회의): declared/actual 라벨은 입력(usage 로그·응답 헤더)에서 온다. **actual 라벨 자체의 진실성은 보증하지 않는다**
+//   — 이 감사는 그 두 라벨이 뜻하는 *비용차*를 결정론으로 계량할 뿐. 가격 미상 모델=unpriced(추정 금지).
+export interface SwapRecord {
+  declaredModel: string; // 청구/약속된 모델
+  actualModel: string; // 실제 응답 모델(usage/헤더)
+  usage: UsageTokens;
+}
+export interface SwapAuditRow {
+  declaredModel: string;
+  actualModel: string;
+  swapped: boolean;
+  declaredCost: number | null;
+  actualCost: number | null;
+  delta: number | null; // declared - actual (양수=선언이 더 비쌈=다운그레이드 의심)
+  direction: "same-model" | "downgrade" | "upgrade" | "same-price" | "unpriced";
+}
+export interface SwapAudit {
+  rows: SwapAuditRow[];
+  totalRecords: number;
+  swaps: number;
+  downgrades: number; // 선언 premium·실제 cheaper(과대청구 의심)
+  totalDelta: number; // priced delta 합(USD)
+  unpriced: number;
+  pricingAsOf: string;
+}
+export function auditModelSwap(records: SwapRecord[]): SwapAudit {
+  const rows: SwapAuditRow[] = [];
+  let swaps = 0, downgrades = 0, totalDelta = 0, unpriced = 0;
+  for (const rec of records) {
+    const dn = normalizeModelId(rec.declaredModel);
+    const an = normalizeModelId(rec.actualModel);
+    const swapped = dn !== "" && an !== "" && dn !== an;
+    const dc = costOf(rec.usage, rec.declaredModel);
+    const ac = costOf(rec.usage, rec.actualModel);
+    const delta = dc !== null && ac !== null ? dc - ac : null;
+    let direction: SwapAuditRow["direction"];
+    if (!swapped) direction = "same-model";
+    else if (delta === null) { direction = "unpriced"; unpriced++; }
+    else if (delta > 0) { direction = "downgrade"; downgrades++; }
+    else if (delta < 0) direction = "upgrade";
+    else direction = "same-price";
+    if (swapped) swaps++;
+    if (delta !== null) totalDelta += delta;
+    rows.push({ declaredModel: rec.declaredModel, actualModel: rec.actualModel, swapped, declaredCost: dc, actualCost: ac, delta, direction });
+  }
+  return { rows, totalRecords: records.length, swaps, downgrades, totalDelta, unpriced, pricingAsOf: PRICING_AS_OF };
+}
+export function renderSwapAuditMd(a: SwapAudit): string {
+  const L: string[] = [];
+  L.push("# 모델치환 감사 (agent-receipt)");
+  L.push("");
+  L.push(`> declared 모델 ↔ actual 모델 대조 + 비용차(리스트 가격·${a.pricingAsOf}). **actual 라벨의 진실성은 보증하지 않음** — 두 라벨의 비용 함의만 계량. 가격 미상=unpriced(추정 없음).`);
+  L.push("");
+  L.push("| declared | actual | swap | declared $ | actual $ | Δ(decl-act) | 판정 |");
+  L.push("|----------|--------|------|-----------|----------|-------------|------|");
+  for (const r of a.rows) {
+    L.push(`| ${r.declaredModel} | ${r.actualModel} | ${r.swapped ? "⚠" : "·"} | ${fmtUsd(r.declaredCost)} | ${fmtUsd(r.actualCost)} | ${r.delta === null ? "?" : fmtUsd(r.delta)} | ${r.direction} |`);
+  }
+  L.push("");
+  L.push(`합계: 레코드 ${a.totalRecords} · 치환 ${a.swaps} · 다운그레이드(과대청구 의심) ${a.downgrades} · Δ합 ${fmtUsd(a.totalDelta)} · unpriced ${a.unpriced}`);
+  L.push(`> ${LIMIT_NOTE}`);
+  return L.join("\n");
+}
+const numOr0 = (x: unknown): number => (typeof x === "number" && Number.isFinite(x) ? x : 0);
+export function runSwapAudit(fileArg: string | undefined, format: string | undefined): never {
+  if (!fileArg) {
+    console.error("cost --audit-swap: --file <usage.json> 가 필요합니다 ({records:[{declaredModel,actualModel,usage:{input,output,cacheRead,cacheCreation}}]}).");
+    process.exit(2);
+  }
+  const p = isAbsolute(fileArg) ? fileArg : join(process.cwd(), fileArg);
+  let raw: string;
+  try {
+    raw = readFileSync(p, "utf8");
+  } catch {
+    console.error(`cost --audit-swap: 파일을 못 읽음: ${fileArg}`);
+    process.exit(2);
+  }
+  let recs: SwapRecord[] = [];
+  try {
+    const j: unknown = JSON.parse(raw);
+    const arr: unknown[] = Array.isArray(j)
+      ? j
+      : j && typeof j === "object" && Array.isArray((j as { records?: unknown }).records)
+        ? (j as { records: unknown[] }).records
+        : [];
+    recs = arr
+      .filter((r): r is Record<string, unknown> => !!r && typeof r === "object" && !Array.isArray(r))
+      .map((r) => {
+        const u = (r.usage && typeof r.usage === "object" ? r.usage : {}) as Record<string, unknown>;
+        return {
+          declaredModel: typeof r.declaredModel === "string" ? r.declaredModel : "",
+          actualModel: typeof r.actualModel === "string" ? r.actualModel : "",
+          usage: { input: numOr0(u.input), output: numOr0(u.output), cacheRead: numOr0(u.cacheRead), cacheCreation: numOr0(u.cacheCreation) },
+        };
+      });
+  } catch {
+    console.error(`cost --audit-swap: JSON 파싱 실패: ${fileArg}`);
+    process.exit(2);
+  }
+  if (recs.length === 0) {
+    console.error(`cost --audit-swap: records 0건: ${fileArg}`);
+    process.exit(2);
+  }
+  const audit = auditModelSwap(recs);
+  process.stdout.write((format === "json" ? JSON.stringify(audit, null, 2) : renderSwapAuditMd(audit)) + "\n");
+  // 다운그레이드(과대청구 의심) 있으면 exit 1(CI 신호·opt-in)·없으면 0.
+  process.exit(audit.downgrades > 0 ? 1 : 0);
+}
+
 export function runCost(format: string | undefined, sessionId: string | undefined, cwd: string = process.cwd()): never {
   const s = summarizeCurrentSession(cwd, sessionId);
   if (format === "json") {
