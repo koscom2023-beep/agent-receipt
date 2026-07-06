@@ -1,6 +1,9 @@
 
 ────────────────────────────────────────────────────────
-agent-receipt done: s6  — PASS ✅
+agent-receipt done: s6
+판정: PASS ✅  (게이트 판정 — 점수 아님)
+계약: allowed 1 globs · denied: .env*
+  · 계약 준수 · 필수 검사 통과 · 경고 신호 없음
 ────────────────────────────────────────────────────────
 receipt 저장: .agent-guard/receipts/receipt-<TS>.json
 변경: touched 1, untracked 1, denied 0, outOfScope 0

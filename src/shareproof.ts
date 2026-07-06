@@ -6,6 +6,7 @@ import { splitActionsForDisplay, COVERED_TOOLS } from "./capture.js";
 import { redactText } from "./redact.js";
 import { LIMIT_NOTE } from "./disclosure.js";
 import { listReceipts, loadRekorAnchor, loadSavedReceipt, type RekorAnchor } from "./receiptStore.js";
+import { renderVerdictLine, renderContractLine } from "./verdict.js";
 
 // ── share-proof v0 (council B) — 외주사가 클라이언트에 보내는 로컬 self-contained HTML 증거 ──
 // 원칙: 자동로드 0(외부 CDN/img/script "src" 없음 — 열람만으로 유출 0) · 모든 동적 문자열 esc(injection 방어)
@@ -96,7 +97,7 @@ export function toProofHtml(r: Receipt, anchor?: RekorAnchor | null): string {
 </style></head><body>
 <div class="wrap">
   <h1>AI Work Receipt</h1>
-  <p class="meta">Scope evidence for <code>${esc(r.contractId)}</code>${r.title ? ` — ${esc(r.title)}` : ""}</p>
+  <p class="meta">Scope evidence for <code>${esc(r.contractId)}</code>${r.title ? ` — ${esc(r.title)}` : ""}</p>${r.verdict ? `\n  <p class="meta"><b>${esc(renderVerdictLine(r.verdict))}</b></p>` : ""}${r.contractSnapshot ? `\n  <p class="meta">${esc(renderContractLine(r.contractSnapshot))}</p>` : ""}
   <div class="status">${statusTxt}</div>
   <table>
     <tr><td class="k">Result</td><td>${pass ? "Stayed within agreed scope" : "Out-of-scope / contract violation — see details"}</td></tr>

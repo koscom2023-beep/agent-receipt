@@ -400,6 +400,14 @@ function parseStated(v) {
     return null;
 }
 export const GRADE_RANK = { A: 3, B: 2, C: 1 };
+// P0 D3(council 2026-07-07): 등급의 사람말 번역 — 기술 라벨(A/B/C·abstain)을 대체하지 않고 병기한다(한계 유지).
+export const GRADE_LABELS = { A: "Strong (recomputed)", B: "Source-matched", C: "Format-only" };
+export const ABSTAIN_LABEL = "Not-enough-basis";
+export function gradeHumanLabel(grade, abstain) {
+    if (grade)
+        return GRADE_LABELS[grade];
+    return abstain ? ABSTAIN_LABEL : "";
+}
 export const CHECK_REGISTRY = [
     { kind: "citation", positive: true, grade: "B", run: (c, s) => (typeof c.quotedText === "string" && c.quotedText ? citationStatus(c.quotedText, s) : null) },
     { kind: "number", positive: true, grade: "A", run: (c, s) => (c.statedValue !== undefined ? numberStatus(parseStated(c.statedValue), { source: s, op: c.op, operands: Array.isArray(c.operands) ? c.operands : undefined, eps: typeof c.eps === "number" ? c.eps : undefined }) : null) },

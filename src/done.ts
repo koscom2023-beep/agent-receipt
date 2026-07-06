@@ -8,6 +8,7 @@ import { listReceipts, approvalsCountFor } from "./receiptStore.js";
 import { guardWasteSummaryLine } from "./capture.js";
 import { collectRedFlags, redFlagLine } from "./reviewfocus.js";
 import { sessionCostLine } from "./cost.js";
+import { sessionVerdict, buildContractSnapshot, renderVerdictLine, renderContractLine } from "./verdict.js";
 import { LIMIT_NOTE } from "./disclosure.js";
 
 const line = "─".repeat(56);
@@ -27,9 +28,25 @@ export function runDone(
 ): never {
   const r = buildReceipt(contract, contractPath);
 
+  // P0 v0.17 (D1·D2): 세션 판정(게이트·점수 아님) + 계약 스냅샷 — 기존 신호의 순수 롤업.
+  const gw = guardWasteSummaryLine(); // 가드/반복 1줄 — capture 없거나 전부 0이면 null=출력 불변
+  const redFlags = collectRedFlags(r.touched, r.untracked);
+  const rf = redFlagLine(redFlags);
+  const redFlagFacts = [
+    ...redFlags.skipOnly.map((s) => `test .only/.skip: ${s.path}(${s.count})`),
+    ...redFlags.depsAdded.map((d) => `의존성 추가: ${d}`),
+  ];
+  const vr = sessionVerdict(r, { wasteSignal: !!gw, redFlags: redFlagFacts });
+  const snapshot = buildContractSnapshot(contract, r);
+  r.verdict = vr; // metadata — contentHash 는 이미 봉인(receiptHash 입력 제외 → 바이트불변)
+  r.contractSnapshot = snapshot;
+
   console.log("");
   console.log(line);
-  console.log(`agent-receipt done: ${r.contractId}  — ${r.ok ? "PASS ✅" : "FAIL ❌"}`);
+  console.log(`agent-receipt done: ${r.contractId}`);
+  console.log(renderVerdictLine(vr));
+  console.log(renderContractLine(snapshot));
+  for (const reason of vr.reasons) console.log(`  · ${reason}`);
   console.log(line);
 
   // receipt 저장(json 항상 — ledger/commit-check 가 참조). --client 면 client-md 도 추가.
@@ -44,10 +61,8 @@ export function runDone(
   console.log(`변경: touched ${r.touched.length}, untracked ${r.untracked.length}, denied ${r.deniedHits.length}, outOfScope ${r.outOfScope.length}`);
   const failedChecks = r.checks.filter((c) => !c.ok).length;
   console.log(`검사: ${r.checks.length ? `${r.checks.length - failedChecks}/${r.checks.length} 통과` : "명령 없음(통과 처리)"}`);
-  const gw = guardWasteSummaryLine(); // 가드/반복 1줄(council L3) — capture 없거나 전부 0이면 null=출력 불변
-  if (gw) console.log(gw);
-  const rf = redFlagLine(collectRedFlags(r.touched, r.untracked)); // 확인 신호(council R2) — 없으면 null=출력 불변
-  if (rf) console.log(rf);
+  if (gw) console.log(gw); // 가드/반복 상세(판정 reasons 는 이 줄을 참조만 — 중복 서술 없음)
+  if (rf) console.log(rf); // 확인 신호 상세
   const cl = sessionCostLine(process.cwd(), r.touched.length + r.untracked.length); // 세션 활동 1줄(도구·비용·git변경 병치) — transcript 없으면 null
   if (cl) console.log(cl);
   const crit = r.criticalPaths.filter((c) => c.touched.length);

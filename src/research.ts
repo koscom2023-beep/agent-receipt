@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { isAbsolute, join } from "node:path";
 import {
   normalizeForCitation, verifyCitationInText, citationStatus, type CitationStatus,
-  evaluateClaim, claimFingerprintV1, decomposeClaim,
+  evaluateClaim, claimFingerprintV1, decomposeClaim, GRADE_LABELS,
   type EvalClaimInput, type ClaimEvaluation,
 } from "./evidencekernel.js";
 import { writeVerificationReceipt, tierProvenance } from "./vreceipt.js";
@@ -361,7 +361,7 @@ export async function runResearchVerify(
     );
     if (opts.decompose) {
       // R6: 복합 주장을 원자 sub-claim 으로 — 각 assertion 의 등급·판정을 개별 표시(opt-in·기본 출력 불변).
-      for (const sc of decomposeClaim(ev)) console.log(`      ├ ${sc.kind} [등급 ${sc.grade}] → ${sc.verdict}`);
+      for (const sc of decomposeClaim(ev)) console.log(`      ├ ${sc.kind} [등급 ${sc.grade} · ${GRADE_LABELS[sc.grade]}] → ${sc.verdict}`);
     }
   }
   if (claims.length === 0) console.log("(검증할 주장 없음)");

@@ -10,7 +10,7 @@
 import { readFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { evaluateOfflineClaim, parseMarkdownReport, type ResearchClaim } from "./research.js";
-import { claimFingerprintV1, type ClaimEvaluation, type Grade } from "./evidencekernel.js";
+import { claimFingerprintV1, GRADE_LABELS, type ClaimEvaluation, type Grade } from "./evidencekernel.js";
 import { writeVerificationReceipt, tierProvenance } from "./vreceipt.js";
 
 export type Verdict = "verified" | "failed" | "advisory";
@@ -187,7 +187,7 @@ export function runBench(fileArg: string | undefined, opts: { repeat?: number; o
     const mark = s.expected === null ? "·" : s.correct ? "✓" : "✗";
     const lab = s.expected ? `gold ${s.expected}` : "unlabeled";
     const rep = s.identical ? `${s.runs}/${s.runs} 동일` : `⚠ 비결정(${s.runs}회 중 불일치)`;
-    const gr = s.assuranceGrade ? ` [등급 ${s.assuranceGrade}]` : "";
+    const gr = s.assuranceGrade ? ` [등급 ${s.assuranceGrade} · ${GRADE_LABELS[s.assuranceGrade]}]` : "";
     const st = s.statement.length > 46 ? s.statement.slice(0, 43) + "..." : s.statement;
     console.log(`[${i + 1}] ${mark} predicted ${s.predicted}${gr} · ${lab} · ${rep}  ${st}`);
   }

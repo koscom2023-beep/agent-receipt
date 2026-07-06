@@ -12,6 +12,7 @@ import { loadPolicySafe, policyObservations, policyPath, type PolicyObs } from "
 import { redactText, redactJsonText } from "./redact.js";
 import { LIMIT_NOTE } from "./disclosure.js";
 import { loadCapturedActions, loadReconciliation, splitActionsForDisplay, type CaptureAction, type ActionsResult, type ReconResult } from "./capture.js";
+import { renderVerdictLine, renderContractLine, type VerdictResult, type ContractSnapshot } from "./verdict.js"; // 런타임 순환 없음(verdict→receipt 는 type-only)
 
 // receipt JSON 스키마 버전(downstream/CI 가 안전하게 의존). additive only. verify --json 14키와 무관.
 export const RECEIPT_SCHEMA_VERSION = "1.0";
@@ -43,6 +44,8 @@ export interface Receipt {
   actions?: CaptureAction[]; // capture(git 너머 행위) — capture.jsonl 있을 때만. contentHash 입력엔 미포함(metadata·additive). 없으면 키 부재 → 기존 출력 바이트동일.
   actionsSummary?: ActionsResult["actionsSummary"]; // 행위 요약(gitVisible 대비). 〃(해시 제외)
   reconciliation?: ReconResult; // D4: git 변경 ↔ capture 대사(matched/미설명 residuals). capture 있을 때만. receiptHash 입력 제외(metadata·additive) → 없으면 키 부재·기존 바이트동일.
+  verdict?: VerdictResult; // P0 D1(v0.17): 세션 판정(게이트·점수 아님) — done 이 부착. receiptHash 입력 제외(metadata·additive).
+  contractSnapshot?: ContractSnapshot; // P0 D2: 계약 최소필드+contractHash 포인터 — done 이 부착. receiptHash 입력 제외(metadata·additive).
   contentHash: string; // sha256 무결성 해시(timestamp/environment/schemaVersion/actions 제외 — 아래 receiptHash 입력 참고)
 }
 
@@ -196,6 +199,9 @@ export function toReceiptMd(r: Receipt): string {
   const L: string[] = [];
   L.push(`# Agent Receipt: ${r.contractId}`);
   if (r.title) L.push(`> ${r.title}`);
+  // P0 D1·D2: 판정·계약을 최상단 표면화 — 필드 없는(구) 영수증은 기존 출력 바이트동일.
+  if (r.verdict) L.push(`> ${renderVerdictLine(r.verdict)}`);
+  if (r.contractSnapshot) L.push(`> ${renderContractLine(r.contractSnapshot)}`);
   L.push("");
   L.push(`- ok: **${r.ok ? "PASS ✅" : "FAIL ❌"}**`);
   L.push(`- branch: \`${r.branch.current}\`${r.branch.expected ? ` (expected \`${r.branch.expected}\`)` : ""}`);

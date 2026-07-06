@@ -502,6 +502,13 @@ function parseStated(v: unknown): number | null {
 //   · B=resolved 사실/부분문자열 대조(출처·git 진실성에 의존) · C=well-formedness(link). 재계산 > 대조 > 형식.
 export type Grade = "A" | "B" | "C";
 export const GRADE_RANK: Record<Grade, number> = { A: 3, B: 2, C: 1 };
+// P0 D3(council 2026-07-07): 등급의 사람말 번역 — 기술 라벨(A/B/C·abstain)을 대체하지 않고 병기한다(한계 유지).
+export const GRADE_LABELS: Record<Grade, string> = { A: "Strong (recomputed)", B: "Source-matched", C: "Format-only" };
+export const ABSTAIN_LABEL = "Not-enough-basis";
+export function gradeHumanLabel(grade: Grade | null, abstain: boolean): string {
+  if (grade) return GRADE_LABELS[grade];
+  return abstain ? ABSTAIN_LABEL : "";
+}
 export interface CheckDescriptor {
   kind: string;
   positive: boolean;
