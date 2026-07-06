@@ -56,6 +56,7 @@ import { runResearchVerify } from "./research.js";
 import { runBench } from "./bench.js";
 import { runMerkle } from "./merkle.js";
 import { runPredicate } from "./predicate.js";
+import { runOtel } from "./otel.js";
 import { runCouncilVerify } from "./council.js";
 import { runSpec } from "./spec.js";
 import { runBadge } from "./badge.js";
@@ -161,7 +162,7 @@ agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
 
 ■ 증빙 / 감사 묶음(git 증거):
   report [--type developer|client|audit] / receipt [--format ...] [--content] [--strict-redact] [--committed] [--agent <n>] [--model <m>] / receipts [--latest|--cat|--dir]
-  audit [--json] / insights [--since <n>] [--format md|json] / risk [--format md|json] / cost [--format md|json] / dashboard / index [--json] / ledger [--json] (rebuild|verify) / replay [--pack <dir>] [--receipt <p> [--fetch]] / attest / anchor [--upload] / controls [--format md|json] [--crosswalk] / incident
+  audit [--json] / insights [--since <n>] [--format md|json] / risk [--format md|json] / cost [--format md|json] / dashboard / index [--json] / ledger [--json] (rebuild|verify) / replay [--pack <dir>] [--receipt <p> [--fetch]] / attest / anchor [--upload] / controls [--format md|json] [--crosswalk] / otel [--receipt <p>] [--format otlp|line] / incident
 
 ■ 서명 / 승인(로컬·ed25519):
   keys init / sign --receipt <p> / verify-signature --receipt <p> / approve --receipt <p> [--note <t>] / approvals / badge --receipt <p>   Rekor 앵커 영수증용 README 배지(클릭=공개 로그 검증·앵커 없으면 발급 거부)
@@ -312,6 +313,10 @@ function main(): void {
   if (command === "predicate") {
     // predicate 는 git 불필요 — verification receipt 를 in-toto Statement(claim-verification/v1)로 명명·출력.
     runPredicate(getArg("--receipt"), { schema: hasFlag("--schema") });
+  }
+  if (command === "otel") {
+    // otel 은 git 불필요 — Verification Receipt 를 OTLP traces JSON/로그로 방출(deps-0·exporter BYO).
+    runOtel(getArg("--receipt"), { format: getArg("--format") });
   }
   if (command === "council") {
     // council 은 회의를 실행하지 않는다(=소비자 컴파일러의 일). DecisionRecord 의 결정↔근거를 검증만.

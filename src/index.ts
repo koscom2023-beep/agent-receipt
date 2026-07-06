@@ -31,6 +31,7 @@ export type { Verdict, BenchClaim, ClaimScore, BenchMetrics } from "./bench.js";
 export { leafHash, nodeHash, merkleRoot, merkleRootHex, inclusionProof, verifyInclusion, consistencyProof, verifyConsistency, runMerkle } from "./merkle.js";
 export { buildClaimVerificationStatement, claimVerificationPredicateSchema, CLAIM_VERIFICATION_PREDICATE_TYPE, runPredicate } from "./predicate.js";
 export { VERIFICATION_CROSSWALK, CROSSWALK_SOURCE, renderCrosswalkMd, renderCrosswalkJson, runCrosswalk } from "./controls.js";
+export { buildOtelSpans, otelLine, runOtel, OTEL_SCOPE, OTEL_GENAI } from "./otel.js";
 
 // 로딩 → 그래프/집계/triage/diff/이력/상태판 (CLI graph 표면과 같은 함수)
 export {
