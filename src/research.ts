@@ -4,6 +4,7 @@ import { isAbsolute, join } from "node:path";
 import {
   normalizeForCitation, verifyCitationInText, citationStatus, type CitationStatus,
   evaluateClaim, claimFingerprintV1,
+  type EvalClaimInput, type ClaimEvaluation,
 } from "./evidencekernel.js";
 import { writeVerificationReceipt, tierProvenance } from "./vreceipt.js";
 import { resolveCommitExists, resolveChangedFiles, resolveDiffText, resolveDependencyMap, resolveFileExists, resolveReceiptFacts, resolveArtifactFacts } from "./gitfacts.js";
@@ -25,7 +26,7 @@ const line = "─".repeat(56);
 // 보증 범위(정직·좁게): "인용 충실성"(인용문이 그 출처에 실재하나)이지 "진위"(주장이 옳나)가 아니다.
 
 // ResearchReport 계약(v1) — 필드는 방어적으로 unknown 으로 받고 타입 확인 후 사용.
-interface ResearchClaim {
+export interface ResearchClaim {
   id?: unknown;
   statement?: unknown; // 주장(표시용)
   sourceUrl?: unknown; // 출처 URL — provenance 라벨 · --fetch 시 라이브 대조 대상
@@ -106,7 +107,7 @@ function resolveContent(claim: ResearchClaim): string | undefined {
 }
 
 // git/의존성 사실 사전조회(파일 IO·git 프로세스 실행은 커널 밖) — 필요한 필드가 있을 때만 조회.
-interface ResolvedFacts {
+export interface ResolvedFacts {
   commitExists?: boolean | null;
   changedFiles?: string | null;
   diffText?: string | null;
@@ -115,7 +116,7 @@ interface ResolvedFacts {
   receiptFacts?: ReceiptFacts | null;
   artifactFacts?: ArtifactFacts | null;
 }
-function resolveFacts(claim: ResearchClaim): ResolvedFacts {
+export function resolveFacts(claim: ResearchClaim): ResolvedFacts {
   const facts: ResolvedFacts = {};
   const repoDir = typeof claim.repoDir === "string" && claim.repoDir ? claim.repoDir : process.cwd();
   if (typeof claim.statedCommit === "string" && claim.statedCommit) {
@@ -140,6 +141,28 @@ function resolveFacts(claim: ResearchClaim): ResolvedFacts {
     facts.artifactFacts = resolveArtifactFacts(p, typeof claim.artifactSha256 === "string" && claim.artifactSha256.length > 0);
   }
   return facts;
+}
+
+// SSOT: claim + 사전조회 facts → EvalClaimInput. research verify 와 bench 가 입력 조립을 이 한 곳에서 공유(drift 0).
+export function buildEvalInput(claim: ResearchClaim, facts: ResolvedFacts): EvalClaimInput {
+  const url = typeof claim.sourceUrl === "string" ? claim.sourceUrl : "";
+  return {
+    quotedText: claim.quotedText, statedValue: claim.statedValue, op: claim.op, operands: claim.operands, eps: claim.eps, statedDate: claim.statedDate, link: url || undefined, statedHash: claim.statedHash, content: resolveContent(claim), algo: claim.algo, signature: claim.signature, publicKey: claim.publicKey,
+    statedCommit: claim.statedCommit, commitExists: facts.commitExists ?? null,
+    statedChangedFile: claim.statedChangedFile, changedFiles: facts.changedFiles ?? null,
+    statedDiffText: claim.statedDiffText, diffText: facts.diffText ?? null,
+    schemaData: claim.schemaData, schemaDef: claim.schemaDef,
+    statedPackage: claim.statedPackage, statedPackageVersion: claim.statedPackageVersion, dependencyMap: facts.dependencyMap ?? null,
+    statedFile: claim.statedFile, fileExists: facts.fileExists ?? null,
+    statedReceiptId: claim.statedReceiptId, receiptFacts: facts.receiptFacts ?? null,
+    statedArtifact: claim.statedArtifact, artifactMinBytes: claim.artifactMinBytes, artifactMaxBytes: claim.artifactMaxBytes, artifactSha256: claim.artifactSha256, artifactFacts: facts.artifactFacts ?? null,
+  };
+}
+
+// 오프라인 단일 평가(출처=인라인/로컬 스냅샷·라이브 fetch 없음) — bench 가 재현성 측정에 반복 호출.
+export function evaluateOfflineClaim(claim: ResearchClaim): ClaimEvaluation {
+  const facts = resolveFacts(claim);
+  return evaluateClaim(buildEvalInput(claim, facts), resolveSource(claim));
 }
 
 // ── Markdown 입력 어댑터 (동결 문법 — EVIDENCE_SPEC 에 명시·NLP 0·정규식만) ──
@@ -300,20 +323,7 @@ export async function runResearchVerify(
     // git/의존성 사실 사전조회(claim 이 요구할 때만·IO 는 여기서 끝) → 커널엔 사실만 전달.
     const facts = resolveFacts(claim);
     // 통합 평가(표준 포맷의 단일 의미론) — 인용·수치·날짜·링크·해시·commit·fileChanged·diffContains·schema·version 을 한 곳에서.
-    const ev = evaluateClaim(
-      {
-        quotedText: claim.quotedText, statedValue: claim.statedValue, op: claim.op, operands: claim.operands, eps: claim.eps, statedDate: claim.statedDate, link: url || undefined, statedHash: claim.statedHash, content: resolveContent(claim), algo: claim.algo, signature: claim.signature, publicKey: claim.publicKey,
-        statedCommit: claim.statedCommit, commitExists: facts.commitExists ?? null,
-        statedChangedFile: claim.statedChangedFile, changedFiles: facts.changedFiles ?? null,
-        statedDiffText: claim.statedDiffText, diffText: facts.diffText ?? null,
-        schemaData: claim.schemaData, schemaDef: claim.schemaDef,
-        statedPackage: claim.statedPackage, statedPackageVersion: claim.statedPackageVersion, dependencyMap: facts.dependencyMap ?? null,
-        statedFile: claim.statedFile, fileExists: facts.fileExists ?? null,
-        statedReceiptId: claim.statedReceiptId, receiptFacts: facts.receiptFacts ?? null,
-        statedArtifact: claim.statedArtifact, artifactMinBytes: claim.artifactMinBytes, artifactMaxBytes: claim.artifactMaxBytes, artifactSha256: claim.artifactSha256, artifactFacts: facts.artifactFacts ?? null,
-      },
-      source,
-    );
+    const ev = evaluateClaim(buildEvalInput(claim, facts), source);
     if (ev.failed) failed++;
     else if (ev.verified) ok++;
     else advisory++;

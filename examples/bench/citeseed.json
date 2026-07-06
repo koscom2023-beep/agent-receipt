@@ -1,0 +1,18 @@
+{
+  "query": "결정론 인용/근거 검사기 — 라벨된 시드셋(citeseed v1)",
+  "_note": "gold 라벨은 객관 근거(부분문자열 여부·재계산·해시·스키마). 표본내 12건 — 세계 정확도 아님. 외부 공개셋(CiteAudit 등)은 같은 문법으로 후속.",
+  "claims": [
+    { "statement": "환각 인용: 출처는 Type I 완료인데 답변은 Type II 통과라 주장", "sourceText": "The company finished a SOC 2 Type I audit in March 2026.", "quotedText": "SOC 2 Type II was passed", "expected": "failed" },
+    { "statement": "수치 오류: 2+3+5 를 11 로 잘못 합산", "statedValue": 11, "op": "sum", "operands": [2, 3, 5], "expected": "failed" },
+    { "statement": "날짜 오류: 출처에 없는 날짜를 명시", "sourceText": "발표일은 2026-07-06 입니다.", "statedDate": "2025-01-01", "expected": "failed" },
+    { "statement": "무결성 위반: content 의 해시가 명시 해시와 불일치", "content": "hello", "statedHash": "0000000000000000000000000000000000000000000000000000000000000000", "expected": "failed" },
+    { "statement": "스키마 위반: 필수 필드 name 누락", "schemaData": { "n": 1 }, "schemaDef": { "type": "object", "required": ["name"], "properties": { "name": { "type": "string" } } }, "expected": "failed" },
+    { "statement": "정합 인용: 인용문이 출처의 리터럴 부분문자열", "sourceText": "The quick brown fox jumps over the lazy dog.", "quotedText": "quick brown fox", "expected": "verified" },
+    { "statement": "수치 정합: 2+3+5=10 재계산 일치", "statedValue": 10, "op": "sum", "operands": [2, 3, 5], "expected": "verified" },
+    { "statement": "날짜 정합: 출처의 날짜와 형식무관 일치", "sourceText": "발표일은 2026-07-06 입니다.", "statedDate": "2026-07-06", "expected": "verified" },
+    { "statement": "무결성 정합: content 의 sha256 이 명시 해시와 일치", "content": "hello", "statedHash": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824", "expected": "verified" },
+    { "statement": "스키마 정합: name(string) 필수 만족", "schemaData": { "name": "Ada", "n": 1 }, "schemaDef": { "type": "object", "required": ["name"], "properties": { "name": { "type": "string" } } }, "expected": "verified" },
+    { "statement": "의역 한계(정직): 뜻은 같지만 리터럴이 아니라 검사기가 실패로 잡음 → FP(엄격성의 대가)", "sourceText": "The company finished a SOC 2 Type I audit in March 2026.", "quotedText": "completed its SOC 2 Type I certification", "expected": "verified" },
+    { "statement": "근거 없음: 검증 가능한 필드가 없어 abstain(advisory)", "expected": "advisory" }
+  ]
+}

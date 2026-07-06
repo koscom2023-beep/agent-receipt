@@ -25,6 +25,8 @@ export type { ClaimEvaluation, EvalClaimInput } from "./evidencekernel.js";
 // Verification Receipt 생산/재검증
 export { buildVerificationReceipt, tierProvenance, replayVerificationReceipt } from "./vreceipt.js";
 export type { VReceiptInput } from "./vreceipt.js";
+export { runBench, scoreClaim, computeMetrics, verdictOf } from "./bench.js";
+export type { Verdict, BenchClaim, ClaimScore, BenchMetrics } from "./bench.js";
 
 // 로딩 → 그래프/집계/triage/diff/이력/상태판 (CLI graph 표면과 같은 함수)
 export {

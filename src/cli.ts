@@ -53,6 +53,7 @@ import { runGenClaim } from "./genclaim.js";
 import { runCaptureIngest, runCaptureShow, runCaptureReset, runCaptureInstall, runCaptureUninstall, runCaptureVerify, runCaptureInstallCursor } from "./capture.js";
 import { runShareProof, runShareProofFromSaved, latestReceiptExists } from "./shareproof.js";
 import { runResearchVerify } from "./research.js";
+import { runBench } from "./bench.js";
 import { runCouncilVerify } from "./council.js";
 import { runSpec } from "./spec.js";
 import { runBadge } from "./badge.js";
@@ -140,6 +141,7 @@ agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
   research verify --file <report.json|report.md> [--fetch] [--out <p>]   각 주장의 14종 근거(인용·수치·날짜·링크·해시·서명·commit·변경파일·diff·스키마·버전·파일·영수증·산출물)를 결정론 대조 · .md=동결 문법 입력 · --fetch=라이브 재대조 · --out=Verification Receipt(입력해시+provenance 봉인)
 
 ■ 회의 결정검증(결정↔근거 대조 — 회의 실행 아님·검증만·같은 Evidence Kernel):
+  bench --file <dataset.json|.md> [--repeat N] [--out <p>]   라벨된 주장셋에서 검사기 정밀·재현율 + N회 재현성(결정론) 측정 · expected=verified|failed|advisory gold · 재현성 위반=exit 1 · --out=Verification Receipt
   council verify --file <decision.json> [--log <path>] [--out <p>]   결정의 근거(인용·수치·날짜·링크·해시·서명)를 대조 · --log=append-only DecisionLog · --out=Verification Receipt
 
 ■ Evidence Specification(검증 포맷의 표준 표면):
@@ -287,6 +289,11 @@ function main(): void {
     }
     console.error("research: 사용법 — research verify --file <report.json> [--fetch] [--out <path>]");
     process.exit(2);
+  }
+  if (command === "bench") {
+    // bench 는 git 불필요 — 라벨된 주장셋에서 검사기 정밀·재현율 + N회 재현성 측정. 재현성 위반=exit 1(불변식 회귀가드).
+    const r = getArg("--repeat");
+    runBench(getArg("--file"), { repeat: r !== undefined ? Number(r) : undefined, out: getArg("--out") });
   }
   if (command === "council") {
     // council 은 회의를 실행하지 않는다(=소비자 컴파일러의 일). DecisionRecord 의 결정↔근거를 검증만.
