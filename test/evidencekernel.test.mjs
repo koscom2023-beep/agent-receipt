@@ -286,9 +286,9 @@ check("evaluateClaim: file+receipt dispatch + 실패 evidence 생성", () => {
   assert.equal(e.failed, true);
   assert.ok(e.evidence.file && e.evidence.receipt);
 });
-check("CHECK_KINDS: Phase5 2종(file/receipt)+Phase6 artifact 포함 — 총 14종", () => {
-  assert.ok(CHECK_KINDS.includes("file") && CHECK_KINDS.includes("receipt") && CHECK_KINDS.includes("artifact"));
-  assert.equal(CHECK_KINDS.length, 14);
+check("CHECK_KINDS: Phase5 2종(file/receipt)+Phase6 artifact+range 포함 — 총 15종", () => {
+  assert.ok(CHECK_KINDS.includes("file") && CHECK_KINDS.includes("receipt") && CHECK_KINDS.includes("artifact") && CHECK_KINDS.includes("range"));
+  assert.equal(CHECK_KINDS.length, 15);
 });
 
 // ── Phase6: artifact 형태 검증(제약 ≥1 필수·크기 경계·sha) ──

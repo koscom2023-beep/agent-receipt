@@ -140,7 +140,7 @@ export const CROSSWALK_SOURCE = "verification capabilities → clauses · EU AI 
 export const VERIFICATION_CROSSWALK: RegistryEntry[] = [
   {
     signal: "deterministicVerification",
-    label: "결정론·재현가능 근거 검사 14종 — 같은 입력→같은 판정(LLM 판단 0)",
+    label: "결정론·재현가능 근거 검사 15종 — 같은 입력→같은 판정(LLM 판단 0)",
     controls: [
       { framework: "EU AI Act", id: "Article 15", title: "Accuracy, robustness and cybersecurity", confidence: "confirmed" },
       { framework: "SOC 2 TSC", id: "CC4.1", title: "Ongoing/separate evaluations of controls", confidence: "confirmed" },

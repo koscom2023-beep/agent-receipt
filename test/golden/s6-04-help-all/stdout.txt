@@ -19,7 +19,7 @@ agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
   verify [--json] / check / claims --file <c.json> / pre / prompt [--cursor|--claude]
 
 ■ 리서치 근거검증(출처 대조 — git 아님·검증만·공유 Evidence Kernel):
-  research verify --file <report.json|report.md> [--fetch] [--out <p>] [--decompose]   각 주장의 14종 근거(인용·수치·날짜·링크·해시·서명·commit·변경파일·diff·스키마·버전·파일·영수증·산출물)를 결정론 대조 · .md=동결 문법 입력 · --fetch=라이브 재대조 · --out=Verification Receipt(입력해시+provenance 봉인)
+  research verify --file <report.json|report.md> [--fetch] [--out <p>] [--decompose]   각 주장의 15종 근거(인용·수치·범위·날짜·링크·해시·서명·commit·변경파일·diff·스키마·버전·파일·영수증·산출물)를 결정론 대조 · .md=동결 문법 입력 · --fetch=라이브 재대조 · --out=Verification Receipt(입력해시+provenance 봉인)
 
 ■ 회의 결정검증(결정↔근거 대조 — 회의 실행 아님·검증만·같은 Evidence Kernel):
   bench --file <dataset.json|.md> [--repeat N] [--out <p>]   라벨된 주장셋에서 검사기 정밀·재현율 + N회 재현성(결정론) 측정 · expected=verified|failed|advisory gold · 재현성 위반=exit 1 · --out=Verification Receipt

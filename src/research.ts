@@ -38,6 +38,8 @@ export interface ResearchClaim {
   op?: unknown; // 재계산 연산(sum|mean|product|diff|ratio|percent|min|max)
   operands?: unknown; // 재계산 피연산자(report 가 줌·발명 0)
   eps?: unknown; // 허용오차(기본 1e-9)
+  statedMin?: unknown; // range: 하한(포함)
+  statedMax?: unknown; // range: 상한(포함)
   statedDate?: unknown; // 날짜 검증(선택) — 출처의 날짜와 형식무관 대조
   statedHash?: unknown; // 무결성 검증(선택) — content/contentFile 의 해시가 이것과 일치하나
   content?: unknown; // 해시/서명 대상 콘텐츠(인라인)
@@ -147,7 +149,7 @@ export function resolveFacts(claim: ResearchClaim): ResolvedFacts {
 export function buildEvalInput(claim: ResearchClaim, facts: ResolvedFacts): EvalClaimInput {
   const url = typeof claim.sourceUrl === "string" ? claim.sourceUrl : "";
   return {
-    quotedText: claim.quotedText, statedValue: claim.statedValue, op: claim.op, operands: claim.operands, eps: claim.eps, statedDate: claim.statedDate, link: url || undefined, statedHash: claim.statedHash, content: resolveContent(claim), algo: claim.algo, signature: claim.signature, publicKey: claim.publicKey,
+    quotedText: claim.quotedText, statedValue: claim.statedValue, op: claim.op, operands: claim.operands, eps: claim.eps, statedMin: claim.statedMin, statedMax: claim.statedMax, statedDate: claim.statedDate, link: url || undefined, statedHash: claim.statedHash, content: resolveContent(claim), algo: claim.algo, signature: claim.signature, publicKey: claim.publicKey,
     statedCommit: claim.statedCommit, commitExists: facts.commitExists ?? null,
     statedChangedFile: claim.statedChangedFile, changedFiles: facts.changedFiles ?? null,
     statedDiffText: claim.statedDiffText, diffText: facts.diffText ?? null,

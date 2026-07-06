@@ -55,6 +55,7 @@ export function citationStatus(quote: string, source: string | null): CitationSt
 // 보증 범위(정직·좁게): "수치가 출처/자기 피연산자와 정합하나"이지 "그 수치가 옳으냐"가 아니다.
 
 export type NumberStatus = "verified" | "mismatch" | "no-basis";
+export type RangeStatus = "verified" | "mismatch" | "no-basis";
 
 // 텍스트에서 숫자 토큰 추출(천단위 콤마 제거·소수·음수). 퍼센트/단위 기호는 무시하고 수만 뽑음.
 export function parseNumbersFromText(text: string): number[] {
@@ -123,6 +124,15 @@ export function numberStatus(
     return nums.some((n) => numbersClose(stated, n, eps)) ? "verified" : "mismatch";
   }
   return "no-basis";
+}
+
+// stated 수치가 [min, max] 안인가(포함). min/max 하나만 있어도 그 방향만 검사. 재계산 아닌 경계 대조(등급 B).
+export function rangeStatus(stated: number | null, min: number | null, max: number | null): RangeStatus {
+  if (stated === null || !Number.isFinite(stated)) return "no-basis";
+  if (min === null && max === null) return "no-basis";
+  if (min !== null && stated < min) return "mismatch";
+  if (max !== null && stated > max) return "mismatch";
+  return "verified";
 }
 
 // ── 날짜 검증 커널 (Phase3) ──
@@ -416,6 +426,8 @@ export interface EvalClaimInput {
   op?: unknown;
   operands?: unknown;
   eps?: unknown;
+  statedMin?: unknown; // range: 하한(포함)
+  statedMax?: unknown; // range: 상한(포함)
   statedDate?: unknown;
   link?: unknown; // 형식 검증할 URL(surface 가 sourceUrl 을 넘길 수 있음)
   statedHash?: unknown; // 무결성: content 의 해시가 이것과 일치하나
@@ -452,6 +464,7 @@ export interface CheckEvidence {
 export interface ClaimEvaluation {
   citation: CitationStatus | null;
   number: NumberStatus | null;
+  range: RangeStatus | null;
   date: DateStatus | null;
   link: LinkStatus | null;
   hash: HashStatus | null;
@@ -498,6 +511,7 @@ export interface CheckDescriptor {
 export const CHECK_REGISTRY: CheckDescriptor[] = [
   { kind: "citation", positive: true, grade: "B", run: (c, s) => (typeof c.quotedText === "string" && c.quotedText ? citationStatus(c.quotedText, s) : null) },
   { kind: "number", positive: true, grade: "A", run: (c, s) => (c.statedValue !== undefined ? numberStatus(parseStated(c.statedValue), { source: s, op: c.op, operands: Array.isArray(c.operands) ? (c.operands as number[]) : undefined, eps: typeof c.eps === "number" ? c.eps : undefined }) : null) },
+  { kind: "range", positive: true, grade: "B", run: (c) => (c.statedValue !== undefined && (c.statedMin !== undefined || c.statedMax !== undefined) ? rangeStatus(parseStated(c.statedValue), parseStated(c.statedMin), parseStated(c.statedMax)) : null) },
   { kind: "date", positive: true, grade: "B", run: (c, s) => (c.statedDate !== undefined ? dateStatus(typeof c.statedDate === "string" ? c.statedDate : null, s) : null) },
   { kind: "hash", positive: true, grade: "A", run: (c) => (c.statedHash !== undefined ? hashStatus(typeof c.statedHash === "string" ? c.statedHash : null, typeof c.content === "string" ? c.content : null, typeof c.algo === "string" ? c.algo : "sha256") : null) },
   { kind: "signature", positive: true, grade: "A", run: (c) => (c.signature !== undefined || c.publicKey !== undefined ? signatureStatus(typeof c.content === "string" ? c.content : null, typeof c.signature === "string" ? c.signature : null, typeof c.publicKey === "string" ? c.publicKey : null) : null) },
@@ -533,6 +547,12 @@ function evidenceFor(c: EvalClaimInput, source: string | null, results: Record<s
       if (nums.length) actual = `출처의 수치 ${nums.slice(0, 5).join(", ")}`;
     }
     ev.number = { expected: stated !== null ? String(stated) : String(c.statedValue), actual };
+  }
+  if (results.range === "mismatch") {
+    const stated = parseStated(c.statedValue);
+    const lo = parseStated(c.statedMin);
+    const hi = parseStated(c.statedMax);
+    ev.range = { expected: `[${lo ?? "-∞"}, ${hi ?? "+∞"}]`, actual: stated !== null ? String(stated) : String(c.statedValue) };
   }
   if (results.date === "mismatch" && typeof c.statedDate === "string") {
     const found = datesInText(s);
@@ -616,6 +636,7 @@ export function evaluateClaim(c: EvalClaimInput, source: string | null): ClaimEv
   return {
     citation: (results.citation as CitationStatus) ?? null,
     number: (results.number as NumberStatus) ?? null,
+    range: (results.range as RangeStatus) ?? null,
     date: (results.date as DateStatus) ?? null,
     link: (results.link as LinkStatus) ?? null,
     hash: (results.hash as HashStatus) ?? null,
@@ -672,6 +693,8 @@ export function claimSchema(): Record<string, unknown> {
       sourceFile: { type: "string" },
       quotedText: { type: "string", description: "citation: 출처의 리터럴 부분문자열인가" },
       statedValue: { type: ["number", "string"], description: "number: 출처의 수 또는 재계산과 상등" },
+      statedMin: { type: ["number", "string"], description: "range: 하한(포함)" },
+      statedMax: { type: ["number", "string"], description: "range: 상한(포함)" },
       op: { type: "string", enum: [...NUMBER_OPS] },
       operands: { type: "array", items: { type: "number" } },
       eps: { type: "number" },

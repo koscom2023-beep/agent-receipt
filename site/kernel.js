@@ -117,6 +117,18 @@ export function numberStatus(stated, opts) {
     }
     return "no-basis";
 }
+// stated 수치가 [min, max] 안인가(포함). min/max 하나만 있어도 그 방향만 검사. 재계산 아닌 경계 대조(등급 B).
+export function rangeStatus(stated, min, max) {
+    if (stated === null || !Number.isFinite(stated))
+        return "no-basis";
+    if (min === null && max === null)
+        return "no-basis";
+    if (min !== null && stated < min)
+        return "mismatch";
+    if (max !== null && stated > max)
+        return "mismatch";
+    return "verified";
+}
 const MONTHS = {
     jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06",
     jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12",
@@ -391,6 +403,7 @@ export const GRADE_RANK = { A: 3, B: 2, C: 1 };
 export const CHECK_REGISTRY = [
     { kind: "citation", positive: true, grade: "B", run: (c, s) => (typeof c.quotedText === "string" && c.quotedText ? citationStatus(c.quotedText, s) : null) },
     { kind: "number", positive: true, grade: "A", run: (c, s) => (c.statedValue !== undefined ? numberStatus(parseStated(c.statedValue), { source: s, op: c.op, operands: Array.isArray(c.operands) ? c.operands : undefined, eps: typeof c.eps === "number" ? c.eps : undefined }) : null) },
+    { kind: "range", positive: true, grade: "B", run: (c) => (c.statedValue !== undefined && (c.statedMin !== undefined || c.statedMax !== undefined) ? rangeStatus(parseStated(c.statedValue), parseStated(c.statedMin), parseStated(c.statedMax)) : null) },
     { kind: "date", positive: true, grade: "B", run: (c, s) => (c.statedDate !== undefined ? dateStatus(typeof c.statedDate === "string" ? c.statedDate : null, s) : null) },
     { kind: "hash", positive: true, grade: "A", run: (c) => (c.statedHash !== undefined ? hashStatus(typeof c.statedHash === "string" ? c.statedHash : null, typeof c.content === "string" ? c.content : null, typeof c.algo === "string" ? c.algo : "sha256") : null) },
     { kind: "signature", positive: true, grade: "A", run: (c) => (c.signature !== undefined || c.publicKey !== undefined ? signatureStatus(typeof c.content === "string" ? c.content : null, typeof c.signature === "string" ? c.signature : null, typeof c.publicKey === "string" ? c.publicKey : null) : null) },
@@ -428,6 +441,12 @@ function evidenceFor(c, source, results) {
                 actual = `출처의 수치 ${nums.slice(0, 5).join(", ")}`;
         }
         ev.number = { expected: stated !== null ? String(stated) : String(c.statedValue), actual };
+    }
+    if (results.range === "mismatch") {
+        const stated = parseStated(c.statedValue);
+        const lo = parseStated(c.statedMin);
+        const hi = parseStated(c.statedMax);
+        ev.range = { expected: `[${lo ?? "-∞"}, ${hi ?? "+∞"}]`, actual: stated !== null ? String(stated) : String(c.statedValue) };
     }
     if (results.date === "mismatch" && typeof c.statedDate === "string") {
         const found = datesInText(s);
@@ -518,6 +537,7 @@ export function evaluateClaim(c, source) {
     return {
         citation: results.citation ?? null,
         number: results.number ?? null,
+        range: results.range ?? null,
         date: results.date ?? null,
         link: results.link ?? null,
         hash: results.hash ?? null,
@@ -565,6 +585,8 @@ export function claimSchema() {
             sourceFile: { type: "string" },
             quotedText: { type: "string", description: "citation: 출처의 리터럴 부분문자열인가" },
             statedValue: { type: ["number", "string"], description: "number: 출처의 수 또는 재계산과 상등" },
+            statedMin: { type: ["number", "string"], description: "range: 하한(포함)" },
+            statedMax: { type: ["number", "string"], description: "range: 상한(포함)" },
             op: { type: "string", enum: [...NUMBER_OPS] },
             operands: { type: "array", items: { type: "number" } },
             eps: { type: "number" },
