@@ -179,10 +179,10 @@ code{font-family:var(--mono);font-size:.9em;background:var(--paper-2);border:1px
 <body>
 <nav>
   <a class="brand" href="/en">agent-receipt</a>
+  <a class="lk hide" href="/en/#axes">Audits</a>
   <a class="lk hide" href="/en/#cost">Cost</a>
   <a class="lk hide" href="/en/#prevents">Prevents</a>
-  <a class="lk" href="/en/playground">Playground</a>
-  <a class="lk hide" href="/demo">Demo</a>
+  <a class="lk" href="/en/playground">Demo</a>
   <a class="lk" href="https://github.com/koscom2023-beep/agent-receipt">GitHub</a>
   <span class="sp"></span>
   <span class="ver">v0.16.0</span>
@@ -193,8 +193,8 @@ code{font-family:var(--mono);font-size:.9em;background:var(--paper-2);border:1px
 <header>
   <div class="eyebrow">local-first · no account · no server</div>
   <h1>agent-receipt</h1>
-  <div class="thesis">AI coding: <b>what this session cost</b> · <b>where it's leaking</b> · <b>whether it did only what you asked</b> — locally.</div>
-  <div class="sub-hero">Reads each session's <span class="h">real token cost</span> from the local transcript, <span class="h">signals waste</span>, and <span class="h">verifies</span> the AI's evidence and changes when you need it. Honestly: it does not cut your bill directly — it shows where the money goes and signals when to stop.</div>
+  <div class="thesis">What the AI <b>did</b> and <b>said</b> — as a <b>verifiable receipt</b>, entirely local.</div>
+  <div class="sub-hero">Prices each session's <span class="h">real usage</span> to show cost, checks the AI's work against <span class="h">git diff and the contract scope</span>, and verifies a report's <span class="h">quotes, numbers, and commit claims</span> against their sources. No server, no account — all on your machine.</div>
   <div class="btns">
     <a class="btn p" href="/en/playground">Catch a fabrication in your browser →</a>
     <a class="btn g" href="/demo">Live Evidence Browser</a>
@@ -245,6 +245,17 @@ code{font-family:var(--mono);font-size:.9em;background:var(--paper-2);border:1px
     </div>
   </div>
 </header>
+
+<section id="axes">
+  <div class="eyebrow-s">§ Three audits</div>
+  <h2>agent-receipt leaves three things behind</h2>
+  <p class="sub">One philosophy — "what the AI did and said, as a local receipt anyone can verify later." Three axes hang off it.</p>
+  <div class="who">
+    <div class="c"><b>🧾 Change Audit</b><p><b>What did the AI actually change</b> in your repo? — checked against the contract scope, recorded in a hash-chained ledger, plus beyond-git actions (even failed / denied ones). <a href="#prevents" style="color:var(--brand)">Incidents it prevents →</a></p></div>
+    <div class="c"><b>🔎 Evidence Audit</b><p><b>Is the AI's stated evidence real?</b> — quotes, numbers, dates, git claims, versions checked against their sources by 15 deterministic checks. No LLM judging LLMs. <a href="#kinds" style="color:var(--brand)">The checks →</a></p></div>
+    <div class="c"><b>💰 Cost Audit</b><p><b>What did this session actually cost?</b> — the transcript's usage priced at list, showing where it leaks and when to start a fresh session. <a href="#cost" style="color:var(--brand)">See cost →</a></p></div>
+  </div>
+</section>
 
 <section id="cost">
   <div class="eyebrow-s">§ Cost</div>
