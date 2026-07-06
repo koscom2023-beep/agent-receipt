@@ -57,7 +57,7 @@ export function parseNumbersFromText(text) {
 export function numbersClose(a, b, eps) {
     return Math.abs(a - b) <= eps;
 }
-const NUMBER_OPS = ["sum", "mean", "product", "diff", "ratio", "percent", "min", "max"];
+const NUMBER_OPS = ["sum", "mean", "product", "diff", "ratio", "percent", "min", "max", "median", "count", "abs", "pow", "mod", "variance", "stddev", "floor", "ceil", "round"];
 export function isNumberOp(s) {
     return typeof s === "string" && NUMBER_OPS.includes(s);
 }
@@ -75,6 +75,27 @@ export function recompute(op, operands) {
         case "percent": return xs.length >= 2 && xs[1] !== 0 ? (xs[0] / xs[1]) * 100 : null;
         case "min": return Math.min(...xs);
         case "max": return Math.max(...xs);
+        // R7 추가(전부 params-free·단일 정의·결정론):
+        case "median": {
+            const s = [...xs].sort((a, b) => a - b);
+            const m = s.length >> 1;
+            return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+        }
+        case "count": return xs.length;
+        case "abs": return Math.abs(xs[0]);
+        case "pow": return xs.length >= 2 ? xs[0] ** xs[1] : null;
+        case "mod": return xs.length >= 2 && xs[1] !== 0 ? xs[0] % xs[1] : null;
+        case "variance": {
+            const mv = xs.reduce((a, b) => a + b, 0) / xs.length;
+            return xs.reduce((a, b) => a + (b - mv) ** 2, 0) / xs.length;
+        } // 모집단(÷n)
+        case "stddev": {
+            const ms = xs.reduce((a, b) => a + b, 0) / xs.length;
+            return Math.sqrt(xs.reduce((a, b) => a + (b - ms) ** 2, 0) / xs.length);
+        } // 모집단
+        case "floor": return Math.floor(xs[0]);
+        case "ceil": return Math.ceil(xs[0]);
+        case "round": return Math.round(xs[0]); // half-up
     }
 }
 // stated 수치 판정. 모드 B(op+operands 재계산) 우선 → 없으면 모드 A(source 에 실재) → 둘 다 없으면 no-basis.

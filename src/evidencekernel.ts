@@ -72,7 +72,7 @@ export function numbersClose(a: number, b: number, eps: number): boolean {
   return Math.abs(a - b) <= eps;
 }
 
-const NUMBER_OPS = ["sum", "mean", "product", "diff", "ratio", "percent", "min", "max"] as const;
+const NUMBER_OPS = ["sum", "mean", "product", "diff", "ratio", "percent", "min", "max", "median", "count", "abs", "pow", "mod", "variance", "stddev", "floor", "ceil", "round"] as const;
 export type NumberOp = (typeof NUMBER_OPS)[number];
 export function isNumberOp(s: unknown): s is NumberOp {
   return typeof s === "string" && (NUMBER_OPS as readonly string[]).includes(s);
@@ -91,6 +91,17 @@ export function recompute(op: NumberOp, operands: number[]): number | null {
     case "percent": return xs.length >= 2 && xs[1] !== 0 ? ((xs[0] as number) / (xs[1] as number)) * 100 : null;
     case "min": return Math.min(...xs);
     case "max": return Math.max(...xs);
+    // R7 추가(전부 params-free·단일 정의·결정론):
+    case "median": { const s = [...xs].sort((a, b) => a - b); const m = s.length >> 1; return s.length % 2 ? (s[m] as number) : ((s[m - 1] as number) + (s[m] as number)) / 2; }
+    case "count": return xs.length;
+    case "abs": return Math.abs(xs[0] as number);
+    case "pow": return xs.length >= 2 ? (xs[0] as number) ** (xs[1] as number) : null;
+    case "mod": return xs.length >= 2 && xs[1] !== 0 ? (xs[0] as number) % (xs[1] as number) : null;
+    case "variance": { const mv = xs.reduce((a, b) => a + b, 0) / xs.length; return xs.reduce((a, b) => a + (b - mv) ** 2, 0) / xs.length; } // 모집단(÷n)
+    case "stddev": { const ms = xs.reduce((a, b) => a + b, 0) / xs.length; return Math.sqrt(xs.reduce((a, b) => a + (b - ms) ** 2, 0) / xs.length); } // 모집단
+    case "floor": return Math.floor(xs[0] as number);
+    case "ceil": return Math.ceil(xs[0] as number);
+    case "round": return Math.round(xs[0] as number); // half-up
   }
 }
 
