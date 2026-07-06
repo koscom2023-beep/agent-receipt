@@ -185,7 +185,7 @@ code{font-family:var(--mono);font-size:.9em;background:var(--paper-2);border:1px
   <a class="lk hide" href="/demo">Demo</a>
   <a class="lk" href="https://github.com/koscom2023-beep/agent-receipt">GitHub</a>
   <span class="sp"></span>
-  <span class="ver">v0.15.3</span>
+  <span class="ver">v0.16.0</span>
   <a class="en" href="/" title="Korean version">한국어</a>
 </nav>
 
@@ -285,7 +285,7 @@ code{font-family:var(--mono);font-size:.9em;background:var(--paper-2);border:1px
   <div class="scroll"><table class="tbl">
     <tr><th>Audit</th><th>Question it answers</th></tr>
     <tr><td><b>AI Change Audit</b></td><td><b>What did the AI actually do to my repo?</b> Contract-scoped diff evidence · hash-chained ledger · third-party Rekor anchoring · beyond-git action capture (incl. failed &amp; denied attempts) — plus an opt-in real-time guard that stops forbidden-path writes up front.</td></tr>
-    <tr><td><b>AI Evidence Audit</b></td><td><b>Is what the AI said actually true?</b> 14 deterministic check kinds — no LLM judging LLMs. Same input, same verdict, every time.</td></tr>
+    <tr><td><b>AI Evidence Audit</b></td><td><b>Is what the AI said actually true?</b> 15 deterministic check kinds — each carries an evidence grade (A recompute · B compare · C form), and abstains when there's no basis. No LLM judging LLMs. Same input, same verdict, every time.</td></tr>
   </table></div>
 </section>
 
@@ -336,12 +336,13 @@ agent-receipt share-proof                  <span class="c"># proof HTML for the 
 
 <section id="kinds">
   <div class="eyebrow-s">§ Kernel</div>
-  <h2>14 deterministic checks</h2>
-  <p class="sub">One kernel registry — the code is the spec (<code>agent-receipt spec --format json</code>).</p>
+  <h2>15 deterministic checks <span style="font-family:var(--mono);font-size:13px;color:var(--mut);font-weight:600">+ A/B/C evidence grades</span></h2>
+  <p class="sub">One kernel registry — the code is the spec (<code>agent-receipt spec --format json</code>). Each check carries a <b>grade</b> (A=recompute · B=compare · C=form), and when there's neither proof nor failure it <b>abstains</b> — no over-assurance.</p>
   <div class="scroll"><table class="tbl">
     <tr><th>kind</th><th>verifies</th></tr>
     <tr><td><b>citation</b></td><td>the quote is literally in the cited source</td></tr>
-    <tr><td><b>number</b></td><td>a stated number exists in the source, or matches a recomputation (sum/mean/ratio…)</td></tr>
+    <tr><td><b>number</b> <span style="color:var(--mut);font-size:11px">grade A</span></td><td>a stated number exists in the source, or matches a recomputation (sum/mean/ratio/median/stddev/pow…)</td></tr>
+    <tr><td><b>range</b> <span style="color:var(--brand);font-size:11px">new in 0.16</span></td><td>a stated number falls within the declared bounds <code>[min, max]</code> (inclusive)</td></tr>
     <tr><td><b>date</b></td><td>format-agnostic date match ("Mar 1, 2026" ≡ "2026-03-01")</td></tr>
     <tr><td><b>hash / signature</b></td><td>SHA-256 integrity · real Ed25519 verification</td></tr>
     <tr><td><b>commit / fileChanged / diffContains</b></td><td>"commit X exists / changed file Y / its diff contains Z" — against actual git history</td></tr>
@@ -350,6 +351,22 @@ agent-receipt share-proof                  <span class="c"># proof HTML for the 
     <tr><td><b>receipt</b></td><td>a cited receipt exists and its seal replays clean</td></tr>
     <tr><td><b>link</b></td><td style="color:var(--mut)">URL well-formedness — advisory only</td></tr>
   </table></div>
+</section>
+
+<section id="deeper">
+  <div class="eyebrow-s">§ 0.16 · harder evidence</div>
+  <h2>Proven in numbers · mapped to clauses · forgery caught</h2>
+  <p class="sub">Not "trust me" — "reproduce it." From the checker's own accuracy to regulation clauses, supply-chain attestation, and halting an action — what grew in 0.16. All deterministic, local, honestly labeled.</p>
+  <div class="who">
+    <div class="c"><b>📊 Benchmark harness <code>bench</code></b><p>Puts a <b>number</b> on how accurate the checker is — precision/recall on a labeled set + <b>N-run reproducibility</b> (same input → same verdict, 1000 out of 1000). If reproducibility ever breaks, CI <code>exit 1</code>. <span style="color:var(--faint)">Seed-set accuracy is in-sample — not a world-accuracy claim.</span></p></div>
+    <div class="c"><b>🅰 Evidence grades A / B / C + abstain</b><p>Not every pass carries the same weight. <b>A</b>=recompute (number·hash·signature) &gt; <b>B</b>=compare (citation·git) &gt; <b>C</b>=form. When there's no basis to judge, it <b>abstains</b> — never over-assures.</p></div>
+    <div class="c"><b>🌳 Merkle transparency log</b><p>Even if someone silently rewrites the log's past and recomputes what follows, a <b>previously published root + consistency proof</b> catches that re-chain (fork). RFC6962 · O(log n) inclusion · <code>ledger merkle</code>.</p></div>
+    <div class="c"><b>🔗 in-toto attestation <code>predicate</code></b><p>Wraps a verification receipt in the standard type <code>claim-verification/v1</code> so it drops straight into the <b>supply-chain attestation</b> ecosystem (in-toto·Sigstore). subject digest = the sealed receipt's hash.</p></div>
+    <div class="c"><b>📋 Regulation crosswalk <code>controls --crosswalk</code></b><p>Maps each verification capability to <b>EU AI Act·SOC 2·ISO 42001</b> clauses as <b>evidence</b> — not a compliance claim; "evidence relevant to", with a per-clause "does not prove".</p></div>
+    <div class="c"><b>🛑 Action-halt gate <code>gate</code></b><p>When verification fails, it <b>halts the action</b> — CI <code>exit 1</code>, or in hook mode a PreToolUse deny that stops the tool <i>before</i> it runs (opt-in, explicitly wired).</p></div>
+    <div class="c"><b>📡 OpenTelemetry emission <code>otel</code></b><p>Emits verification events as <b>OTLP</b> into your existing observability / GenAI dashboards. No SDK bundled (<b>deps 0</b>) · deterministic traceId.</p></div>
+    <div class="c"><b>💸 Model-swap audit <code>cost --audit-swap</code></b><p>When the declared model differs from the model that actually answered, it <b>computes the price delta</b> — catching a <b>downgrade</b> (a premium model promised, a cheaper one served = suspected overcharge).</p></div>
+  </div>
 </section>
 
 <section id="gallery">

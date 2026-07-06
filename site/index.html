@@ -185,7 +185,7 @@ code{font-family:var(--mono);font-size:.9em;background:var(--paper-2);border:1px
   <a class="lk hide" href="/demo">데모</a>
   <a class="lk" href="https://github.com/koscom2023-beep/agent-receipt">GitHub</a>
   <span class="sp"></span>
-  <span class="ver">v0.15.3</span>
+  <span class="ver">v0.16.0</span>
   <a class="en" href="/en">EN</a>
 </nav>
 
@@ -285,7 +285,7 @@ code{font-family:var(--mono);font-size:.9em;background:var(--paper-2);border:1px
   <div class="scroll"><table class="tbl">
     <tr><th>감사</th><th>답하는 질문</th></tr>
     <tr><td><b>AI 작업 감사<br><span style="font-weight:400;color:var(--mut);font-size:11.5px">Change Audit</span></b></td><td><b>AI가 내 저장소에서 실제로 무엇을 했나?</b> 계약 범위와 맞춰 보고, 해시체인 원장에 남기고, 제3자(Rekor)에 봉인하고, git엔 안 보이는 행동(실패·거부까지)도 기록합니다. 원하면 실시간 가드를 켜서 금지 경로 쓰기를 미리 막을 수도 있죠.</td></tr>
-    <tr><td><b>AI 근거 감사<br><span style="font-weight:400;color:var(--mut);font-size:11.5px">Evidence Audit</span></b></td><td><b>AI가 댄 근거가 진짜인가?</b> 14가지 검사로 확인합니다. LLM에게 LLM을 채점시키지 않아요. 같은 입력이면 언제나 같은 답이 나옵니다.</td></tr>
+    <tr><td><b>AI 근거 감사<br><span style="font-weight:400;color:var(--mut);font-size:11.5px">Evidence Audit</span></b></td><td><b>AI가 댄 근거가 진짜인가?</b> 15가지 검사로 확인합니다 — 각 검사엔 <b>증거 등급(A 재계산·B 대조·C 형식)</b>이 붙고, 판단할 근거가 없으면 <b>보류</b>합니다. LLM에게 LLM을 채점시키지 않아요. 같은 입력이면 언제나 같은 답.</td></tr>
   </table></div>
 </section>
 
@@ -336,12 +336,13 @@ agent-receipt share-proof                  <span class="c"># 클라이언트·�
 
 <section id="kinds">
   <div class="eyebrow-s">§ 커널</div>
-  <h2>14종 결정론 검사</h2>
-  <p class="sub">검사 하나하나가 커널 레지스트리에 등록돼 있습니다. 코드가 곧 명세죠(<code>agent-receipt spec --format json</code>).</p>
+  <h2>15종 결정론 검사 <span style="font-family:var(--mono);font-size:13px;color:var(--mut);font-weight:600">+ 증거 등급 A/B/C</span></h2>
+  <p class="sub">검사 하나하나가 커널 레지스트리에 등록돼 있습니다. 코드가 곧 명세죠(<code>agent-receipt spec --format json</code>). 각 검사는 <b>등급</b>(A=재계산·B=대조·C=형식)을 달고, 실증도 실패도 아니면 <b>보류(abstain)</b>로 남겨 과대보증을 막습니다.</p>
   <div class="scroll"><table class="tbl">
     <tr><th>종류</th><th>검증 내용</th></tr>
     <tr><td><b>citation</b></td><td>인용문이 출처에 실제로 있나</td></tr>
-    <tr><td><b>number</b></td><td>주장한 수가 출처에 있거나 재계산(합계·평균·비율…)과 일치하나</td></tr>
+    <tr><td><b>number</b> <span style="color:var(--mut);font-size:11px">등급 A</span></td><td>주장한 수가 출처에 있거나 재계산(합계·평균·비율·중앙값·표준편차·거듭제곱…)과 일치하나</td></tr>
+    <tr><td><b>range</b> <span style="color:var(--brand);font-size:11px">0.16 신규</span></td><td>주장한 수가 명시한 상·하한 <code>[min, max]</code> 안에 드나(경계 포함)</td></tr>
     <tr><td><b>date</b></td><td>표기가 달라도 같은 날인가("Mar 1, 2026" ≡ "2026-03-01")</td></tr>
     <tr><td><b>hash / signature</b></td><td>SHA-256 무결성 · 진짜 Ed25519 전자서명 검증</td></tr>
     <tr><td><b>commit / fileChanged / diffContains</b></td><td>"커밋 X 존재 / 파일 Y 변경 / diff에 Z 포함" — 실제 git 이력 대조</td></tr>
@@ -350,6 +351,22 @@ agent-receipt share-proof                  <span class="c"># 클라이언트·�
     <tr><td><b>receipt</b></td><td>인용한 영수증이 실재하고 봉인 재계산까지 통과</td></tr>
     <tr><td><b>link</b></td><td style="color:var(--mut)">URL 형식만 봅니다 — 참고용이라 증거로는 안 칩니다</td></tr>
   </table></div>
+</section>
+
+<section id="deeper">
+  <div class="eyebrow-s">§ 0.16 · 더 단단한 증거</div>
+  <h2>숫자로 증명하고 · 조항에 매핑하고 · 위조를 잡습니다</h2>
+  <p class="sub">"믿어라"가 아니라 "재현해 봐라". 검사기 자신의 정확도부터 규제 조항·공급망 증명·행위 차단까지 — 0.16에서 늘어난 것들입니다. 전부 결정론·로컬·정직 라벨.</p>
+  <div class="who">
+    <div class="c"><b>📊 벤치 하네스 <code>bench</code></b><p>검사기가 얼마나 정확한지 <b>숫자로</b> 냅니다 — 라벨셋에서 정밀·재현율 + <b>N회 재현성</b>(같은 입력이면 1000번 돌려 1000번 같은 판정). 재현성이 깨지면 CI가 <code>exit 1</code>. <span style="color:var(--faint)">시드셋 정확도는 표본내 — 세계 정확도 주장 아님.</span></p></div>
+    <div class="c"><b>🅰 증거 등급 A / B / C + 보류</b><p>모든 통과가 같은 무게가 아닙니다. <b>A</b>=재계산(수치·해시·서명) &gt; <b>B</b>=대조(인용·git) &gt; <b>C</b>=형식. 판단할 근거가 없으면 <b>보류(abstain)</b> — 과대보증하지 않습니다.</p></div>
+    <div class="c"><b>🌳 Merkle 투명로그</b><p>원장의 과거를 몰래 고치고 이후를 다시 계산해도, <b>예전에 게시한 root와 일관성증명</b>이 그 재체인(포크)을 잡습니다. RFC6962 · 포함증명 O(log n) · <code>ledger merkle</code>.</p></div>
+    <div class="c"><b>🔗 in-toto 증명 <code>predicate</code></b><p>검증 영수증을 표준 타입 <code>claim-verification/v1</code>으로 감싸 <b>공급망 증명 생태계</b>(in-toto·Sigstore)에 그대로 얹습니다. subject digest = 봉인 영수증 해시.</p></div>
+    <div class="c"><b>📋 규제 조항 크로스워크 <code>controls --crosswalk</code></b><p>각 검증 능력을 <b>EU AI Act·SOC 2·ISO 42001</b> 조항에 <b>증거로</b> 매핑합니다 — 준수 단정이 아니라 '관련 증거', 조항마다 "does not prove" 명시.</p></div>
+    <div class="c"><b>🛑 행위 중단 게이트 <code>gate</code></b><p>검증이 실패하면 <b>행위를 중단</b>합니다 — CI는 <code>exit 1</code>, 훅 모드는 PreToolUse deny로 도구 실행 <i>전에</i> 막습니다(opt-in·명시 배선).</p></div>
+    <div class="c"><b>📡 OpenTelemetry 방출 <code>otel</code></b><p>검증 이벤트를 <b>OTLP</b>로 방출해 기존 관측 파이프라인·GenAI 대시보드에 편입합니다. SDK 미번들(<b>deps 0</b>)·결정론 traceId.</p></div>
+    <div class="c"><b>💸 모델치환 감사 <code>cost --audit-swap</code></b><p>선언한 모델과 실제 응답 모델이 다르면 <b>비용차를 계산</b>합니다 — premium을 약속하고 싼 모델을 서빙한 <b>다운그레이드(과대청구 의심)</b>를 잡아냅니다.</p></div>
+  </div>
 </section>
 
 <section id="gallery">
