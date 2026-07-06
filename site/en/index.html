@@ -185,7 +185,7 @@ code{font-family:var(--mono);font-size:.9em;background:var(--paper-2);border:1px
   <a class="lk" href="/en/playground">Demo</a>
   <a class="lk" href="https://github.com/koscom2023-beep/agent-receipt">GitHub</a>
   <span class="sp"></span>
-  <span class="ver">v0.16.0</span>
+  <span class="ver">v0.17.0</span>
   <a class="en" href="/" title="Korean version">한국어</a>
 </nav>
 
@@ -193,8 +193,9 @@ code{font-family:var(--mono);font-size:.9em;background:var(--paper-2);border:1px
 <header>
   <div class="eyebrow">local-first · no account · no server</div>
   <h1>agent-receipt</h1>
-  <div class="thesis">What the AI <b>did</b> and <b>said</b> — as a <b>verifiable receipt</b>, entirely local.</div>
-  <div class="sub-hero">Prices each session's <span class="h">real usage</span> to show cost, checks the AI's work against <span class="h">git diff and the contract scope</span>, and verifies a report's <span class="h">quotes, numbers, and commit claims</span> against their sources. No server, no account — all on your machine.</div>
+  <div class="thesis"><b>Contract</b> an AI coding session, <b>judge</b> it when it ends, keep a <b>verifiable receipt</b>.</div>
+  <div class="sub-hero">Checks the contract scope (allowed/denied paths) against the <span class="h">real git diff</span> and closes the session with a <span class="h">4-value verdict</span> (PASS · warnings · FAIL · incomplete) — the diff is the evidence, not the agent's self-report. The same engine verifies a report's <span class="h">quotes, numbers and commit claims</span>, and shows what the session actually cost. No server, no account — all on your machine.</div>
+  <div class="sub-hero" style="font-size:12.5px;color:var(--faint)">Why trust it — deterministic verdicts (same input → same verdict) · sealed receipts (sha256, replayable) · third-party seal (Rekor) · in-toto · Merkle. All local.</div>
   <div class="btns">
     <a class="btn p" href="/en/playground">Catch a fabrication in your browser →</a>
     <a class="btn g" href="/demo">Live Evidence Browser</a>
