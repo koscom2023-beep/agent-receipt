@@ -28,7 +28,8 @@ export { buildVerificationReceipt, tierProvenance, replayVerificationReceipt } f
 export type { VReceiptInput } from "./vreceipt.js";
 export { runBench, scoreClaim, computeMetrics, verdictOf } from "./bench.js";
 export type { Verdict, BenchClaim, ClaimScore, BenchMetrics } from "./bench.js";
-export { leafHash, nodeHash, merkleRoot, merkleRootHex, inclusionProof, verifyInclusion, consistencyProof, verifyConsistency, runMerkle } from "./merkle.js";
+export { leafHash, nodeHash, merkleRoot, merkleRootHex, inclusionProof, verifyInclusion, consistencyProof, verifyConsistency, runMerkle, printMerkleReport } from "./merkle.js";
+export { runLedgerMerkle, ledgerMerkleLeaves } from "./ledger.js";
 export { buildClaimVerificationStatement, claimVerificationPredicateSchema, CLAIM_VERIFICATION_PREDICATE_TYPE, runPredicate } from "./predicate.js";
 export { VERIFICATION_CROSSWALK, CROSSWALK_SOURCE, renderCrosswalkMd, renderCrosswalkJson, runCrosswalk } from "./controls.js";
 export { buildOtelSpans, otelLine, runOtel, OTEL_SCOPE, OTEL_GENAI } from "./otel.js";

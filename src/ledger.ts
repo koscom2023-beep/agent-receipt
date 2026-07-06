@@ -1,4 +1,5 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { printMerkleReport } from "./merkle.js";
 import { dirname, join } from "node:path";
 import { createHash } from "node:crypto";
 import { withFileLock, writeFileAtomic } from "./lock.js";
@@ -136,6 +137,18 @@ export function runLedger(json: boolean, cwd: string = process.cwd()): never {
   console.log("  " + LIMIT_NOTE);
   console.log("");
   process.exit(0);
+}
+
+// ── 백로그: R3 Merkle 투명로그를 실제 원장에 배선 — 엔트리의 entryHash(정본 신원)를 leaf 로 ──
+// 해시체인은 "내가 가진 로그"의 내부 무결성만 본다. 재체인 공격(과거 라인 바꾸고 이후 entryHash 전부 재계산)은
+//   체인상 정합이라 못 잡는다. 게시된 old Merkle root + 일관성증명이 그 cross-time 개찬(포크)을 잡는다.
+export function ledgerMerkleLeaves(entries: LedgerEntry[]): string[] {
+  return entries.map((e) => e.entryHash).filter((h): h is string => typeof h === "string" && h.length > 0);
+}
+export function runLedgerMerkle(sub: string | undefined, opts: { index?: number; oldSize?: number; oldRoot?: string }, cwd: string = process.cwd()): never {
+  const entries = readLedger(cwd);
+  const leaves = ledgerMerkleLeaves(entries);
+  printMerkleReport(sub, leaves, `${LEDGER_REL} (${leaves.length}/${entries.length} 엔트리=entryHash leaf)`, opts);
 }
 
 export interface ChainResult {

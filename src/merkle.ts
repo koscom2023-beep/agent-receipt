@@ -174,12 +174,21 @@ export function runMerkle(sub: string | undefined, opts: { file?: string; dir?: 
     console.error((e as Error).message === "no-input" ? "merkle: --file <jsonl> 또는 --dir <경로> 가 필요합니다." : `merkle: 입력을 못 읽음: ${(e as Error).message}`);
     process.exit(2);
   }
-  const { leaves, src } = loaded;
+  printMerkleReport(sub, loaded.leaves, loaded.src, opts);
+}
+
+// SSOT: leaves(Buffer 또는 문자열=엔트리해시) 위에서 root/포함/일관성 리포트 — merkle CLI 와 ledger 배선이 공유.
+export function printMerkleReport(
+  sub: string | undefined,
+  leaves: Array<Buffer | string>,
+  srcLabel: string,
+  opts: { index?: number; oldSize?: number; oldRoot?: string },
+): never {
   const n = leaves.length;
   const root = merkleRoot(leaves);
   console.log("");
   console.log(line);
-  console.log(`merkle ${sub ?? "root"} · RFC6962 · ${src}`);
+  console.log(`merkle ${sub ?? "root"} · RFC6962 · ${srcLabel}`);
   console.log(line);
   console.log(`tree size : ${n}`);
   console.log(`root      : ${root.toString("hex")}`);
@@ -191,7 +200,7 @@ export function runMerkle(sub: string | undefined, opts: { file?: string; dir?: 
       process.exit(2);
     }
     const proof = inclusionProof(i, leaves);
-    const lh = leafHash(leaves[i] as Buffer);
+    const lh = leafHash(leaves[i] as Buffer | string);
     const ok = verifyInclusion(lh, i, n, proof, root);
     console.log(`leaf[${i}]  : ${lh.toString("hex")}`);
     console.log(`proof(${proof.length}) : ${proof.map((p) => p.toString("hex").slice(0, 12) + "…").join(" · ") || "(단일 leaf)"}`);

@@ -32,7 +32,7 @@ import { runAuditPack } from "./auditpack.js";
 import { runCloseRecon } from "./closerecon.js";
 import { runPrepareCommit } from "./preparecommit.js";
 import { runFinish } from "./finish.js";
-import { runLedger, runLedgerRebuild, runLedgerVerify } from "./ledger.js";
+import { runLedger, runLedgerRebuild, runLedgerVerify, runLedgerMerkle } from "./ledger.js";
 import { runReplay } from "./replay.js";
 import { runAttest } from "./attest.js";
 import { runControls, runCrosswalk } from "./controls.js";
@@ -163,7 +163,7 @@ agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
 
 ■ 증빙 / 감사 묶음(git 증거):
   report [--type developer|client|audit] / receipt [--format ...] [--content] [--strict-redact] [--committed] [--agent <n>] [--model <m>] / receipts [--latest|--cat|--dir]
-  audit [--json] / insights [--since <n>] [--format md|json] / risk [--format md|json] / cost [--format md|json] [--audit-swap --file <usage.json>] / dashboard / index [--json] / ledger [--json] (rebuild|verify) / replay [--pack <dir>] [--receipt <p> [--fetch]] / attest / anchor [--upload] / controls [--format md|json] [--crosswalk] / otel [--receipt <p>] [--format otlp|line] / gate [--receipt <p>] [--hook] / incident
+  audit [--json] / insights [--since <n>] [--format md|json] / risk [--format md|json] / cost [--format md|json] [--audit-swap --file <usage.json>] / dashboard / index [--json] / ledger [--json] (rebuild|verify|merkle [root|prove|consistency]) / replay [--pack <dir>] [--receipt <p> [--fetch]] / attest / anchor [--upload] / controls [--format md|json] [--crosswalk] / otel [--receipt <p>] [--format otlp|line] / gate [--receipt <p>] [--hook] / incident
 
 ■ 서명 / 승인(로컬·ed25519):
   keys init / sign --receipt <p> / verify-signature --receipt <p> / approve --receipt <p> [--note <t>] / approvals / badge --receipt <p>   Rekor 앵커 영수증용 README 배지(클릭=공개 로그 검증·앵커 없으면 발급 거부)
@@ -261,6 +261,14 @@ function main(): void {
   if (command === "ledger") {
     if (process.argv[3] === "rebuild") runLedgerRebuild();
     if (process.argv[3] === "verify") runLedgerVerify();
+    if (process.argv[3] === "merkle") {
+      // R3 Merkle 투명로그를 실제 원장에 배선 — entryHash leaf 위 root/포함/일관성(포크 탐지).
+      const ln = (f: string): number | undefined => {
+        const v = getArg(f);
+        return v !== undefined ? Number(v) : undefined;
+      };
+      runLedgerMerkle(process.argv[4], { index: ln("--index"), oldSize: ln("--old-size"), oldRoot: getArg("--old-root") });
+    }
     runLedger(hasFlag("--json"));
   }
   if (command === "replay" || command === "verify-pack") {
