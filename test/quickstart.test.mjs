@@ -65,6 +65,7 @@ check("사전조건: done PASS + 다음행동(share) 안내", () => {
   assert.equal(doneOut.status, 0, doneOut.stdout);
   assert.ok(doneOut.stdout.includes("판정: PASS"), "PASS");
   assert.ok(doneOut.stdout.includes("다음 행동:") && doneOut.stdout.includes("share-proof"), "결정4 PASS 분기");
+  assert.ok(/① .*share-proof.*② .*PR.*③ .*verify-proof/.test(doneOut.stdout), "배치A-4: PASS 순서 고정(①share→②PR→③보존/검증)");
 });
 run(d2, ["share-proof", "--out", "a.html"]);
 run(d2, ["share", "--out", "b.html"]);

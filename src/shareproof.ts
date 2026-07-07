@@ -163,16 +163,48 @@ export function toProofHtml(r: Receipt, anchor?: RekorAnchor | null, extras?: Pr
   <p class="meta">Not included — generate with <code>agent-receipt share-proof --evidence-dir .agent-guard/vreceipts</code> to embed a neutral pass/fail rollup of this session's evidence checks.</p>
 </section>`;
 
-  // ── v0.20 결정1·2: 10초 요약 블록(탭 위 고정) — 전 수치가 Receipt 필드 그대로(신규 계산 0·"권장" 어휘 금지) ──
+  // ── v0.20 결정1·2 + 배치A-1: 10초 요약 블록(탭 위 고정) — 전 수치가 Receipt 필드 그대로(신규 계산 0·"권장" 어휘 금지) ──
+  // 배치A-1(council 2026-07-07): 신호를 4버킷(리뷰어의 실제 판단 순서)으로 재그룹 — *재배치만*(재그룹 전후 신호 집합 동일을 테스트가 단언).
+  //   민감 렉시콘 내장 금지 — Critical 버킷의 판단 주체는 계약/policy(도구는 매칭만·버킷명에 명시).
   const prose = r.contractSnapshot ? renderContractProse(r.contractSnapshot) : null;
   const guardDenied = r.actions ? r.actions.filter((a) => a.denied).length : null;
   const checksPassed = r.checks.filter((c) => c.ok).length;
   const signals = r.verdict?.reasons ?? [];
+  const BUCKET_TITLES = [
+    "1 · Scope — 계약 범위",
+    "2 · Critical paths — 계약이 지정한 고위험",
+    "3 · Validation — 검사·측정 기반",
+    "4 · Agent behavior — 행위 신호",
+  ] as const;
+  const BUCKET_OF: Record<string, 0 | 1 | 2 | 3> = {
+    "denied-path": 0, "out-of-scope": 0,
+    "critical-path": 1, "policy-forbid": 1,
+    "check-failed": 2, "verify-fail": 2, "no-baseline": 2, "stale-branch-mismatch": 2, "stale-baseline-not-ancestor": 2, "stale-unknown": 2,
+    "waste-signal": 3, "red-flag": 3,
+  };
+  const BUCKET_CAP = 5;
+  const bucketed: string[][] = [[], [], [], []];
+  const unbucketed: string[] = []; // rule-id 없는 reason(PASS 문장 등) — 버킷 밖 그대로(누락 금지)
+  for (const s2 of signals) {
+    const m = s2.match(/^\[([a-z-]+)\]/);
+    if (m && BUCKET_OF[m[1]] !== undefined) bucketed[BUCKET_OF[m[1]]].push(s2);
+    else unbucketed.push(s2);
+  }
+  const bucketHtml = BUCKET_TITLES.map((title, i) => {
+    const items = bucketed[i];
+    const shown = items.slice(0, BUCKET_CAP);
+    const foldedN = items.length - shown.length;
+    return `<p class="meta"><strong>${esc(title)}</strong>${items.length === 0 ? " — 해당 없음" : ""}</p>${
+      shown.length ? `\n  <ul class="actions">${shown.map((x) => `<li>${esc(x)}</li>`).join("\n")}${foldedN > 0 ? `\n  <li class="muted">외 ${foldedN}건 — 접힘을 여기(인쇄 포함) 명시</li>` : ""}</ul>` : ""
+    }`;
+  }).join("\n  ");
   const execSummary = `
   <section class="exec">
   ${prose ? `<p class="meta"><b>${esc(prose.ko)}</b></p>\n  <p class="meta">${esc(prose.en)}</p>` : ""}
   <p class="meta">Changed: <strong>${r.touched.length}</strong> file(s) (+${r.magnitude.added} / -${r.magnitude.deleted} lines, ${r.magnitude.newFiles} new) · Critical paths: ${critTxt} · Checks: ${r.checks.length ? `${checksPassed}/${r.checks.length} OK` : "none"}${guardDenied !== null ? ` · Guard-denied events: <strong>${guardDenied}</strong>` : ""}</p>
-  ${signals.length ? `<p class="meta">Signals (verdict facts, restated — a pointer, <strong>not a judgment</strong> and not the whole):</p>\n  <ul class="actions">${signals.map((s2) => `<li>${esc(s2)}</li>`).join("\n")}</ul>` : ""}
+  <p class="meta">Review focus — 판정 사실의 재배치(a pointer, <strong>not a judgment</strong> and not the whole):</p>
+  ${bucketHtml}
+  ${unbucketed.length ? `<ul class="actions">${unbucketed.map((x) => `<li>${esc(x)}</li>`).join("\n")}</ul>` : ""}
   </section>`;
 
   // ── v0.20 결정3: 세션 타임라인 — capture(행위) / git(커밋 시각 축약판·정직 라벨) ──
@@ -241,7 +273,15 @@ export function toProofHtml(r: Receipt, anchor?: RekorAnchor | null, extras?: Pr
   <div class="tablabels"><label for="pt-change">Change</label><label for="pt-evidence">Evidence</label><label for="pt-cost">Cost</label></div>
   <div class="pane pane-change">
   ${extras?.client
-    ? `<p class="meta">Condensed client view — technical detail is intentionally omitted here. The <strong>full technical receipt</strong> (default share-proof) and the <strong>preservation bundle</strong> (--bundle) are separate artifacts.</p>
+    ? `<p class="meta"><strong>Condensed client view</strong> — a condensed <strong>view of the same sealed evidence</strong>, not a separate document (배치A-3: 같은 증빙의 축약 뷰).</p>
+  <table>
+    <tr><td class="k">Same evidence (contentHash)</td><td class="hash">${esc(r.contentHash)}</td></tr>
+    <tr><td class="k">Contract</td><td><code>${esc(r.contractId)}</code></td></tr>
+    <tr><td class="k">Generated</td><td>${esc(r.timestamp)}</td></tr>
+    <tr><td class="k">Full technical proof</td><td>generate with <code>agent-receipt share</code> on the same receipt — identical contentHash</td></tr>
+    <tr><td class="k">Preservation bundle</td><td><code>agent-receipt share --bundle</code> → recipient verifies offline with <code>verify-proof</code></td></tr>
+  </table>
+  <p class="meta">Omitted in this view (all present in the full proof/bundle of the same contentHash): full touched-file list · detailed technical table · beyond-git action detail · capture coverage detail.</p>
   ${anchorSection}${timelineSection}`
     : `<table>
     <tr><td class="k">Result</td><td>${pass ? "Stayed within agreed scope" : "Out-of-scope / contract violation — see details"}</td></tr>

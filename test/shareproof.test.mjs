@@ -136,14 +136,42 @@ check("타임라인 — git 축약판 정직 라벨(capture 미설치)", () => {
   const h = toProofHtml(r, null, { timeline: { source: "git", events: [{ ts: "2026-01-01T00:00:00Z", label: "commit abc — init" }], folded: 0 } });
   assert.ok(h.includes("git commit times") && h.includes("capture hooks are installed"), "축약판 사유 명시");
 });
-check("--client 축약판 — 기술 상세 생략 + '전체판 별도' 자백 + 요약은 유지", () => {
+check("--client 축약판(배치A-3) — 동일 증빙 연결 슬롯 + 생략 목록 + 상세 생략", () => {
   const h = toProofHtml(r, null, { client: true, timeline: { source: "git", events: [{ ts: "2026-01-01T00:00:00Z", label: "commit abc — init" }], folded: 0 } });
   assert.ok(!h.includes("Integrity (contentHash)"), "기술표 생략");
   assert.ok(!h.includes("Beyond-git actions"), "상세 생략");
-  assert.ok(h.includes("Condensed client view") && h.includes("separate artifacts"), "전체판 별도 자백");
-  assert.ok(h.includes('class="exec"'), "요약 블록은 유지");
-  assert.ok(h.includes("Session timeline"), "타임라인 유지");
+  assert.ok(h.includes("same sealed evidence"), "별도 문서 아님 명시");
+  assert.ok(h.includes("Same evidence (contentHash)") && h.includes("sha256:deadbeef"), "동일 contentHash 슬롯(전체판과 같은 값)");
+  assert.ok(h.includes("Full technical proof") && h.includes("--bundle"), "전체판·번들 참조 슬롯");
+  assert.ok(h.includes("Omitted in this view") && h.includes("touched-file list") && h.includes("capture coverage"), "생략 목록 명시");
+  assert.ok(h.includes('class="exec"') && h.includes("Session timeline"), "요약·타임라인 유지");
   assert.ok(!h.includes("<script"), "script 0 불변");
+});
+// ════════ 배치A-1 — Review Focus 4버킷(재배치만·집합 보존·cap·빈 버킷 표기) ════════
+check("4버킷 — 재그룹 전후 신호 집합 동일(누락/중복 0) + 버킷 배치 정확", () => {
+  const reasons = [
+    "[denied-path] 금지 경로 변경 1건: .env",
+    "[critical-path] 고위험 경로 변경: pay/**",
+    "[check-failed] 필수 검사 실패 1건: tsc",
+    "[red-flag] 확인 신호 1건: 의존성 추가",
+    "[mystery-id] 알 수 없는 신호",
+  ];
+  const h = toProofHtml({ ...r, verdict: { verdict: "FAIL", reasons } });
+  for (const s of reasons) {
+    const escaped = s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    assert.equal((h.match(new RegExp(escaped, "g")) ?? []).length, 1, `정확히 1회 렌더: ${s}`);
+  }
+  assert.ok(h.indexOf("Scope") < h.indexOf("[denied-path]"), "Scope 버킷 배치");
+  assert.ok(h.includes("계약이 지정한"), "Critical 버킷명=판단 주체 명시(렉시콘 내장 아님)");
+  assert.ok(h.indexOf("Validation") < h.indexOf("[check-failed]"), "Validation 배치");
+  assert.ok(h.indexOf("Agent behavior") < h.indexOf("[red-flag]"), "Behavior 배치");
+});
+check("4버킷 — 빈 버킷 '해당 없음' + cap 5 접힘 명시(인쇄 포함)", () => {
+  const many = Array.from({ length: 7 }, (_, i) => `[red-flag] 신호 ${i}`);
+  const h = toProofHtml({ ...r, verdict: { verdict: "PASS_WITH_WARNINGS", reasons: many } });
+  assert.ok(h.includes("Scope") && h.includes("해당 없음"), "빈 버킷 표기(침묵 금지)");
+  assert.ok(h.includes("외 2건") && h.includes("인쇄 포함"), "cap 5 + 접힘 명시");
+  assert.ok(!/권장|추천/.test(h), "판단어 금지 유지");
 });
 check("타임라인 없음/요약 후에도 script 0·외부 URL 0 불변", () => {
   const h = toProofHtml(r, null, { timeline: null });
