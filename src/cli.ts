@@ -53,6 +53,8 @@ import { runGenClaim, runGenClaimLlmPrompt, runGenClaimFromLlm } from "./genclai
 import { runCaptureIngest, runCaptureShow, runCaptureReset, runCaptureInstall, runCaptureUninstall, runCaptureVerify, runCaptureInstallCursor } from "./capture.js";
 import { runShareProof, runShareProofFromSaved, latestReceiptExists } from "./shareproof.js";
 import { runQuickstart } from "./quickstart.js";
+import { runVerifyProof } from "./verifyproof.js";
+import { runInbox } from "./inbox.js";
 import { runResearchVerify } from "./research.js";
 import { runBench } from "./bench.js";
 import { runMerkle } from "./merkle.js";
@@ -169,6 +171,8 @@ agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
   graph subjects --dir <d> [--format json]   subject(프로젝트) 단위 상태판 — 순수 카운트 롤업(영수증·pass/fail·실패 이벤트·check 분포·기간[자가보고]·판단 아님) · 증감은 graph diff 의 bySubject
 
 ■ 증빙 / 감사 묶음(git 증거):
+  verify-proof <bundle-dir>                              받은 proof bundle 한 번에 검증(봉인 재계산·DSSE 서명·rekor 형식·evidence replay — 오프라인·exit 0/1/2)
+  inbox [--out <html>] [--format json] [--days N|--all]  쌓인 영수증 상태판(판정/금지경로/고위험 필터·구버전=판정없음 버킷·기본 90일·읽기전용)
   report [--type developer|client|audit] / receipt [--format ...] [--content] [--strict-redact] [--committed] [--agent <n>] [--model <m>] / receipts [--latest|--cat|--dir]
   audit [--json] / insights [--since <n>] [--format md|json] / risk [--format md|json] / cost [--format md|json] [--audit-swap --file <usage.json>] / dashboard / index [--json] / ledger [--json] (rebuild|verify|merkle [root|prove|consistency]) / replay [--pack <dir>] [--receipt <p> [--fetch]] / attest / anchor [--upload] / controls [--format md|json] [--crosswalk] / otel [--receipt <p>] [--format otlp|line] / gate [--receipt <p>] [--hook] / incident
 
@@ -329,6 +333,14 @@ function main(): void {
       return v !== undefined ? Number(v) : undefined;
     };
     runMerkle(process.argv[3], { file: getArg("--file"), dir: getArg("--dir"), index: mnum("--index"), oldSize: mnum("--old-size"), oldRoot: getArg("--old-root") });
+  }
+  if (command === "verify-proof") {
+    // v0.21 결정7 — 받은 proof bundle 을 한 명령으로 검증(오프라인·합성·신규 프리미티브 0).
+    runVerifyProof(process.argv[3]);
+  }
+  if (command === "inbox") {
+    // v0.21 결정8 — 쌓인 Work Receipt 상태판(읽기전용·중립 카운트·inbox/1 JSON 계약=hosted-호환).
+    runInbox({ out: getArg("--out"), format: getArg("--format"), days: getArg("--days"), all: hasFlag("--all") });
   }
   if (command === "quickstart") {
     // v0.20 결정5 — 첫 성공 경험: 인쇄 우선·--write 에서만 실제 기록(자기 CLI 순차 호출·재구현 0).
