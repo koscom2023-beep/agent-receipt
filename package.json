@@ -1,6 +1,6 @@
 {
   "name": "@promptia-labs/agent-receipt",
-  "version": "0.17.0",
+  "version": "0.18.0",
   "description": "AI work audit receipts — verifies and records what an AI coding agent actually changed in your local git tree. Provides git-based evidence for compliance review (not a compliance guarantee).",
   "license": "MIT",
   "repository": {
