@@ -11,7 +11,7 @@ import { ensureSigningKey, publicKeyFingerprint, publicKeyRelPath } from "./keys
 // 한 명령(anchor --upload): 최신 영수증 자동 + 키 자동생성 + 서명 + Rekor 등록(node fetch·외부 도구 0).
 // 원칙: npm 의존성 0(node crypto/fetch + 순수 PAE) · 정직 라벨(Rekor=시간·존재 봉인, keyless 신원은 아님) · 값 미노출(Statement만).
 
-const DSSE_PAYLOAD_TYPE = "application/vnd.in-toto+json";
+export const DSSE_PAYLOAD_TYPE = "application/vnd.in-toto+json"; // P2 백로그: predicate --sign 이 재사용(같은 payloadType — Statement 의 predicateType 이 종류를 구분)
 const REKOR_URL = "https://rekor.sigstore.dev";
 
 /** DSSE PAE(Pre-Authentication Encoding) v1: "DSSEv1 SP len(type) SP type SP len(body) SP body"(바이트). 순수함수. */

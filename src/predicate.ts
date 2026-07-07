@@ -1,6 +1,9 @@
-import { existsSync, readFileSync } from "node:fs";
-import { isAbsolute, join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { basename, isAbsolute, join } from "node:path";
+import { sign as edSign } from "node:crypto";
 import type { InTotoStatement } from "./attest.js";
+import { buildDsseEnvelope, DSSE_PAYLOAD_TYPE } from "./anchor.js";
+import { ensureSigningKey, publicKeyFingerprint } from "./keys.js";
 import { LIMIT_NOTE } from "./disclosure.js";
 
 // R4: verification receipt(research/council/bench)용 in-toto predicate 를 정식 명명·공개.
@@ -70,11 +73,13 @@ export function claimVerificationPredicateSchema(): Record<string, unknown> {
 }
 
 /**
- * `agent-receipt predicate --receipt <verification-receipt.json> [--schema]`
- *  Verification Receipt 를 claim-verification/v1 in-toto Statement 로 감싸 stdout 출력(전송/서명 없음).
- *  --schema: predicate JSON Schema 출력. exit 0 / 2.
+ * `agent-receipt predicate --receipt <verification-receipt.json> [--schema] [--sign [--out <p>]]`
+ *  Verification Receipt 를 claim-verification/v1 in-toto Statement 로 감싸 stdout 출력.
+ *  --sign(백로그 D7): Statement 를 **오프라인 DSSE 서명**(기존 ed25519 키 재사용·anchor 와 같은 payloadType —
+ *    Statement 의 predicateType 이 종류를 구분) → `.agent-guard/anchors/<name>.vreceipt.dsse.json`.
+ *    업로드 없음(네트워크 0) — Rekor 등록은 별도 결정. exit 0 / 2.
  */
-export function runPredicate(receiptArg: string | undefined, opts: { schema?: boolean } = {}): never {
+export function runPredicate(receiptArg: string | undefined, opts: { schema?: boolean; sign?: boolean; out?: string } = {}): never {
   if (opts.schema) {
     process.stdout.write(JSON.stringify(claimVerificationPredicateSchema(), null, 2) + "\n");
     process.exit(0);
@@ -100,7 +105,30 @@ export function runPredicate(receiptArg: string | undefined, opts: { schema?: bo
     process.exit(2);
   }
   const statement = buildClaimVerificationStatement(receipt);
+  if (opts.sign) {
+    // 백로그 D7 — 오프라인 DSSE 서명: 기존 키(ensureSigningKey) 재사용·키 2벌 금지(Security 회의). 네트워크 0.
+    let signing: ReturnType<typeof ensureSigningKey>;
+    try {
+      signing = ensureSigningKey(process.cwd());
+    } catch (e) {
+      console.error(`predicate --sign: ${(e as Error).message}`);
+      process.exit(2);
+    }
+    const keyid = publicKeyFingerprint(process.cwd()) ?? undefined;
+    const payload = Buffer.from(JSON.stringify(statement));
+    const envelope = buildDsseEnvelope(payload, DSSE_PAYLOAD_TYPE, (pae) => ({
+      sig: edSign(null, pae, signing.key).toString("base64"),
+      keyid,
+    }));
+    const outRel = opts.out ?? join(".agent-guard", "anchors", basename(p).replace(/\.json$/, "") + ".vreceipt.dsse.json");
+    const outAbs = isAbsolute(outRel) ? outRel : join(process.cwd(), outRel);
+    mkdirSync(join(outAbs, ".."), { recursive: true });
+    writeFileSync(outAbs, JSON.stringify(envelope, null, 2) + "\n");
+    console.log(`predicate --sign: DSSE 서명 완료 → ${outRel}`);
+    console.log("  정직: 오프라인 자기키 서명(무결성+키 소유 부인방지) — 신원 증명·Rekor 등록 아님(등록은 별도 결정·업로드 0).");
+    process.exit(0);
+  }
   process.stdout.write(JSON.stringify(statement, null, 2) + "\n");
-  process.stderr.write(`note: in-toto Statement(${CLAIM_VERIFICATION_PREDICATE_TYPE})를 stdout 으로만 출력 — 전송/서명 없음. DSSE 서명·Rekor 봉인은 anchor 경로.\n`);
+  process.stderr.write(`note: in-toto Statement(${CLAIM_VERIFICATION_PREDICATE_TYPE})를 stdout 으로만 출력 — 전송 없음. 오프라인 DSSE 서명은 --sign, Rekor 봉인은 anchor 경로.\n`);
   process.exit(0);
 }

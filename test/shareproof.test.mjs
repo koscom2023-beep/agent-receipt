@@ -77,6 +77,32 @@ check("actions 없으면 beyond-git 섹션 생략(바이트 절약)", () => {
   assert.ok(!h.includes("Beyond-git actions"));
 });
 
+// ════════ P2 v0.19 D5 — 3축 탭(CSS-only·script 0 유지) ════════
+check("탭 3축(Change/Evidence/Cost) — radio+label+pane 존재", () => {
+  for (const id of ["pt-change", "pt-evidence", "pt-cost"]) assert.ok(html.includes(`id="${id}"`), `radio ${id}`);
+  for (const cls of ["pane-change", "pane-evidence", "pane-cost"]) assert.ok(html.includes(cls), `pane ${cls}`);
+  assert.ok(html.includes('type="radio"'), "CSS-only radio 탭");
+  assert.ok(!html.includes("<script"), "탭 도입 후에도 script 0(보안 불변)");
+});
+check("DA-3: 인쇄=전 패널 펼침 규칙", () => {
+  assert.ok(html.includes("@media print") && html.includes("display:block!important"), "print 펼침 규칙");
+});
+check("빈 탭 정직 표기(침묵 금지) — 포함 방법 안내", () => {
+  assert.ok(html.includes("--evidence-dir"), "Evidence 빈 탭에 포함 방법");
+  assert.ok(html.includes("--with-cost"), "Cost 빈 탭에 포함 방법");
+});
+check("extras 주입 — evidence 롤업(중립·판단 없음) + cost 라벨", () => {
+  const h = toProofHtml(r, null, {
+    evidence: { receipts: 5, pass: 4, fail: 1, exceptions: 2, mostFailedCheck: "citation" },
+    evidenceDirLabel: ".agent-guard/vreceipts",
+    costLines: ["이 세션 비용(추정·리스트가·청구서 아님): ~$1.23"],
+  });
+  assert.ok(h.includes("<strong>5</strong>") && h.includes("citation"), "evidence 카운트+최다실패");
+  assert.ok(h.includes("not a judgment"), "중립 명시");
+  assert.ok(h.includes("~$1.23") && h.includes("Estimate, not an invoice"), "cost 라벨");
+  assert.ok(!h.includes("<script"), "extras 주입 후에도 script 0");
+});
+
 if (fail.length) {
   console.error(`shareproof: ${fail.length} FAIL\n  ` + fail.join("\n  "));
   process.exit(1);

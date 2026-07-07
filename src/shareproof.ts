@@ -1,25 +1,58 @@
-import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname, isAbsolute, join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { basename, dirname, isAbsolute, join } from "node:path";
 import type { Contract } from "./schema.js";
-import { buildReceipt, type Receipt } from "./receipt.js";
+import { buildReceipt, renderReceipt, type Receipt } from "./receipt.js";
 import { splitActionsForDisplay, COVERED_TOOLS } from "./capture.js";
-import { redactText } from "./redact.js";
+import { redactText, redactJsonText } from "./redact.js";
 import { LIMIT_NOTE } from "./disclosure.js";
-import { listReceipts, loadRekorAnchor, loadSavedReceipt, type RekorAnchor } from "./receiptStore.js";
+import { listReceipts, loadRekorAnchor, loadSavedReceipt, rekorAnchorPath, type RekorAnchor } from "./receiptStore.js";
 import { renderVerdictLine, renderContractLine } from "./verdict.js";
+import { buildViewData, buildSummary } from "./graph.js";
+import { costLines } from "./cost.js";
+import { summarizeCurrentSession } from "./transcript.js";
+import { publicKeyRelPath } from "./keys.js";
 
 // ── share-proof v0 (council B) — 외주사가 클라이언트에 보내는 로컬 self-contained HTML 증거 ──
 // 원칙: 자동로드 0(외부 CDN/img/script "src" 없음 — 열람만으로 유출 0) · 모든 동적 문자열 esc(injection 방어)
 //        · 정직 라벨(제목=AI Work Receipt·tamper-evident·컴플라이언스 보장 아님) · buildReceipt 재사용(새 계산 0).
 // Stage 1b(6차 council): 영수증을 Rekor 에 앵커한 경우(.rekor.json sidecar 존재)만 *클릭형* 검증 링크(href)를 추가.
-//   href 는 사용자가 직접 누를 때만 외부와 통신 → '열람만으로 유출 0' 원칙 유지. 앵커 없으면 출력은 기존과 바이트 동일.
+//   href 는 사용자가 직접 누를 때만 외부와 통신 → '열람만으로 유출 0' 원칙 유지.
+// P2 v0.19 (council D5·D6): 3축 탭 1페이지(Change/Evidence/Cost — D7 확정 축과 동일) + proof bundle.
+//   · 탭은 **CSS radio 만**(script 0 유지 — 보안 테스트가 <script 를 금지) · @media print 에서 전 패널 펼침(DA-3:
+//     "탭이 증거를 숨김" 수용) · CSS 미지원 환경 폴백 = 전부 보임 · 빈 탭은 침묵 대신 "포함 안 됨 + 포함 방법" 정직 표기.
+//   · Evidence/Cost 내용은 opt-in 플래그(--evidence-dir/--with-cost)로만 채움 — 기본 IO 불변.
 
 function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-/** 순수함수: Receipt(+선택 Rekor 앵커) → 고객 전달용 self-contained HTML(자동로드 리소스 0). 앵커 미전달 시 출력은 앵커 도입 전과 바이트 동일. */
-export function toProofHtml(r: Receipt, anchor?: RekorAnchor | null): string {
+// ── P2 D5: Evidence 탭 데이터 — vreceipts 디렉터리의 중립 롤업(graph 와 같은 함수 재사용·판단 없음) ──
+export interface ProofEvidence {
+  receipts: number;
+  pass: number;
+  fail: number;
+  exceptions: number; // 봉인확인실패·날조근거결정·출처도달실패 합(동결 3종)
+  mostFailedCheck: string | null;
+}
+export function buildProofEvidence(dir: string): ProofEvidence | null {
+  try {
+    const rows = buildViewData(dir);
+    if (!rows.length) return null;
+    const s = buildSummary(rows);
+    const exceptions = Object.values(s.exceptions).reduce((a, b) => a + b, 0);
+    return { receipts: s.total, pass: s.pass, fail: s.fail, exceptions, mostFailedCheck: s.mostFailedCheck };
+  } catch {
+    return null; // 깨진/비어있는 디렉터리 = 포함 안 함(가짜 요약 금지)
+  }
+}
+export interface ProofExtras {
+  evidence?: ProofEvidence | null;
+  evidenceDirLabel?: string | null; // 표기용(어느 디렉터리를 요약했나)
+  costLines?: string[] | null; // 생성 시점 세션 비용 줄(cost.ts costLines 재사용)
+}
+
+/** 순수함수: Receipt(+선택 Rekor 앵커·선택 extras) → 고객 전달용 self-contained HTML(자동로드 리소스 0·script 0). */
+export function toProofHtml(r: Receipt, anchor?: RekorAnchor | null, extras?: ProofExtras): string {
   const pass = r.ok;
   const statusTxt = pass ? "PASS ✓" : "FAIL ✗";
   const statusColor = pass ? "#0a7d33" : "#c00";
@@ -44,7 +77,7 @@ export function toProofHtml(r: Receipt, anchor?: RekorAnchor | null): string {
 </section>`
       : "";
 
-  // Stage 1b: Rekor 앵커가 있으면 *클릭형* 제3자 검증 섹션. 기존 CSS 클래스만 사용(전역 style 불변) → 앵커 없으면 ""(바이트 동일).
+  // Stage 1b: Rekor 앵커가 있으면 *클릭형* 제3자 검증 섹션. 앵커 없으면 ""(섹션 자체 없음).
   const anchorSection = anchor
     ? `
   <section>
@@ -56,10 +89,9 @@ export function toProofHtml(r: Receipt, anchor?: RekorAnchor | null): string {
   </table>
   <p class="meta">Seals <strong>time &amp; existence</strong> via a third party — not a keyless (identity) proof.</p>
 </section>`
-      : "";
+    : "";
 
   // 완전성 보증 iter1b(6차 council #3·#6): git 이 바꿨으나 capture 기록 없는 경로(훅 사각) + 커버리지 caveat.
-  // 기존 CSS 클래스만 사용(전역 style 불변). capture 부재(r.actions undefined)거나 갭 0이면 ""(=기존과 바이트 동일·골든143 유지).
   const gitChanged = new Set<string>([...r.touched, ...r.staged, ...r.untracked]);
   const capturedPaths = new Set<string>((r.actions ?? []).map((a) => a.path).filter((p): p is string => !!p));
   const uncovered = r.actions !== undefined ? [...gitChanged].filter((p) => !capturedPaths.has(p)) : [];
@@ -73,7 +105,34 @@ export function toProofHtml(r: Receipt, anchor?: RekorAnchor | null): string {
   <ul class="actions">${uncoveredRows}${moreLi}</ul>
   <p class="meta">Captured surface: ${esc(COVERED_TOOLS.join(", "))}. Not captured: WebFetch / MCP / sub-agent / OS-level. This proof is <strong>tamper-evident &amp; gap-evident — not complete</strong>.</p>
 </section>`
-      : "";
+    : "";
+
+  // ── P2 D5: Evidence 탭 — vreceipts 요약(있으면) / 정직한 빈 상태(없으면 어떻게 포함하나) ──
+  const ev = extras?.evidence ?? null;
+  const evidencePane = ev
+    ? `<section>
+  <h2>Verification receipts${extras?.evidenceDirLabel ? ` — <code>${esc(extras.evidenceDirLabel)}</code>` : ""}</h2>
+  <p class="contrast"><strong>${ev.receipts}</strong> receipt(s) — pass <strong>${ev.pass}</strong> · fail <strong>${ev.fail}</strong>${ev.exceptions ? ` · <strong>exceptions ${ev.exceptions}</strong> (seal-replay fail / ungrounded decision / unreachable source)` : ""}</p>
+  ${ev.mostFailedCheck ? `<p class="meta">Most-failed check: <code>${esc(ev.mostFailedCheck)}</code></p>` : ""}
+  <p class="meta">Each receipt re-verifies locally: <code>agent-receipt replay --receipt &lt;file&gt;</code> (seal recompute · input drift · commit link). Counts are a neutral rollup — <strong>not a judgment</strong>.</p>
+</section>`
+    : `<section>
+  <h2>Verification receipts</h2>
+  <p class="meta">Not included — generate with <code>agent-receipt share-proof --evidence-dir .agent-guard/vreceipts</code> to embed a neutral pass/fail rollup of this session's evidence checks.</p>
+</section>`;
+
+  // ── P2 D5: Cost 탭 — 생성 시점 세션 추정(있으면) / 정직한 빈 상태 ──
+  const cl = extras?.costLines ?? null;
+  const costPane = cl && cl.length
+    ? `<section>
+  <h2>Session cost (at proof-generation time)</h2>
+  ${cl.map((x) => `<p class="meta">${esc(x)}</p>`).join("\n  ")}
+  <p class="meta"><strong>Estimate, not an invoice</strong> — local transcript × list price, read at generation time; it is not stored in the sealed receipt.</p>
+</section>`
+    : `<section>
+  <h2>Session cost</h2>
+  <p class="meta">Not included — generate with <code>agent-receipt share-proof --with-cost</code> to embed the session's estimated token cost (local transcript · estimate, not an invoice).</p>
+</section>`;
 
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -94,11 +153,27 @@ export function toProofHtml(r: Receipt, anchor?: RekorAnchor | null): string {
   .flag{display:inline-block;background:#fff3cd;color:#7a5b00;border-radius:4px;padding:0 .35rem;font-size:.75rem;font-weight:600}
   .contrast{background:#f1f4ff;border-radius:8px;padding:.5rem .7rem;font-size:.95rem}
   footer{margin-top:1.6rem;padding-top:1rem;border-top:1px solid #eee;color:#888;font-size:.78rem}
+  /* P2 D5 — CSS-only tabs (radio hack · script 0). CSS 미지원 폴백 = 전 패널 보임. */
+  .tabs>input.tabradio{position:absolute;opacity:0;pointer-events:none}
+  .tablabels{display:flex;gap:.35rem;border-bottom:2px solid #e3e3e6;margin:1.2rem 0 .9rem}
+  .tablabels label{padding:.35rem .8rem;border:1px solid #e3e3e6;border-bottom:none;border-radius:8px 8px 0 0;cursor:pointer;font-size:.88rem;color:#666;background:#fafafa}
+  .tabs .pane{display:none}
+  #pt-change:checked~.pane-change{display:block}
+  #pt-evidence:checked~.pane-evidence{display:block}
+  #pt-cost:checked~.pane-cost{display:block}
+  #pt-change:checked~.tablabels label[for="pt-change"],#pt-evidence:checked~.tablabels label[for="pt-evidence"],#pt-cost:checked~.tablabels label[for="pt-cost"]{background:#fff;color:#1a1a1a;font-weight:600;border-bottom:2px solid #fff;margin-bottom:-2px}
+  @media print{.tabs .pane{display:block!important}.tablabels,.tabs>input.tabradio{display:none!important}} /* DA-3: 인쇄=전 패널 펼침(증거 숨김 금지) */
 </style></head><body>
 <div class="wrap">
   <h1>AI Work Receipt</h1>
   <p class="meta">Scope evidence for <code>${esc(r.contractId)}</code>${r.title ? ` — ${esc(r.title)}` : ""}</p>${r.verdict ? `\n  <p class="meta"><b>${esc(renderVerdictLine(r.verdict))}</b></p>` : ""}${r.contractSnapshot ? `\n  <p class="meta">${esc(renderContractLine(r.contractSnapshot))}</p>` : ""}
   <div class="status">${statusTxt}</div>
+  <div class="tabs">
+  <input class="tabradio" type="radio" name="proof-tab" id="pt-change" checked>
+  <input class="tabradio" type="radio" name="proof-tab" id="pt-evidence">
+  <input class="tabradio" type="radio" name="proof-tab" id="pt-cost">
+  <div class="tablabels"><label for="pt-change">Change</label><label for="pt-evidence">Evidence</label><label for="pt-cost">Cost</label></div>
+  <div class="pane pane-change">
   <table>
     <tr><td class="k">Result</td><td>${pass ? "Stayed within agreed scope" : "Out-of-scope / contract violation — see details"}</td></tr>
     <tr><td class="k">Branch</td><td><code>${esc(r.branch.current)}</code>${r.branch.expected ? ` (expected <code>${esc(r.branch.expected)}</code>)` : ""}</td></tr>
@@ -110,6 +185,14 @@ export function toProofHtml(r: Receipt, anchor?: RekorAnchor | null): string {
     <tr><td class="k">Generated</td><td>${esc(r.timestamp)}</td></tr>
   </table>
   ${beyondGit}${coverageSection}${anchorSection}
+  </div>
+  <div class="pane pane-evidence">
+  ${evidencePane}
+  </div>
+  <div class="pane pane-cost">
+  ${costPane}
+  </div>
+  </div>
   <footer>
     ${esc(LIMIT_NOTE)}<br>
     git-based evidence — <strong>tamper-evident, not non-forgeable</strong>. This is evidence for review, <strong>not a compliance guarantee</strong>. Generated locally; no data left the machine.
@@ -119,17 +202,41 @@ export function toProofHtml(r: Receipt, anchor?: RekorAnchor | null): string {
 `;
 }
 
+// ── CLI 옵션(P2) ──
+export interface ShareProofOpts {
+  out?: string;
+  redact?: boolean;
+  evidenceDir?: string;
+  withCost?: boolean;
+  bundle?: boolean;
+}
+
+// extras 조립 — opt-in 플래그일 때만 IO(기본 경로 IO 불변).
+function buildExtras(opts: ShareProofOpts, cwd: string): ProofExtras {
+  const evDir = opts.evidenceDir ? (isAbsolute(opts.evidenceDir) ? opts.evidenceDir : join(cwd, opts.evidenceDir)) : null;
+  const evidence = evDir ? buildProofEvidence(evDir) : null;
+  let cost: string[] | null = null;
+  if (opts.withCost) {
+    try {
+      const sum = summarizeCurrentSession(cwd);
+      cost = sum.supported ? costLines(sum) : null;
+    } catch {
+      cost = null; // 비용 읽기 실패 = 미포함(가짜 숫자 금지)
+    }
+  }
+  return { evidence, evidenceDirLabel: opts.evidenceDir ?? null, costLines: cost };
+}
+
 /**
- * `agent-receipt share-proof [--out <path>] [--redact]` — 현재 상태로 receipt 를 만들어
- * 클라이언트 전달용 self-contained HTML 로 저장. exit = ok ? 0 : 1.
+ * `agent-receipt share-proof [--out <path>] [--redact] [--evidence-dir <d>] [--with-cost]` — receipt 를
+ * 클라이언트 전달용 self-contained 3축 탭 HTML 로 저장. exit = ok ? 0 : 1.
  */
-// 공통 쓰기: Receipt → HTML 파일. fresh build / 저장 receipt 양쪽이 재사용. anchor 는 저장 receipt 경로에서만 조회됨(fresh 는 항상 없음 → 바이트 동일).
-function writeProof(r: Receipt, outArg: string | undefined, redact: boolean, anchor?: RekorAnchor | null): never {
-  let html = toProofHtml(r, anchor);
-  if (redact) html = redactText(html).text;
+function writeProof(r: Receipt, opts: ShareProofOpts, anchor: RekorAnchor | null, cwd: string): never {
+  let html = toProofHtml(r, anchor, buildExtras(opts, cwd));
+  if (opts.redact) html = redactText(html).text;
   const stamp = (r.timestamp ?? "receipt").replace(/[:.]/g, "-");
-  const rel = outArg ?? join(".agent-guard", `proof-${stamp}.html`);
-  const out = isAbsolute(rel) ? rel : join(process.cwd(), rel);
+  const rel = opts.out ?? join(".agent-guard", `proof-${stamp}.html`);
+  const out = isAbsolute(rel) ? rel : join(cwd, rel);
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, html);
   console.log(`share-proof 생성: ${rel} (${r.ok ? "PASS" : "FAIL"})`);
@@ -138,9 +245,97 @@ function writeProof(r: Receipt, outArg: string | undefined, redact: boolean, anc
   process.exit(r.ok ? 0 : 1);
 }
 
+// ── P2 D6: proof bundle — 공유용 디렉터리(html + receipt.json + anchor sidecar + public key + VERIFY.md) ──
+// audit-pack 과 목적 분리(감사용 claim 대조 vs 제3자 공유·검증 안내) — Simplicity dissent 기록됨.
+export function buildVerifyMd(hasDsse: boolean, hasRekor: boolean, rekorUrl: string | null, hasPublicKey: boolean, evidenceFiles: number): string {
+  const L: string[] = [];
+  L.push("# How to verify this proof bundle / 이 증거 묶음을 검증하는 법");
+  L.push("");
+  L.push("## Contents / 구성");
+  L.push("- `index.html` — the human-readable proof page (self-contained; opening it loads nothing external).");
+  L.push("- `receipt.json` — the sealed work receipt (fields + `contentHash`).");
+  if (hasDsse) L.push("- `anchor.dsse.json` — DSSE envelope (in-toto Statement, ed25519-signed).");
+  if (hasRekor) L.push("- `anchor.rekor.json` — third-party transparency-log registration (Rekor).");
+  if (hasPublicKey) L.push("- `public.pem` — the signer's self-managed ed25519 public key.");
+  if (evidenceFiles > 0) L.push(`- \`evidence/\` — ${evidenceFiles} verification receipt(s) (research/council/bench).`);
+  L.push("");
+  L.push("## Verify / 검증");
+  if (hasRekor && rekorUrl) {
+    L.push(`1. **Third-party (no trust in the sender needed)**: open ${rekorUrl} — the public Rekor log confirms this receipt **existed at that time**. Seals time & existence — not the signer's real-world identity.`);
+  } else {
+    L.push("1. **Third-party anchor: not present** — this bundle has no Rekor registration (the sender can add one with `agent-receipt anchor --upload`).");
+  }
+  if (hasDsse && hasPublicKey) {
+    L.push("2. **Signature**: `anchor.dsse.json` is a standard DSSE envelope over an in-toto Statement whose `subject.digest` is the receipt's `contentHash`. Verify with any DSSE verifier against `public.pem` (self-managed key: proves integrity + signer-key possession, **not identity**).");
+  }
+  if (evidenceFiles > 0) {
+    L.push("3. **Evidence receipts**: each file in `evidence/` re-verifies locally — `npx @promptia-labs/agent-receipt replay --receipt evidence/<file>` (seal recompute · input drift · commit link).");
+  }
+  L.push("");
+  L.push("## Honest limits / 정직한 경계");
+  L.push("- git-based evidence — **tamper-evident, not non-forgeable**; evidence for review, **not a compliance guarantee**.");
+  L.push("- Re-measuring the work itself requires the original repository — outside this bundle's scope.");
+  L.push("");
+  return L.join("\n");
+}
+export function runProofBundle(receiptPath: string | undefined, opts: ShareProofOpts, cwd: string = process.cwd()): never {
+  const { abs, receipt: r } = loadSavedReceipt(receiptPath, "share-proof --bundle", cwd); // 저장 receipt 필수(사이드카 정체성)
+  const anchor = loadRekorAnchor(abs);
+  let html = toProofHtml(r, anchor, buildExtras(opts, cwd));
+  let receiptJson = readFileSync(abs, "utf8");
+  if (opts.redact) {
+    html = redactText(html).text;
+    receiptJson = redactJsonText(receiptJson).text; // audit-pack 과 동일 규칙(JSON 구조 인식)
+  }
+  const stamp = (r.timestamp ?? "receipt").replace(/[:.]/g, "-");
+  const rel = opts.out ?? join(".agent-guard", `proof-bundle-${stamp}`);
+  const dir = isAbsolute(rel) ? rel : join(cwd, rel);
+  mkdirSync(dir, { recursive: true });
+  const files: string[] = [];
+  const put = (name: string, body: string): void => {
+    writeFileSync(join(dir, name), body);
+    files.push(name);
+  };
+  put("index.html", html);
+  put("receipt.json", receiptJson);
+  const base = basename(abs).replace(/\.json$/, "");
+  const dssePath = join(cwd, ".agent-guard", "anchors", `${base}.dsse.json`);
+  if (existsSync(dssePath)) put("anchor.dsse.json", readFileSync(dssePath, "utf8"));
+  const rekorPath = rekorAnchorPath(abs);
+  if (existsSync(rekorPath)) put("anchor.rekor.json", readFileSync(rekorPath, "utf8"));
+  const pubPath = join(cwd, publicKeyRelPath());
+  if (existsSync(pubPath)) put("public.pem", readFileSync(pubPath, "utf8"));
+  let evidenceFiles = 0;
+  if (opts.evidenceDir) {
+    const evDir = isAbsolute(opts.evidenceDir) ? opts.evidenceDir : join(cwd, opts.evidenceDir);
+    if (existsSync(evDir)) {
+      const names = readdirSync(evDir).filter((n) => n.endsWith(".json"));
+      if (names.length) {
+        mkdirSync(join(dir, "evidence"), { recursive: true });
+        for (const nm of names) {
+          const body = readFileSync(join(evDir, nm), "utf8");
+          writeFileSync(join(dir, "evidence", nm), opts.redact ? redactJsonText(body).text : body);
+          files.push(`evidence/${nm}`);
+          evidenceFiles++;
+        }
+      }
+    }
+  }
+  put("VERIFY.md", buildVerifyMd(existsSync(dssePath), existsSync(rekorPath), anchor?.verifyUrl ?? null, existsSync(pubPath), evidenceFiles));
+  console.log(`proof bundle 생성: ${rel} (${r.ok ? "PASS" : "FAIL"} · 파일 ${files.length}개)`);
+  for (const f of files) console.log(`  - ${f}`);
+  console.log("  → 폴더째 전달하세요. 받는 쪽 검증 절차는 VERIFY.md 에(제3자 Rekor 링크·DSSE 서명·evidence replay).");
+  console.log(`  ${LIMIT_NOTE}`);
+  process.exit(r.ok ? 0 : 1);
+}
+
 /** 현재 상태로 receipt 를 새로 만들어 렌더(계약 필요). 저장 receipt 가 없을 때의 fallback. */
-export function runShareProof(contract: Contract, contractPath: string | undefined, outArg: string | undefined, redact: boolean = false): never {
-  writeProof(buildReceipt(contract, contractPath), outArg, redact);
+export function runShareProof(contract: Contract, contractPath: string | undefined, opts: ShareProofOpts): never {
+  if (opts.bundle) {
+    console.error("share-proof --bundle: 저장된 receipt 가 필요합니다 — 먼저 `agent-receipt done` 을 실행하세요(사이드카·봉인 정체성).");
+    process.exit(2);
+  }
+  writeProof(buildReceipt(contract, contractPath), opts, null, process.cwd());
 }
 
 /** 저장된 receipt(.json)가 하나라도 있나 — cli 가 "기본=최신 렌더 vs fresh build" 분기에 사용. */
@@ -149,16 +344,11 @@ export function latestReceiptExists(cwd: string = process.cwd()): boolean {
 }
 
 /**
- * `agent-receipt share-proof [--receipt <path>]` — 저장된 receipt 를 렌더(기본 최신).
+ * `agent-receipt share-proof [--receipt <path>] [--bundle]` — 저장된 receipt 를 렌더(기본 최신).
  * done/receipt 시점 그대로 클라이언트에 증명. 파싱/형식 실패 = exit 2(계약 불필요).
  */
-export function runShareProofFromSaved(
-  receiptPath: string | undefined,
-  outArg: string | undefined,
-  redact: boolean,
-  cwd: string = process.cwd(),
-): never {
+export function runShareProofFromSaved(receiptPath: string | undefined, opts: ShareProofOpts, cwd: string = process.cwd()): never {
+  if (opts.bundle) runProofBundle(receiptPath, opts, cwd);
   const { abs, receipt: r } = loadSavedReceipt(receiptPath, "share-proof", cwd); // 13차 council: 공용 로더
-  // Stage 1b: 이 영수증이 Rekor 에 앵커됐으면(.rekor.json sidecar) 검증 링크를 임베드. 없으면 null → 기존과 바이트 동일.
-  writeProof(r, outArg, redact, loadRekorAnchor(abs));
+  writeProof(r, opts, loadRekorAnchor(abs), cwd);
 }

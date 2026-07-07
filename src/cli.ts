@@ -49,7 +49,7 @@ import { installedVersion } from "./version.js";
 import { runInstallHooks, runUninstallHooks } from "./hooks.js";
 import { runSelftest } from "./selftest.js";
 import { runIndex } from "./receiptindex.js";
-import { runGenClaim } from "./genclaim.js";
+import { runGenClaim, runGenClaimLlmPrompt, runGenClaimFromLlm } from "./genclaim.js";
 import { runCaptureIngest, runCaptureShow, runCaptureReset, runCaptureInstall, runCaptureUninstall, runCaptureVerify, runCaptureInstallCursor } from "./capture.js";
 import { runShareProof, runShareProofFromSaved, latestReceiptExists } from "./shareproof.js";
 import { runResearchVerify } from "./research.js";
@@ -126,7 +126,7 @@ agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
 
 ■ 핵심 루프(대부분 이 7개면 충분):
   begin [--cursor|--claude] [--kind <recon|implementation|docs|test|measure-first|observe-only|release-check>]
-  cost / done / share-proof [--receipt <p>] [--out <p>] / next / audit-pack / prepare-commit [--message <m>] [--include-linked-tests] / explain
+  cost / done / share-proof [--receipt <p>] [--out <p>] [--evidence-dir <d>] [--with-cost] [--bundle] / next / audit-pack / prepare-commit [--message <m>] [--include-linked-tests] / explain
 
 ■ 세션 / 정찰 / 구현:
   start / status / mode / reset / close-recon / finish [--message <m>] [--client] / trailer / commit-check / receipt
@@ -147,7 +147,7 @@ agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
 ■ 회의 결정검증(결정↔근거 대조 — 회의 실행 아님·검증만·같은 Evidence Kernel):
   bench --file <dataset.json|.md> [--repeat N] [--out <p>]   라벨된 주장셋에서 검사기 정밀·재현율 + N회 재현성(결정론) 측정 · expected=verified|failed|advisory gold · 재현성 위반=exit 1 · --out=Verification Receipt
   merkle <root|prove|consistency> (--file <jsonl>|--dir <d>) [--index N] [--old-size M] [--old-root <hex>]   RFC6962 Merkle 투명로그: root·포함증명·일관성증명(포크/개찬 탐지) · exit 1=불일치
-  predicate --receipt <verification-receipt.json> [--schema]   Verification Receipt 를 in-toto claim-verification/v1 Statement 로 명명·출력 · --schema=predicate JSON Schema · docs/PREDICATE.md
+  predicate --receipt <verification-receipt.json> [--schema] [--sign [--out <p>]]   Verification Receipt 를 in-toto claim-verification/v1 Statement 로 명명·출력 · --schema=predicate JSON Schema · --sign=오프라인 DSSE 서명(기존 ed25519 키 재사용·업로드 0·신원증명 아님) · docs/PREDICATE.md
   council verify --file <decision.json> [--log <path>] [--out <p>]   결정의 근거(인용·수치·날짜·링크·해시·서명)를 대조 · --log=append-only DecisionLog · --out=Verification Receipt
 
 ■ Evidence Specification(검증 포맷의 표준 표면):
@@ -180,6 +180,7 @@ agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
 ■ 연동(experimental — 미리보기, 전송 없음):
   export --format <slack|json|github-pr|otel|langfuse> --receipt <p>
   gen-claim --transcript <jsonl> [--out <claim.json>]   에이전트 transcript → claim.json(이후 claims 로 대조)
+  gen-claim --llm-prompt [--out <p>] / --from-llm <resp.json> [--out <claim.json>]   LLM 분해 브릿지(LLM 호출 0): 분해 프롬프트 방출(스키마 SSOT) → LLM 응답을 allowlist 정규화(미검증 라벨) → 판정은 research verify(날조=not-found 격추)
   capture [--event pre|post|fail] / show [--json] / verify / reset / install [--write] [--global] / install-cursor [--write] [--wsl-bridge] / uninstall   git 너머 행위 추적(훅 stdin·값 미저장·체인 검증·alpha)
 
 ■ 기타: run
@@ -323,7 +324,7 @@ function main(): void {
   }
   if (command === "predicate") {
     // predicate 는 git 불필요 — verification receipt 를 in-toto Statement(claim-verification/v1)로 명명·출력.
-    runPredicate(getArg("--receipt"), { schema: hasFlag("--schema") });
+    runPredicate(getArg("--receipt"), { schema: hasFlag("--schema"), sign: hasFlag("--sign"), out: getArg("--out") }); // --sign=오프라인 DSSE(백로그 D7)
   }
   if (command === "otel") {
     // otel 은 git 불필요 — Verification Receipt 를 OTLP traces JSON/로그로 방출(deps-0·exporter BYO).
@@ -415,6 +416,10 @@ function main(): void {
     runIndex(hasFlag("--json"));
   }
   if (command === "gen-claim") {
+    // 백로그 D8 — LLM 분해 브릿지(LLM 호출 0): --llm-prompt=분해 프롬프트 방출 · --from-llm=응답 정규화(allowlist·미검증 라벨).
+    if (hasFlag("--llm-prompt")) runGenClaimLlmPrompt(getArg("--out"));
+    const fromLlm = getArg("--from-llm");
+    if (fromLlm) runGenClaimFromLlm(fromLlm, getArg("--out"));
     runGenClaim(getArg("--transcript"), getArg("--out"));
   }
   // capture (alpha) — 훅 stdin 행위 기록 / 집계 / 초기화. hook 호출용(기본 help 미노출).
@@ -442,7 +447,8 @@ function main(): void {
   // 둘 다 없으면 아래 switch 에서 현재 상태로 fresh build(계약 필요).
   if (command === "share-proof") {
     const rp = getArg("--receipt");
-    if (rp || latestReceiptExists()) runShareProofFromSaved(rp, getArg("--out"), hasFlag("--redact"));
+    const spOpts = { out: getArg("--out"), redact: hasFlag("--redact"), evidenceDir: getArg("--evidence-dir"), withCost: hasFlag("--with-cost"), bundle: hasFlag("--bundle") }; // P2 D5·D6
+    if (rp || latestReceiptExists()) runShareProofFromSaved(rp, spOpts);
   }
   if (command === "approve") {
     runApprove(getArg("--receipt"), getArg("--note"));
@@ -608,7 +614,7 @@ function main(): void {
 
     case "share-proof": {
       requireRepo();
-      runShareProof(contract, contractPath, getArg("--out"), hasFlag("--redact"));
+      runShareProof(contract, contractPath, { out: getArg("--out"), redact: hasFlag("--redact"), evidenceDir: getArg("--evidence-dir"), withCost: hasFlag("--with-cost"), bundle: hasFlag("--bundle") }); // P2 D5·D6
       break;
     }
 
