@@ -27,6 +27,11 @@ const PolicySchema = z.object({
   // 루프 개입(council 2026-07-03 L1~L2) — 같은 test/build/lint 명령이 *사이 파일변경 0*으로 N회째 재실행될 때
   // guard 모드에 따라 warn/deny. 미설정=완전 off(디스크 스캔조차 안 함). strict 프로필에도 미포함(별도 명시 opt-in).
   loop_repeat_threshold: z.number().int().min(2).optional(),
+  // P1 v0.18 (council D3) — done 의 exit 게이트 opt-in: 세션 판정이 임계 이상이면 done 이 exit 1.
+  //   fail=FAIL 만(현행과 동일·명시용) · incomplete=FAIL+INCOMPLETE · warn=FAIL+INCOMPLETE+PASS_WITH_WARNINGS.
+  //   미설정=현행 그대로(receipt.ok 만). 판정/출력은 불변 — exit 코드만 올림(발동 시 done 이 원인 1줄 자백).
+  //   ⚠ warn 임계는 고위험 경로(critical_paths)를 일상적으로 만지는 repo 에 비권장(알람 피로 — DA 지적).
+  fail_on_done: z.enum(["fail", "incomplete", "warn"]).optional(),
 });
 
 // 0.9: 모드별 self-report 체크리스트(도구는 git diff 만 봄 — 의미 위반은 자동검출 불가, 사람/AI self-report).
@@ -173,6 +178,7 @@ function runPolicyShow(cwd: string): never {
   console.log(line);
   if (policy.mode !== "standard") console.log(`mode           : ${policy.mode}`);
   if (policy.guard !== "warn") console.log(`guard          : ${policy.guard} (금지 경로 쓰기 실시간 차단)`); // 기본(warn)은 미표시 — 기존 출력 불변
+  if (policy.fail_on_done) console.log(`fail_on_done   : ${policy.fail_on_done} (done 판정이 임계 이상이면 exit 1 — warn 임계는 고위험 경로를 일상 수정하는 repo 에 비권장)`); // 미설정은 미표시 — 기존 출력 불변
   console.log(`requireReceipt : ${policy.requireReceipt}`);
   console.log(`requireClaims  : ${policy.requireClaims}`);
   console.log(`requireCheck   : ${policy.requireCheck}`);

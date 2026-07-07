@@ -35,6 +35,76 @@ export function costLines(s: TranscriptSummary): string[] {
   return L;
 }
 
+// ── P1 v0.18 (council D4): "왜 비쌌나" — 구성요소 분해 + 고정 규칙 신호 ──
+// 🔴 경계(DA-2 재확인): 판정어 0("낭비/비효율" 금지) — 사실 분해 + 조건 자백 신호만. verdict 에 절대 유입 금지.
+//   분해 공식 = costOf 와 동일(cacheCreation 은 5m 단가 상한 추정 — transcript 에 1h 구분 없음) → 합계가 s.cost 와 일치.
+export type CostComponent = "input" | "output" | "cacheRead" | "cacheCreation";
+export interface CostComponentRow {
+  component: CostComponent;
+  cost: number;
+  share: number; // priced 합 대비 비율(0~1)
+}
+export interface CostDiagnosis {
+  pricedTotal: number; // 가격표가 있는 모델만의 합(= hasUnpriced=false 면 s.cost 와 동일)
+  components: CostComponentRow[]; // cost 내림차순
+  signals: string[]; // 고정 규칙 신호 — 각 줄에 발동조건 자백(판정어 0)
+  unpricedModels: number; // 분해에서 제외된 모델 수(추정 금지)
+}
+const COMPONENT_LABEL: Record<CostComponent, string> = {
+  input: "입력(비캐시)",
+  output: "출력(생성)",
+  cacheRead: "캐시 읽기(컨텍스트 재전송)",
+  cacheCreation: "캐시 생성(재캐싱)",
+};
+export function diagnoseCost(s: TranscriptSummary): CostDiagnosis | null {
+  if (!s.supported || !s.byModel.length) return null;
+  const comp: Record<CostComponent, number> = { input: 0, output: 0, cacheRead: 0, cacheCreation: 0 };
+  let unpricedModels = 0;
+  for (const m of s.byModel) {
+    const p = priceFor(m.model);
+    if (!p) {
+      unpricedModels++;
+      continue; // 가격 미상 — 분해에서 제외(추정 금지)
+    }
+    const per = (tok: number, rate: number): number => (tok / 1_000_000) * rate;
+    comp.input += per(m.tokens.input, p.input);
+    comp.output += per(m.tokens.output, p.output);
+    comp.cacheRead += per(m.tokens.cacheRead, p.cacheRead);
+    comp.cacheCreation += per(m.tokens.cacheCreation, p.cacheWrite5m); // costOf 와 동일 가정(1h 구분 없음=5m 상한)
+  }
+  const pricedTotal = comp.input + comp.output + comp.cacheRead + comp.cacheCreation;
+  const components: CostComponentRow[] = (Object.keys(comp) as CostComponent[])
+    .map((c) => ({ component: c, cost: comp[c], share: pricedTotal > 0 ? comp[c] / pricedTotal : 0 }))
+    .sort((a, b) => b.cost - a.cost || (a.component < b.component ? -1 : 1));
+  const signals: string[] = [];
+  const pct = (x: number): number => Math.round(x * 100);
+  const top = components[0];
+  if (pricedTotal > 0 && top && top.share >= 0.5) {
+    signals.push(`가장 큰 몫: ${COMPONENT_LABEL[top.component]} ${pct(top.share)}% (규칙: 최대 구성요소 ≥50% 일 때 표시)`);
+  }
+  if (s.contextPeak >= CONTEXT_BLOAT_TOKENS) {
+    signals.push(`컨텍스트 정점 ${n(s.contextPeak)} 토큰 — 이후 턴마다 그 크기를 다시 처리 (규칙: 정점 ≥${n(CONTEXT_BLOAT_TOKENS)})`);
+  }
+  if (comp.cacheCreation > comp.cacheRead && comp.cacheCreation > 0) {
+    signals.push("캐시 생성비 > 캐시 읽기비 — 재캐싱 비중이 큼(캐시 간격·컨텍스트 변경) (규칙: 생성비>읽기비)");
+  }
+  const topModel = s.byModel[0];
+  if (topModel && topModel.cost != null && s.cost != null && s.cost > 0 && topModel.cost / s.cost >= 0.7) {
+    signals.push(`모델 집중: ${topModel.model} 가 비용의 ${pct(topModel.cost / s.cost)}% (규칙: 최상위 모델 ≥70%)`);
+  }
+  return { pricedTotal, components, signals, unpricedModels };
+}
+// 사람용 진단 줄(고정 규칙·판정 아님). 진단 불가면 [](출력 불변).
+export function diagnosisLines(d: CostDiagnosis | null): string[] {
+  if (!d || d.pricedTotal <= 0) return [];
+  const L: string[] = [];
+  L.push("왜 비쌌나(추정 분해 — 사실 나열·판정 아님):");
+  L.push("  " + d.components.map((c) => `${COMPONENT_LABEL[c.component]} ~${fmtUsd(c.cost)} (${Math.round(c.share * 100)}%)`).join(" · "));
+  for (const sig of d.signals) L.push(`  · ${sig}`);
+  if (d.unpricedModels > 0) L.push(`  · 가격 미상 모델 ${d.unpricedModels}개 — 분해에서 제외(추정 금지)`);
+  return L;
+}
+
 function toJson(s: TranscriptSummary): Record<string, unknown> {
   return {
     supported: s.supported,
@@ -166,9 +236,10 @@ export function runSwapAudit(fileArg: string | undefined, format: string | undef
 
 export function runCost(format: string | undefined, sessionId: string | undefined, cwd: string = process.cwd()): never {
   const s = summarizeCurrentSession(cwd, sessionId);
+  const diag = diagnoseCost(s); // P1 D4 — 실패/미지원이면 null(출력 불변)
   if (format === "json") {
     const t = summarizeProjectToday(cwd, todayUtc());
-    process.stdout.write(JSON.stringify({ ...toJson(s), today: { date: t.date, sessions: t.sessions, cost: t.cost, hasUnpriced: t.hasUnpriced } }, null, 2) + "\n");
+    process.stdout.write(JSON.stringify({ ...toJson(s), diagnosis: diag, today: { date: t.date, sessions: t.sessions, cost: t.cost, hasUnpriced: t.hasUnpriced } }, null, 2) + "\n");
     process.exit(0);
   }
   console.log("");
@@ -176,6 +247,7 @@ export function runCost(format: string | undefined, sessionId: string | undefine
   console.log("agent-receipt cost — 이 세션의 실제 토큰 비용 (로컬 transcript·읽기전용)");
   console.log(line);
   for (const l of costLines(s)) console.log(l);
+  for (const l of diagnosisLines(diag)) console.log(l); // P1 D4 — 구성요소 분해+고정 신호(판정어 0)
   const tl = todayLine(summarizeProjectToday(cwd, todayUtc())); // 오늘 누적(순수 합산)
   if (tl) console.log(tl);
   if (s.supported) {

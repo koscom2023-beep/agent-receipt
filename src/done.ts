@@ -8,7 +8,8 @@ import { listReceipts, approvalsCountFor } from "./receiptStore.js";
 import { guardWasteSummaryLine } from "./capture.js";
 import { collectRedFlags, redFlagLine } from "./reviewfocus.js";
 import { sessionCostLine } from "./cost.js";
-import { sessionVerdict, buildContractSnapshot, renderVerdictLine, renderContractLine } from "./verdict.js";
+import { sessionVerdict, buildContractSnapshot, renderVerdictLine, renderContractLine, failOnDoneTriggers } from "./verdict.js";
+import { loadPolicySafe } from "./policy.js";
 import { LIMIT_NOTE } from "./disclosure.js";
 
 const line = "─".repeat(56);
@@ -41,12 +42,19 @@ export function runDone(
   r.verdict = vr; // metadata — contentHash 는 이미 봉인(receiptHash 입력 제외 → 바이트불변)
   r.contractSnapshot = snapshot;
 
+  // P1 D3: policy fail_on_done(opt-in) — 판정이 임계 이상이면 exit 만 1 로(판정/reasons 불변·원인 자백 1줄).
+  const { policy, error: policyError } = loadPolicySafe(cwd);
+  const fod = policy?.fail_on_done;
+  const escalated = !!fod && r.ok && failOnDoneTriggers(vr.verdict, fod);
+
   console.log("");
   console.log(line);
   console.log(`agent-receipt done: ${r.contractId}`);
   console.log(renderVerdictLine(vr));
   console.log(renderContractLine(snapshot));
   for (const reason of vr.reasons) console.log(`  · ${reason}`);
+  if (escalated) console.log(`  ⛔ policy fail_on_done=${fod}: 판정 ${vr.verdict} 이 임계 도달 — exit 1 (게이트 opt-in·판정 자체는 위 사실 그대로)`);
+  if (policyError) console.log(`  ⚠️ policy.yaml 오류 — fail_on_done 게이트 미적용(침묵 방지 자백): ${policyError.split("\n")[0]}`); // review: 깨진 policy 로 게이트가 조용히 꺼지는 것 방지
   console.log(line);
 
   // receipt 저장(json 항상 — ledger/commit-check 가 참조). --client 면 client-md 도 추가.
@@ -110,5 +118,5 @@ export function runDone(
   console.log("  " + LIMIT_NOTE);
   console.log(line);
   console.log("");
-  process.exit(r.ok ? 0 : 1);
+  process.exit(!r.ok || escalated ? 1 : 0);
 }

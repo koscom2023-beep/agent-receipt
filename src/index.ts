@@ -35,8 +35,10 @@ export { VERIFICATION_CROSSWALK, CROSSWALK_SOURCE, renderCrosswalkMd, renderCros
 export { buildOtelSpans, otelLine, runOtel, OTEL_SCOPE, OTEL_GENAI } from "./otel.js";
 export { gateDecision, runGate } from "./gate.js";
 export { auditModelSwap, renderSwapAuditMd, runSwapAudit } from "./cost.js";
-export { sessionVerdict, buildContractSnapshot, renderVerdictLine, renderContractLine, VERDICT_MARK } from "./verdict.js";
-export type { SessionVerdict, VerdictResult, VerdictExtras, ContractSnapshot } from "./verdict.js";
+export { sessionVerdict, buildContractSnapshot, renderVerdictLine, renderContractLine, VERDICT_MARK, VERDICT_RULES, WARN_ESCALATION_NOTE, incompleteDetail, VERDICT_SEVERITY, failOnDoneTriggers } from "./verdict.js";
+export type { SessionVerdict, VerdictResult, VerdictExtras, ContractSnapshot, VerdictRule, IncompleteDetail, IncompleteCode, FailOnDoneThreshold } from "./verdict.js";
+export { diagnoseCost, diagnosisLines } from "./cost.js"; // P1 D4 — 진단(고정 규칙·판정어 0)
+export type { CostDiagnosis, CostComponentRow, CostComponent } from "./cost.js";
 export type { SwapRecord, SwapAuditRow, SwapAudit } from "./cost.js";
 
 // 로딩 → 그래프/집계/triage/diff/이력/상태판 (CLI graph 표면과 같은 함수)

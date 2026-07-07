@@ -114,4 +114,56 @@ assert.equal(GRADE_LABELS.A, "Strong (recomputed)");
 assert.equal(GRADE_LABELS.B, "Source-matched");
 assert.equal(GRADE_LABELS.C, "Format-only");
 
-console.log("verdict.test: OK — 4값 게이트(FAIL>INCOMPLETE>WARN>PASS)·reasons 뒷받침·점수0·hash 바이트불변·계약 스냅샷·라벨 병기");
+// ════════ P1 v0.18 — D1 규칙 레지스트리 · D2 INCOMPLETE 세분 · D3 fail_on_done 임계 ════════
+import { readFileSync } from "node:fs";
+import { VERDICT_RULES, WARN_ESCALATION_NOTE, incompleteDetail, VERDICT_SEVERITY, failOnDoneTriggers } from "../dist/verdict.js";
+
+// D1: 레지스트리 — id 유일·4값 커버·WARN 4종
+const ids = VERDICT_RULES.map((r) => r.id);
+assert.equal(new Set(ids).size, ids.length, "rule id 유일");
+assert.equal(VERDICT_RULES.filter((r) => r.verdict === "PASS_WITH_WARNINGS").length, 4, "WARN 규칙 4종");
+assert.equal(VERDICT_RULES.filter((r) => r.verdict === "INCOMPLETE").length, 4, "INCOMPLETE 코드 4종");
+assert.ok(WARN_ESCALATION_NOTE.includes("자동 승격되지 않는다"), "승격 없음 명문");
+
+// D1: reason 은 [rule-id] 형식(기계 판독) — 발동한 규칙 id 가 레지스트리에 실재
+v = sessionVerdict({ ...base, ok: false, deniedHits: [".env"] });
+assert.ok(v.reasons[0].startsWith("[denied-path]"), "FAIL reason 에 rule id");
+v = sessionVerdict({ ...base, criticalPaths: [{ glob: "src/pay/**", touched: ["src/pay/a.ts"] }] });
+assert.ok(v.reasons[0].startsWith("[critical-path]"), "WARN reason 에 rule id");
+for (const reason of v.reasons) {
+  const m = reason.match(/^\[([a-z-]+)\]/);
+  assert.ok(m && ids.includes(m[1]), `reason 의 id 가 레지스트리에 실재: ${reason}`);
+}
+
+// D2: INCOMPLETE 코드 + 고치는 법(고정 매핑)
+let d = incompleteDetail(null);
+assert.equal(d.code, "no-baseline");
+assert.ok(d.fix.includes("begin"), "no-baseline fix 는 begin 안내");
+d = incompleteDetail({ applied: false, reason: "branch-mismatch", baselineHead: "x" });
+assert.equal(d.code, "stale-branch-mismatch");
+d = incompleteDetail({ applied: false, reason: "baseline-not-ancestor", baselineHead: "x" });
+assert.equal(d.code, "stale-baseline-not-ancestor");
+assert.ok(d.text.includes("rebase"), "not-ancestor 는 rebase/reset 흔적 설명");
+d = incompleteDetail({ applied: false, reason: null, baselineHead: "x" });
+assert.equal(d.code, "stale-unknown");
+assert.equal(incompleteDetail(okSession), null, "applied=true 면 null");
+v = sessionVerdict({ ...base, session: null });
+assert.ok(v.reasons[0].startsWith("[no-baseline]") && v.reasons[0].includes("고치는 법"), "INCOMPLETE reason = [code]+fix 병기");
+
+// D3: 임계 매트릭스(순수·결정론)
+assert.equal(VERDICT_SEVERITY.FAIL, 3);
+assert.equal(failOnDoneTriggers("PASS", "warn"), false);
+assert.equal(failOnDoneTriggers("PASS_WITH_WARNINGS", "warn"), true);
+assert.equal(failOnDoneTriggers("PASS_WITH_WARNINGS", "incomplete"), false);
+assert.equal(failOnDoneTriggers("INCOMPLETE", "incomplete"), true);
+assert.equal(failOnDoneTriggers("INCOMPLETE", "fail"), false);
+assert.equal(failOnDoneTriggers("FAIL", "fail"), true);
+assert.equal(failOnDoneTriggers("FAIL", "warn"), true);
+
+// D1: docs/VERDICT.md ↔ 레지스트리 id 일치(표류 방지 — 문서가 코드 표의 서술)
+const doc = readFileSync(new URL("../docs/VERDICT.md", import.meta.url), "utf8");
+for (const id of ids) assert.ok(doc.includes(`\`${id}\``), `docs/VERDICT.md 에 rule id 누락: ${id}`);
+assert.ok(doc.includes("자동 승격되지 않는다"), "docs 에 승격 없음 명문");
+assert.ok(doc.includes("fail_on_done"), "docs 에 fail_on_done 표");
+
+console.log("verdict.test: OK — 4값 게이트·reasons 뒷받침·점수0·hash 바이트불변·계약 스냅샷·라벨 병기 + P1(규칙 레지스트리·[id] reason·INCOMPLETE 세분+fix·fail_on_done 임계·docs 일치)");
