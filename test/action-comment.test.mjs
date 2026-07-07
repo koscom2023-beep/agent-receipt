@@ -104,6 +104,19 @@ check("no-receipt 경고 — 부재를 서술(판단 없음)", () => {
   assert.ok(b.includes("no work receipt attached") && b.includes("not judged"));
 });
 
+// ════════ 배치B-8 — 검토 배지 + 1줄 요약(--summary) ════════
+import { buildSummaryLine } from "../scripts/pr-comment-body.mjs";
+check("review 배지 — 기계 투영 + 자가보고 라벨", () => {
+  const b = buildBody(passReceipt, { review: { status: "rejected", reviewer: "황교동" } });
+  assert.ok(b.includes("**review**: ✗ rejected by 황교동") && b.includes("not an authority"));
+  assert.ok(!buildBody(passReceipt).includes("**review**"), "미제공=배지 없음");
+});
+check("buildSummaryLine — 1줄·기계 투영·review/proof 슬롯", () => {
+  const l = buildSummaryLine(passReceipt, { review: { status: "approved", reviewer: "x" }, proofUrl: "https://e.test/p" });
+  assert.ok(!l.includes("\n"), "1줄");
+  assert.ok(l.includes("✅") && l.includes("verified 3") && l.includes("review: approved(self-reported)") && l.includes("proof: https://e.test/p") && l.includes("receiptId abcdef012345"));
+  assert.ok(!/saved|절감|추천|권장/i.test(l), "판단·마케팅어 0");
+});
 console.log(`action-comment.test: ${pass} passed, ${fail.length} failed`);
 if (fail.length) {
   for (const f of fail) console.error("  ✗ " + f);

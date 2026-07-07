@@ -124,6 +124,15 @@ check("inbox HTML — 필터 UI + 외부 리소스 0 + 판단어 없음", () => 
   assert.ok(!h.includes("src=") && !h.includes("http://") && !h.includes("https://"), "외부 로드 0");
   assert.ok(h.includes("판단 아님"), "중립 명시");
 });
+check("배치B-7: 프리셋 — 사실 조건명·해시 공유·checks 키·판단어 0", () => {
+  const h = readFileSync(join(repo, ".agent-guard", "inbox.html"), "utf8");
+  for (const lbl of ["FAIL만", "금지경로 접촉", "고위험경로·검사 없음", "미검토"]) assert.ok(h.includes(lbl), `프리셋: ${lbl}`);
+  assert.ok(h.includes("#preset=") || h.includes("preset="), "URL 해시 공유");
+  assert.ok(h.includes("critical-nocheck") && h.includes("checksTotal===0"), "복합 조건=사실식");
+  assert.ok(!/안전|추천|권장|safe/i.test(h), "프리셋 판단어 0");
+  const d = JSON.parse(run(["inbox", "--format", "json", "--all"]).stdout);
+  assert.ok(d.rows.every((x) => typeof x.checksTotal === "number" && typeof x.checksFailed === "number"), "checks 키 additive");
+});
 
 rmSync(repo, { recursive: true, force: true });
 if (fail.length) {

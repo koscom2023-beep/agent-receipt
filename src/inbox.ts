@@ -34,6 +34,9 @@ export interface InboxRow {
   captureQuality: "full" | "degraded" | "none"; // 기록 상태 사실(판정 아님): actions 부재=none·degraded 마커=degraded
   reviewStatus: ReviewStatus | null; // 사이드카(배치A-2) — null=미검토
   repoLabel: string | null; // repo 루트 디렉터리명(hosted 그룹핑용)
+  // 배치B-7 — 프리셋 조건용 사실(additive): 계약 checks 실행 수/실패 수(0/0=검사 명령 없음)
+  checksTotal: number;
+  checksFailed: number;
 }
 export interface InboxData {
   schemaVersion: "inbox/1";
@@ -90,6 +93,8 @@ export function buildInbox(cwd: string, opts: { days?: number | null } = {}): In
         captureQuality: actions === undefined ? "none" : actions.some((a) => a.op === "capture-degraded") ? "degraded" : "full",
         reviewStatus: reviewStatusFor(e.abs)?.status ?? null,
         repoLabel: repoLabel,
+        checksTotal: r.checks?.length ?? 0,
+        checksFailed: (r.checks ?? []).filter((c) => !c.ok).length,
       });
     } catch {
       broken++;
@@ -155,6 +160,14 @@ export function buildInboxHtml(d: InboxData): string {
  <span class="card">금지경로 접촉 세션 ${s.deniedTouched}</span><span class="card">고위험경로 세션 ${s.criticalTouched}</span>
  <span class="card">검토: ✓${s.byReview.approved} ✗${s.byReview.rejected} ◌${s.byReview["needs-review"]} 미검토 ${s.byReview.unreviewed}</span>
 </div>
+<div class="meta" style="margin:.4rem 0">프리셋(저장 필터 — 사실 조건·판단 아님):
+ <label><input type="radio" name="preset" value="" checked> 없음</label>
+ <label><input type="radio" name="preset" value="fail"> FAIL만</label>
+ <label><input type="radio" name="preset" value="denied"> 금지경로 접촉</label>
+ <label><input type="radio" name="preset" value="critical-nocheck"> 고위험경로·검사 없음</label>
+ <label><input type="radio" name="preset" value="unreviewed"> 미검토</label>
+ <span class="meta">(URL #preset=… 로 공유)</span>
+</div>
 <div>
  <label>판정 <select id="f-v"><option value="">전체</option><option>PASS</option><option>PASS_WITH_WARNINGS</option><option>FAIL</option><option>INCOMPLETE</option><option value="none">판정 없음</option></select></label>
  <label><input type="checkbox" id="f-d"> 금지경로 접촉만</label>
@@ -169,15 +182,22 @@ const rows=${rowsJson};
 const kinds=[...new Set(rows.map(r=>r.kind).filter(Boolean))].sort();
 const fk=document.getElementById("f-k");kinds.forEach(k=>{const o=document.createElement("option");o.textContent=k;fk.appendChild(o)});
 const tb=document.getElementById("tb");
+// 배치B-7 — 프리셋=사실 조건(판단 0). 수동 필터와 AND. URL 해시로 공유(#preset=fail).
+const PRESETS={"":()=>true,fail:r=>(r.verdict??"none")==="FAIL",denied:r=>r.denied>0,"critical-nocheck":r=>r.critical>0&&r.checksTotal===0,unreviewed:r=>(r.reviewStatus??null)===null};
+function currentPreset(){const el=document.querySelector('input[name="preset"]:checked');return el?el.value:""}
+function applyHash(){const m=(location.hash||"").match(/preset=([a-z-]*)/);const v=m&&PRESETS[m[1]]!==undefined?m[1]:"";const el=document.querySelector(\`input[name="preset"][value="\${v}"]\`);if(el)el.checked=true}
+
 function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;")}
 function render(){
  const v=document.getElementById("f-v").value,d=document.getElementById("f-d").checked,c=document.getElementById("f-c").checked,k=fk.value,rw=document.getElementById("f-r").value;
  tb.innerHTML=rows.filter(r=>{
   const rv=r.verdict??"none",rr=r.reviewStatus??"unreviewed";
-  return (!v||rv===v)&&(!d||r.denied>0)&&(!c||r.critical>0)&&(!k||r.kind===k)&&(!rw||rr===rw);
+  return PRESETS[currentPreset()](r)&&(!v||rv===v)&&(!d||r.denied>0)&&(!c||r.critical>0)&&(!k||r.kind===k)&&(!rw||rr===rw);
  }).map(r=>{const rv=r.verdict??"none";const rr=r.reviewStatus??null;const rb=rr==="approved"?"✓":rr==="rejected"?"✗":rr==="needs-review"?"◌":"—";return \`<tr><td>\${esc(r.timestamp)}</td><td class="v-\${rv}">\${rv==="none"?"판정 없음":esc(rv)}</td><td>\${rb}\${rr?" "+esc(rr):""}</td><td>\${esc(r.kind??"—")}</td><td>\${r.touched}</td><td>\${r.denied}</td><td>\${r.outOfScope}</td><td>\${r.critical}</td><td><code>\${esc(r.file)}</code></td></tr>\`}).join("");
 }
 ["f-v","f-d","f-c","f-k","f-r"].forEach(id=>document.getElementById(id).addEventListener("change",render));
+document.querySelectorAll('input[name="preset"]').forEach(el=>el.addEventListener("change",()=>{location.hash=el.value?("preset="+el.value):"";render()}));
+applyHash();window.addEventListener("hashchange",()=>{applyHash();render()});
 render();
 </script>
 </div></body></html>

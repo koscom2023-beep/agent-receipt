@@ -82,10 +82,11 @@ runs:
         EXTRA_ARGS=()
         if [ -n "${{ inputs.proof-url }}" ]; then EXTRA_ARGS+=(--proof-url "${{ inputs.proof-url }}"); fi
         if [ -n "${{ inputs.work-receipt }}" ]; then
+          EXTRA_ARGS+=(--work-receipt "${{ inputs.work-receipt }}")   # 배치B-8: 검토 배지는 파일 diff 와 무관하게(사이드카만)
           PRF="$(mktemp)"
           git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.sha }}" > "$PRF" 2>/dev/null || true
           if [ -s "$PRF" ]; then
-            EXTRA_ARGS+=(--work-receipt "${{ inputs.work-receipt }}" --pr-files "$PRF")
+            EXTRA_ARGS+=(--pr-files "$PRF")
             if [ "${{ inputs.warn-no-receipt }}" = "true" ]; then EXTRA_ARGS+=(--warn-no-receipt); fi
           else
             echo "::warning::agent-receipt: PR file diff unavailable (shallow checkout? use fetch-depth: 0) — skipping mismatch section (non-blocking)"
