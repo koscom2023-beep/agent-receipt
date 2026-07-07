@@ -6,10 +6,10 @@ import { rekorAnchorPath } from "./receiptStore.js";
 // 원칙: 배지는 장식이 아니라 링크다 — 제3자 Rekor 앵커(.rekor.json 사이드카·anchor --upload 산출물)가
 //   있어야만 발급한다. 앵커 없는 배지 = 자가주장을 검증처럼 꾸미는 것이라 거부(exit 2·정직).
 // 네트워크 0: 이미 저장된 사이드카의 verifyUrl 을 재사용할 뿐, 여기서 아무것도 등록/조회하지 않는다.
-// SVG 는 사이트가 정적으로 서빙(https://agent-receipt-promptia.vercel.app/badge.svg) — 외부 배지 서비스 의존 0.
+// SVG 는 사이트가 정적으로 서빙(https://receipt.promptia.kr/badge.svg) — 외부 배지 서비스 의존 0.
 
 const line = "─".repeat(56);
-const BADGE_SVG_URL = "https://agent-receipt-promptia.vercel.app/badge.svg";
+const BADGE_SVG_URL = "https://receipt.promptia.kr/badge.svg";
 
 export function runBadge(receiptArg: string | undefined): never {
   if (!receiptArg) {
