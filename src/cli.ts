@@ -21,7 +21,7 @@ import { runDraftContract } from "./draft.js";
 import { runReview } from "./review.js";
 import { runAudit } from "./audit.js";
 import { runDashboard } from "./dashboard.js";
-import { runApprove, runApprovals } from "./approve.js";
+import { runApprove, runApprovals, runReviewMark } from "./approve.js";
 import { runExport } from "./export.js";
 import { runKeysInit, runSign, runVerifySignature } from "./keys.js";
 import { runPolicy } from "./policy.js";
@@ -177,7 +177,8 @@ agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
   audit [--json] / insights [--since <n>] [--format md|json] / risk [--format md|json] / cost [--format md|json] [--audit-swap --file <usage.json>] / dashboard / index [--json] / ledger [--json] (rebuild|verify|merkle [root|prove|consistency]) / replay [--pack <dir>] [--receipt <p> [--fetch]] / attest / anchor [--upload] / controls [--format md|json] [--crosswalk] / otel [--receipt <p>] [--format otlp|line] / gate [--receipt <p>] [--hook] / incident
 
 ■ 서명 / 승인(로컬·ed25519):
-  keys init / sign --receipt <p> / verify-signature --receipt <p> / approve --receipt <p> [--note <t>] / approvals / badge --receipt <p>   Rekor 앵커 영수증용 README 배지(클릭=공개 로그 검증·앵커 없으면 발급 거부)
+  keys init / sign --receipt <p> / verify-signature --receipt <p> / approve --receipt <p> [--note <t>] / approvals
+  review approve|reject|note --receipt <p> [--note <t>]   검토 기록(사이드카 status: approved/rejected/needs-review — 자가보고·inbox 배지+share-proof 표면·전송 0) / badge --receipt <p>   Rekor 앵커 영수증용 README 배지(클릭=공개 로그 검증·앵커 없으면 발급 거부)
 
 ■ 정책(상시 규칙):
   policy init [--profile solo-founder|vibe-coder|agency-client|team-strict|promptia] / policy check / policy show
@@ -473,6 +474,10 @@ function main(): void {
     const rp = getArg("--receipt");
     const spOpts = { out: getArg("--out"), redact: hasFlag("--redact"), evidenceDir: getArg("--evidence-dir"), withCost: hasFlag("--with-cost"), bundle: hasFlag("--bundle"), client: hasFlag("--client") }; // P2 D5·D6 + v0.20 결정5(--client)
     if (rp || latestReceiptExists()) runShareProofFromSaved(rp, spOpts);
+  }
+  if (command === "review" && ["approve", "reject", "note"].includes(process.argv[3] ?? "")) {
+    // 배치A-2 — review 사이드카 정식화(contract 불필요·기존 approve 와 같은 사이드카에 status).
+    runReviewMark(process.argv[3] as string, getArg("--receipt"), getArg("--note"));
   }
   if (command === "approve") {
     runApprove(getArg("--receipt"), getArg("--note"));

@@ -2,6 +2,7 @@
 ────────────────────────────────────────────────────────
 agent-receipt approvals  (.agent-guard/receipts)
 ────────────────────────────────────────────────────────
-  receipt-A.json  ✓ unknown  <TS>  — 검수 완료
+  receipt-A.json  ✓ approved  unknown  <TS>  — 검수 완료
 ────────────────────────────────────────────────────────
+  status/reviewer 는 자가보고 기록(권위 아님) — 사이드카는 로컬 파일·전송 0.
 

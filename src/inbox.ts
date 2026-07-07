@@ -3,6 +3,9 @@ import { isAbsolute, join } from "node:path";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { listReceipts } from "./receiptStore.js";
+import { reviewStatusFor, type ReviewStatus } from "./approve.js";
+import * as g from "./git.js";
+import { basename } from "node:path";
 import type { Receipt } from "./receipt.js";
 import type { SessionVerdict } from "./verdict.js";
 import { LIMIT_NOTE } from "./disclosure.js";
@@ -24,6 +27,13 @@ export interface InboxRow {
   denied: number;
   outOfScope: number;
   critical: number; // criticalPaths 중 실제 touched 있는 glob 수
+  // 배치A-5 (council) — hosted-호환 그룹핑 키(additive·구영수증=null 안전)
+  branch: string | null;
+  sessionId: string | null; // environment.agentSession(자가기록)
+  vendor: string | null; // 아는 경우만(agentSession 존재=claude-code) — 발명 금지·모르면 null
+  captureQuality: "full" | "degraded" | "none"; // 기록 상태 사실(판정 아님): actions 부재=none·degraded 마커=degraded
+  reviewStatus: ReviewStatus | null; // 사이드카(배치A-2) — null=미검토
+  repoLabel: string | null; // repo 루트 디렉터리명(hosted 그룹핑용)
 }
 export interface InboxData {
   schemaVersion: "inbox/1";
@@ -35,6 +45,7 @@ export interface InboxData {
     scanned: number; // 창 적용 전 전체(잘림 자백)
     broken: number; // 파싱 실패(침묵 금지 — 카운트로 자백)
     byVerdict: Record<"PASS" | "PASS_WITH_WARNINGS" | "FAIL" | "INCOMPLETE" | "none", number>;
+    byReview: Record<"approved" | "rejected" | "needs-review" | "unreviewed", number>; // 배치A-2 표면
     deniedTouched: number;
     criticalTouched: number;
   };
@@ -44,6 +55,14 @@ export const INBOX_DEFAULT_DAYS = 90; // Perf 상한 — 측정 전 추가 최�
 
 export function buildInbox(cwd: string, opts: { days?: number | null } = {}): InboxData {
   const entries = listReceipts(cwd).filter((e) => e.name.endsWith(".json"));
+  const repoLabel = (() => {
+    try {
+      const root = g.repoRoot();
+      return root ? basename(root) : null;
+    } catch {
+      return null;
+    }
+  })();
   const rows: InboxRow[] = [];
   let broken = 0;
   for (const e of entries) {
@@ -53,6 +72,7 @@ export function buildInbox(cwd: string, opts: { days?: number | null } = {}): In
         broken++;
         continue;
       }
+      const actions = r.actions;
       rows.push({
         file: e.rel,
         timestamp: r.timestamp,
@@ -64,6 +84,12 @@ export function buildInbox(cwd: string, opts: { days?: number | null } = {}): In
         denied: r.deniedHits?.length ?? 0,
         outOfScope: r.outOfScope?.length ?? 0,
         critical: (r.criticalPaths ?? []).filter((c) => c.touched.length).length,
+        branch: r.branch?.current ?? null,
+        sessionId: r.environment?.agentSession ?? null,
+        vendor: r.environment?.agentSession ? "claude-code" : null, // 아는 경우만 — 발명 금지
+        captureQuality: actions === undefined ? "none" : actions.some((a) => a.op === "capture-degraded") ? "degraded" : "full",
+        reviewStatus: reviewStatusFor(e.abs)?.status ?? null,
+        repoLabel: repoLabel,
       });
     } catch {
       broken++;
@@ -79,10 +105,12 @@ export function buildInbox(cwd: string, opts: { days?: number | null } = {}): In
     windowed = rows.filter((r) => r.timestamp >= cutoff);
   }
   const byVerdict = { PASS: 0, PASS_WITH_WARNINGS: 0, FAIL: 0, INCOMPLETE: 0, none: 0 };
+  const byReview = { approved: 0, rejected: 0, "needs-review": 0, unreviewed: 0 };
   let deniedTouched = 0;
   let criticalTouched = 0;
   for (const r of windowed) {
     byVerdict[r.verdict ?? "none"]++;
+    byReview[r.reviewStatus ?? "unreviewed"]++;
     if (r.denied > 0) deniedTouched++;
     if (r.critical > 0) criticalTouched++;
   }
@@ -91,7 +119,7 @@ export function buildInbox(cwd: string, opts: { days?: number | null } = {}): In
     asOf,
     windowDays: days,
     rows: windowed,
-    summary: { total: windowed.length, scanned, broken, byVerdict, deniedTouched, criticalTouched },
+    summary: { total: windowed.length, scanned, broken, byVerdict, byReview, deniedTouched, criticalTouched },
   };
 }
 
@@ -125,14 +153,16 @@ export function buildInboxHtml(d: InboxData): string {
  <span class="card">FAIL ${s.byVerdict.FAIL}</span><span class="card">◌ ${s.byVerdict.INCOMPLETE}</span>
  <span class="card">판정 없음(구버전) ${s.byVerdict.none}</span>
  <span class="card">금지경로 접촉 세션 ${s.deniedTouched}</span><span class="card">고위험경로 세션 ${s.criticalTouched}</span>
+ <span class="card">검토: ✓${s.byReview.approved} ✗${s.byReview.rejected} ◌${s.byReview["needs-review"]} 미검토 ${s.byReview.unreviewed}</span>
 </div>
 <div>
  <label>판정 <select id="f-v"><option value="">전체</option><option>PASS</option><option>PASS_WITH_WARNINGS</option><option>FAIL</option><option>INCOMPLETE</option><option value="none">판정 없음</option></select></label>
  <label><input type="checkbox" id="f-d"> 금지경로 접촉만</label>
  <label><input type="checkbox" id="f-c"> 고위험경로만</label>
  <label>kind <select id="f-k"><option value="">전체</option></select></label>
+ <label>검토 <select id="f-r"><option value="">전체</option><option value="unreviewed">미검토</option><option>approved</option><option>rejected</option><option>needs-review</option></select></label>
 </div>
-<table><thead><tr><th>시각</th><th>판정</th><th>kind</th><th>변경</th><th>denied</th><th>범위밖</th><th>고위험</th><th>파일</th></tr></thead><tbody id="tb"></tbody></table>
+<table><thead><tr><th>시각</th><th>판정</th><th>검토</th><th>kind</th><th>변경</th><th>denied</th><th>범위밖</th><th>고위험</th><th>파일</th></tr></thead><tbody id="tb"></tbody></table>
 <p class="meta">${esc(LIMIT_NOTE)}</p>
 <script>
 const rows=${rowsJson};
@@ -141,13 +171,13 @@ const fk=document.getElementById("f-k");kinds.forEach(k=>{const o=document.creat
 const tb=document.getElementById("tb");
 function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;")}
 function render(){
- const v=document.getElementById("f-v").value,d=document.getElementById("f-d").checked,c=document.getElementById("f-c").checked,k=fk.value;
+ const v=document.getElementById("f-v").value,d=document.getElementById("f-d").checked,c=document.getElementById("f-c").checked,k=fk.value,rw=document.getElementById("f-r").value;
  tb.innerHTML=rows.filter(r=>{
-  const rv=r.verdict??"none";
-  return (!v||rv===v)&&(!d||r.denied>0)&&(!c||r.critical>0)&&(!k||r.kind===k);
- }).map(r=>{const rv=r.verdict??"none";return \`<tr><td>\${esc(r.timestamp)}</td><td class="v-\${rv}">\${rv==="none"?"판정 없음":esc(rv)}</td><td>\${esc(r.kind??"—")}</td><td>\${r.touched}</td><td>\${r.denied}</td><td>\${r.outOfScope}</td><td>\${r.critical}</td><td><code>\${esc(r.file)}</code></td></tr>\`}).join("");
+  const rv=r.verdict??"none",rr=r.reviewStatus??"unreviewed";
+  return (!v||rv===v)&&(!d||r.denied>0)&&(!c||r.critical>0)&&(!k||r.kind===k)&&(!rw||rr===rw);
+ }).map(r=>{const rv=r.verdict??"none";const rr=r.reviewStatus??null;const rb=rr==="approved"?"✓":rr==="rejected"?"✗":rr==="needs-review"?"◌":"—";return \`<tr><td>\${esc(r.timestamp)}</td><td class="v-\${rv}">\${rv==="none"?"판정 없음":esc(rv)}</td><td>\${rb}\${rr?" "+esc(rr):""}</td><td>\${esc(r.kind??"—")}</td><td>\${r.touched}</td><td>\${r.denied}</td><td>\${r.outOfScope}</td><td>\${r.critical}</td><td><code>\${esc(r.file)}</code></td></tr>\`}).join("");
 }
-["f-v","f-d","f-c","f-k"].forEach(id=>document.getElementById(id).addEventListener("change",render));
+["f-v","f-d","f-c","f-k","f-r"].forEach(id=>document.getElementById(id).addEventListener("change",render));
 render();
 </script>
 </div></body></html>

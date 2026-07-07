@@ -1,7 +1,10 @@
 {
+  "status": "approved",
+  "reviewer": "unknown",
+  "reviewedAt": "<TS>",
+  "note": "검수 완료",
   "approver": "unknown",
   "approvedAt": "<TS>",
   "receipt": "receipt-A.json",
-  "contentHash": "sha256:685bfa45f1a0d0aed0503bfa49954b831eca3b53f914e6c09990f7c2eee4d47e",
-  "note": "검수 완료"
+  "contentHash": "sha256:685bfa45f1a0d0aed0503bfa49954b831eca3b53f914e6c09990f7c2eee4d47e"
 }

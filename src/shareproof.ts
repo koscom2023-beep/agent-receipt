@@ -12,6 +12,7 @@ import { costLines } from "./cost.js";
 import { summarizeCurrentSession } from "./transcript.js";
 import { publicKeyRelPath } from "./keys.js";
 import { loadCaptureRecords } from "./capture.js";
+import { reviewStatusFor, type ReviewRecord } from "./approve.js";
 import * as g from "./git.js";
 
 // ── share-proof v0 (council B) — 외주사가 클라이언트에 보내는 로컬 self-contained HTML 증거 ──
@@ -53,6 +54,7 @@ export interface ProofExtras {
   costLines?: string[] | null; // 생성 시점 세션 비용 줄(cost.ts costLines 재사용)
   timeline?: ProofTimeline | null; // v0.20 결정3 — 세션 타임라인(결정론 렌더)
   client?: boolean; // v0.20 결정5 — 축약판(요약+판정+타임라인 중심·기술 상세 생략·'전체판 별도' 자백)
+  review?: ReviewRecord | null; // 배치A-2 — 검토 기록(사이드카·자가보고) 표면화
 }
 
 // ── v0.20 결정3: 세션 타임라인 — capture 레코드(ts·seq·op) 결정론 / capture 없으면 git 커밋 시각 축약판 ──
@@ -201,6 +203,7 @@ export function toProofHtml(r: Receipt, anchor?: RekorAnchor | null, extras?: Pr
   const execSummary = `
   <section class="exec">
   ${prose ? `<p class="meta"><b>${esc(prose.ko)}</b></p>\n  <p class="meta">${esc(prose.en)}</p>` : ""}
+  ${extras?.review ? `<p class="meta"><strong>Review recorded: ${esc(extras.review.status)}</strong> by ${esc(extras.review.reviewer)} at ${esc(extras.review.reviewedAt)} (self-reported — a record, not an authority)${extras.review.note ? ` — ${esc(extras.review.note)}` : ""}</p>` : ""}
   <p class="meta">Changed: <strong>${r.touched.length}</strong> file(s) (+${r.magnitude.added} / -${r.magnitude.deleted} lines, ${r.magnitude.newFiles} new) · Critical paths: ${critTxt} · Checks: ${r.checks.length ? `${checksPassed}/${r.checks.length} OK` : "none"}${guardDenied !== null ? ` · Guard-denied events: <strong>${guardDenied}</strong>` : ""}</p>
   <p class="meta">Review focus — 판정 사실의 재배치(a pointer, <strong>not a judgment</strong> and not the whole):</p>
   ${bucketHtml}
@@ -341,8 +344,8 @@ function buildExtras(opts: ShareProofOpts, cwd: string): ProofExtras {
  * `agent-receipt share-proof [--out <path>] [--redact] [--evidence-dir <d>] [--with-cost]` — receipt 를
  * 클라이언트 전달용 self-contained 3축 탭 HTML 로 저장. exit = ok ? 0 : 1.
  */
-function writeProof(r: Receipt, opts: ShareProofOpts, anchor: RekorAnchor | null, cwd: string): never {
-  let html = toProofHtml(r, anchor, buildExtras(opts, cwd));
+function writeProof(r: Receipt, opts: ShareProofOpts, anchor: RekorAnchor | null, cwd: string, review: ReviewRecord | null = null): never {
+  let html = toProofHtml(r, anchor, { ...buildExtras(opts, cwd), review });
   if (opts.redact) html = redactText(html).text;
   const stamp = (r.timestamp ?? "receipt").replace(/[:.]/g, "-");
   const rel = opts.out ?? join(".agent-guard", `proof-${stamp}.html`);
@@ -391,7 +394,7 @@ export function buildVerifyMd(hasDsse: boolean, hasRekor: boolean, rekorUrl: str
 export function runProofBundle(receiptPath: string | undefined, opts: ShareProofOpts, cwd: string = process.cwd()): never {
   const { abs, receipt: r } = loadSavedReceipt(receiptPath, "share-proof --bundle", cwd); // 저장 receipt 필수(사이드카 정체성)
   const anchor = loadRekorAnchor(abs);
-  let html = toProofHtml(r, anchor, buildExtras(opts, cwd));
+  let html = toProofHtml(r, anchor, { ...buildExtras(opts, cwd), review: reviewStatusFor(abs) });
   let receiptJson = readFileSync(abs, "utf8");
   if (opts.redact) {
     html = redactText(html).text;
@@ -460,5 +463,5 @@ export function latestReceiptExists(cwd: string = process.cwd()): boolean {
 export function runShareProofFromSaved(receiptPath: string | undefined, opts: ShareProofOpts, cwd: string = process.cwd()): never {
   if (opts.bundle) runProofBundle(receiptPath, opts, cwd);
   const { abs, receipt: r } = loadSavedReceipt(receiptPath, "share-proof", cwd); // 13차 council: 공용 로더
-  writeProof(r, opts, loadRekorAnchor(abs), cwd);
+  writeProof(r, opts, loadRekorAnchor(abs), cwd, reviewStatusFor(abs)); // 배치A-2: 검토 기록 표면화
 }
