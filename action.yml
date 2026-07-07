@@ -24,7 +24,7 @@ inputs:
   version:
     description: "agent-receipt version to run (pinned for reproducibility)"
     required: false
-    default: "0.14.0"
+    default: "0.20.0"
   proof-url:
     description: "Optional link slot rendered as **proof** in the PR comment (e.g. a hosted proof bundle) — value is caller-provided, never invented"
     default: ""

@@ -146,7 +146,7 @@ export function runGenClaimFromLlm(fileArg: string, outArg: string | undefined, 
  */
 export function runGenClaim(transcript: string | undefined, outArg: string | undefined, cwd: string = process.cwd()): never {
   if (!transcript) {
-    console.error("gen-claim: --transcript <path.jsonl> 가 필요합니다 (에이전트 transcript).");
+    console.error("gen-claim: 사용법 — --transcript <path.jsonl>(편집경로 초안) | --llm-prompt [--out <p>](분해 프롬프트 방출) | --from-llm <resp.json> [--out <claim.json>](LLM 응답 정규화·미검증 라벨)");
     process.exit(2);
   }
   if (!existsSync(transcript)) {
