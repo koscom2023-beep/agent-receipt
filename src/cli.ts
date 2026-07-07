@@ -181,7 +181,7 @@ agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
   review approve|reject|note --receipt <p> [--note <t>]   검토 기록(사이드카 status: approved/rejected/needs-review — 자가보고·inbox 배지+share-proof 표면·전송 0) / badge --receipt <p>   Rekor 앵커 영수증용 README 배지(클릭=공개 로그 검증·앵커 없으면 발급 거부)
 
 ■ 정책(상시 규칙):
-  policy init [--profile solo-founder|vibe-coder|agency-client|team-strict|promptia] / policy check / policy show
+  policy init [--profile solo-founder|vibe-coder|agency-client|team-strict|strict|client-delivery|sensitive-backend|promptia] / policy check / policy show   (배치B-9: client-delivery·sensitive-backend=렉시콘 제안 팩 — 채택은 사용자)
 
 ■ advisory / 참고 (검증 아님 — PASS/FAIL 근거 아님):
   release-check --base <ref> [--failed-tests <f>] [--observe <ev>]   배포 판단 보조(deploy/push 안 함)

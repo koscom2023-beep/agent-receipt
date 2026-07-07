@@ -132,6 +132,23 @@ export const POLICY_PROFILES: Record<string, string> = {
     `forbidAlways:\n  - ".env*"\n  - "secrets/**"\n  - "**/*.pem"\n  - "**/id_rsa*"\n` +
     `requireApprovalFor:\n  - "package-lock.json"\n  - "supabase/migrations/**"\n` +
     `protectAlways: []\n`,
+  // 배치B-9 (council 2026-07-07) — 정책 프리셋 팩: 렉시콘은 **제안**이고 판단 주체는 채택/수정하는 사용자(도구는 매칭만).
+  "client-delivery":
+    `# agent-receipt policy — client-delivery (외주 납품용 · 제안 — 채택/수정은 사용자, 도구는 매칭만)\n` +
+    `# forbid_actions 는 행위 클래스 신호등(첫 토큰 파스·우회 가능) — 납품 창구 밖 publish/push 를 기록/차단(guard 모드).\n` +
+    `requireReceipt: true\nrequireClaims: true\nrequireCheck: false\n` +
+    `forbidAlways:\n  - ".env*"\n  - "secrets/**"\n  - "**/*.pem"\n` +
+    `requireApprovalFor:\n  - "package-lock.json"\n  - "pnpm-lock.yaml"\n  - "supabase/migrations/**"\n  - "vercel.json"\n` +
+    `protectAlways: []\n` +
+    `forbid_actions:\n  - publish\n  - push\n`,
+  "sensitive-backend":
+    `# agent-receipt policy — sensitive-backend (민감 백엔드 · 제안 — 채택/수정은 사용자, 도구는 매칭만)\n` +
+    `# 아래 경로 렉시콘(auth/billing/infra)은 제안입니다 — 이 파일을 채택하는 순간 판단 주체는 사용자입니다.\n` +
+    `requireReceipt: true\nrequireClaims: false\nrequireCheck: true\n` +
+    `forbidAlways:\n  - ".env*"\n  - "secrets/**"\n  - "**/*.pem"\n  - "**/id_rsa*"\n` +
+    `requireApprovalFor:\n  - "supabase/migrations/**"\n  - "auth/**"\n  - "billing/**"\n  - "infra/**"\n` +
+    `protectAlways:\n  - "package-lock.json"\n` +
+    `forbid_actions:\n  - network\n  - publish\n`,
   promptia:
     `# agent-receipt policy — promptia (본진 상시 규칙)\n` +
     `requireReceipt: true\nrequireClaims: false\nrequireCheck: false\n` +
