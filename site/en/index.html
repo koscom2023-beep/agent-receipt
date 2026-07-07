@@ -1,13 +1,13 @@
 <!doctype html>
-<!-- ⚠️ KO/EN pair-edit: when you change this file, update site/index.html too — a parity test cross-checks key elements -->
+<!-- ⚠️ KO/EN pair-edit: when you change this file, update site/index.html too, a parity test cross-checks key elements -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>agent-receipt — local receipts for your AI coding session's cost, work and evidence</title>
-<meta name="description" content="AI coding: what this session cost, where it's leaking, and whether it did only what you asked — locally. Reads real token cost from the local transcript, signals waste, and leaves a verifiable trail for AI work and evidence. No account, no server.">
-<meta property="og:title" content="agent-receipt — local receipts for your AI coding session's cost, work and evidence">
-<meta property="og:description" content="What this session cost, where it leaks, whether it stayed in scope — as local receipts. Fabrication exits 1 in CI.">
+<title>agent-receipt, local receipts for your AI coding session's cost, work and evidence</title>
+<meta name="description" content="AI coding: what this session cost, where it's leaking, and whether it did only what you asked, locally. Reads real token cost from the local transcript, signals waste, and leaves a verifiable trail for AI work and evidence. No account, no server.">
+<meta property="og:title" content="agent-receipt, local receipts for your AI coding session's cost, work and evidence">
+<meta property="og:description" content="What this session cost, where it leaks, whether it stayed in scope, as local receipts. Fabrication exits 1 in CI.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧾</text></svg>">
 <style>
 :root{
@@ -194,8 +194,8 @@ code{font-family:var(--mono);font-size:.9em;background:var(--paper-2);border:1px
   <div class="eyebrow">local-first · no account · no server</div>
   <h1>agent-receipt</h1>
   <div class="thesis"><b>Contract</b> an AI coding session, <b>judge</b> it when it ends, keep a <b>verifiable receipt</b>.</div>
-  <div class="sub-hero">Checks the contract scope (allowed/denied paths) against the <span class="h">real git diff</span> and closes the session with a <span class="h">4-value verdict</span> (PASS · warnings · FAIL · incomplete) — the diff is the evidence, not the agent's self-report. The verdict ships as a <span class="h">ten-second proof page</span> (four review buckets in the order reviewers actually read), with <span class="h">approve/reject records</span>, <span class="h">one-command re-verification for the recipient (verify-proof)</span>, and a local <span class="h">inbox</span> over the pile — the whole flow is four verbs: <span class="h">begin · done · share · review</span>. The same engine verifies a report's <span class="h">quotes, numbers and commit claims</span>, and shows what the session actually cost. No server, no account — all on your machine.</div>
-  <div class="sub-hero" style="font-size:12.5px;color:var(--faint)">Why trust it — deterministic verdicts (same input → same verdict) · sealed receipts (sha256, replayable) · third-party seal (Rekor) · in-toto · Merkle. All local.</div>
+  <div class="sub-hero">Checks the contract scope (allowed/denied paths) against the <span class="h">real git diff</span> and closes the session with a <span class="h">4-value verdict</span> (PASS · warnings · FAIL · incomplete), the diff is the evidence, not the agent's self-report. The verdict ships as a <span class="h">ten-second proof page</span> (four review buckets in the order reviewers actually read), with <span class="h">approve/reject records</span>, <span class="h">one-command re-verification for the recipient (verify-proof)</span>, and a local <span class="h">inbox</span> over the pile, the whole flow is four verbs: <span class="h">begin · done · share · review</span>. The same engine verifies a report's <span class="h">quotes, numbers and commit claims</span>, and shows what the session actually cost. No server, no account, all on your machine.</div>
+  <div class="sub-hero" style="font-size:12.5px;color:var(--faint)">Why trust it, deterministic verdicts (same input → same verdict) · sealed receipts (sha256, replayable) · third-party seal (Rekor) · in-toto · Merkle. All local.</div>
   <div class="btns">
     <a class="btn p" href="/en/playground">Catch a fabrication in your browser →</a>
     <a class="btn g" href="/demo">Live Evidence Browser</a>
@@ -205,7 +205,7 @@ code{font-family:var(--mono);font-size:.9em;background:var(--paper-2);border:1px
   <div class="receipt-stage">
     <div class="receipt" role="img" aria-label="An example of agent-receipt cost output rendered as a printed receipt">
       <div class="r-head">A G E N T · R E C E I P T</div>
-      <div class="r-sub">SESSION COST — LOCAL TRANSCRIPT</div>
+      <div class="r-sub">SESSION COST, LOCAL TRANSCRIPT</div>
       <hr class="r-rule">
       <div class="r-line"><span class="k">messages</span><span class="fill"></span><span>446</span></div>
       <div class="r-line"><span class="k">output tokens</span><span class="fill"></span><span>646,271</span></div>
@@ -216,10 +216,10 @@ code{font-family:var(--mono);font-size:.9em;background:var(--paper-2);border:1px
       <hr class="r-rule solid">
       <div class="r-total"><span class="lab">TOTAL (est.)</span><span class="amt">~$241.77</span></div>
       <hr class="r-rule">
-      <div class="r-warn">⚠ CONTEXT PEAK 670,951 — a fresh session lowers<br>the per-turn resend (cache read + re-caching) cost.</div>
+      <div class="r-warn">⚠ CONTEXT PEAK 670,951, a fresh session lowers<br>the per-turn resend (cache read + re-caching) cost.</div>
       <div class="r-today"><span>TODAY 2026-07-04</span><span>~$843.39 · 3 sessions</span></div>
       <div class="r-barcode" aria-hidden="true"></div>
-      <div class="r-foot">estimate · list price · not an invoice · no discounts<br>zero upload · no values stored — counts only</div>
+      <div class="r-foot">estimate · list price · not an invoice · no discounts<br>zero upload · no values stored, counts only</div>
     </div>
   </div>
   <div class="hero-cap">↑ <code>agent-receipt cost</code> reads your local transcript (Anthropic's own usage) and prints this. Example session.</div>
@@ -227,7 +227,7 @@ code{font-family:var(--mono);font-size:.9em;background:var(--paper-2);border:1px
   <div class="try hero-try">
     <div class="card">
       <h3>🔎 Catch a fabrication right now</h3>
-      <div class="mut">Runs entirely in your browser — nothing is sent anywhere.</div>
+      <div class="mut">Runs entirely in your browser, nothing is sent anywhere.</div>
       <label>What the AI claimed (as a quote)</label>
       <input id="h-quote" value="has passed a SOC 2 Type II audit" spellcheck="false">
       <label>The source it cited</label>
@@ -236,8 +236,8 @@ code{font-family:var(--mono);font-size:.9em;background:var(--paper-2);border:1px
       <div class="out" id="h-out"></div>
     </div>
     <div class="card">
-      <h3>🧾 Someone sent you a receipt? Inspect it — no install</h3>
-      <div class="mut">Drop a Verification Receipt (JSON) and its seal (contentHash · receiptId) is recomputed right here. The file never leaves your browser — zero upload. <a href="/sample-receipt.json" download style="color:var(--brand)">Download a sample</a> → drop it → then edit one character and drop it again to watch tamper detection fire.</div>
+      <h3>🧾 Someone sent you a receipt? Inspect it, no install</h3>
+      <div class="mut">Drop a Verification Receipt (JSON) and its seal (contentHash · receiptId) is recomputed right here. The file never leaves your browser, zero upload. <a href="/sample-receipt.json" download style="color:var(--brand)">Download a sample</a> → drop it → then edit one character and drop it again to watch tamper detection fire.</div>
       <div class="drop" id="drop">
         <div style="font-family:var(--mono);font-size:12.5px;color:var(--mut)">Drop a <b>.json</b> here<br>or click to choose</div>
         <input type="file" id="drop-file" accept=".json" style="display:none">
@@ -250,44 +250,44 @@ code{font-family:var(--mono);font-size:.9em;background:var(--paper-2);border:1px
 <section id="axes">
   <div class="eyebrow-s">§ Three audits</div>
   <h2>agent-receipt leaves three things behind</h2>
-  <p class="sub">One philosophy — "what the AI did and said, as a local receipt anyone can verify later." Three axes hang off it. From v0.20 the receipt becomes a <b>reviewed document</b> — approve/reject records, a local inbox, and one-command verification for the recipient.</p>
+  <p class="sub">One philosophy, "what the AI did and said, as a local receipt anyone can verify later." Three axes hang off it. From v0.20 the receipt becomes a <b>reviewed document</b>, approve/reject records, a local inbox, and one-command verification for the recipient.</p>
   <div class="who">
-    <div class="c"><b>🧾 Change Audit</b><p><b>What did the AI actually change</b> in your repo? — checked against the contract scope, recorded in a hash-chained ledger, plus beyond-git actions (even failed / denied ones). <a href="#prevents" style="color:var(--brand)">Incidents it prevents →</a></p></div>
-    <div class="c"><b>🔎 Evidence Audit</b><p><b>Is the AI's stated evidence real?</b> — quotes, numbers, dates, git claims, versions checked against their sources by 15 deterministic checks. No LLM judging LLMs. <a href="#kinds" style="color:var(--brand)">The checks →</a></p></div>
-    <div class="c"><b>💰 Cost Audit</b><p><b>What did this session actually cost?</b> — the transcript's usage priced at list, showing where it leaks and when to start a fresh session. <a href="#cost" style="color:var(--brand)">See cost →</a></p></div>
+    <div class="c"><b>🧾 Change Audit</b><p><b>What did the AI actually change</b> in your repo?, checked against the contract scope, recorded in a hash-chained ledger, plus beyond-git actions (even failed / denied ones). <a href="#prevents" style="color:var(--brand)">Incidents it prevents →</a></p></div>
+    <div class="c"><b>🔎 Evidence Audit</b><p><b>Is the AI's stated evidence real?</b>, quotes, numbers, dates, git claims, versions checked against their sources by 15 deterministic checks. No LLM judging LLMs. <a href="#kinds" style="color:var(--brand)">The checks →</a></p></div>
+    <div class="c"><b>💰 Cost Audit</b><p><b>What did this session actually cost?</b>, the transcript's usage priced at list, showing where it leaks and when to start a fresh session. <a href="#cost" style="color:var(--brand)">See cost →</a></p></div>
   </div>
 </section>
 
 <section id="cost">
   <div class="eyebrow-s">§ Cost</div>
-  <h2>What this session cost — in real numbers</h2>
-  <p class="sub">Claude Code writes each session to local disk, and that transcript carries <b>Anthropic's own usage data</b> (per-message tokens + model). agent-receipt reads it and applies list pricing — nothing sent to a server, no values stored.</p>
-  <p class="sub" style="margin-top:-6px"><b>In a long session the money isn't the new code — it's re-sending the growing context every turn</b> (80% of the session above). Seeing it tells you when to start fresh. <b>Today's running total</b> sums every session in the project today — a pure count that shows what you're spending now, before the month-end bill. <span style="color:var(--mut)">High cache-read is NOT waste — the cache saved you 90%. We show measured numbers, never a made-up "savings" figure.</span></p>
+  <h2>What this session cost, in real numbers</h2>
+  <p class="sub">Claude Code writes each session to local disk, and that transcript carries <b>Anthropic's own usage data</b> (per-message tokens + model). agent-receipt reads it and applies list pricing, nothing sent to a server, no values stored.</p>
+  <p class="sub" style="margin-top:-6px"><b>In a long session the money isn't the new code, it's re-sending the growing context every turn</b> (80% of the session above). Seeing it tells you when to start fresh. <b>Today's running total</b> sums every session in the project today, a pure count that shows what you're spending now, before the month-end bill. <span style="color:var(--mut)">High cache-read is NOT waste, the cache saved you 90%. We show measured numbers, never a made-up "savings" figure.</span></p>
 </section>
 
 <section id="prevents">
   <div class="eyebrow-s">§ Incident log</div>
   <h2>What it prevents</h2>
-  <p class="sub">Not a feature list — the incidents that actually happen. Badges state exactly what the machine does: <span class="stamp blk">blocked</span> = command fails (exit 1) or the commit is refused · <span class="stamp rec">recorded</span> = kept as evidence (not blocked).</p>
+  <p class="sub">Not a feature list, the incidents that actually happen. Badges state exactly what the machine does: <span class="stamp blk">blocked</span> = command fails (exit 1) or the commit is refused · <span class="stamp rec">recorded</span> = kept as evidence (not blocked).</p>
   <div class="scn">
-    <div class="c"><b>📋 The AI wrote "passed SOC 2 Type II" — only Type I was completed</b>
-      <p>Quotes are deterministically checked against the source — a sentence that isn't there fails on the spot.</p>
+    <div class="c"><b>📋 The AI wrote "passed SOC 2 Type II", only Type I was completed</b>
+      <p>Quotes are deterministically checked against the source, a sentence that isn't there fails on the spot.</p>
       <div class="badges"><span class="stamp blk">blocked in CI · exit 1</span></div></div>
-    <div class="c"><b>🔀 The AI wrote "commit abc modified payment.ts" — history says otherwise</b>
-      <p>Commit existence, changed files, even diff contents — checked against actual git history.</p>
+    <div class="c"><b>🔀 The AI wrote "commit abc modified payment.ts", history says otherwise</b>
+      <p>Commit existence, changed files, even diff contents, checked against actual git history.</p>
       <div class="badges"><span class="stamp blk">blocked in CI · exit 1</span></div></div>
     <div class="c"><b>📁 The AI modified files outside the agreed scope</b>
-      <p>The contract's allowed paths are compared against the real diff — the pre-commit gate refuses, and even a bypass (<code>--no-verify</code>) still leaves an evidence receipt. With <code>guard: block</code>, forbidden-path writes are stopped <b>before the tool runs</b> — the agent sees why and backs off (the denied attempt is chain-recorded too).</p>
+      <p>The contract's allowed paths are compared against the real diff, the pre-commit gate refuses, and even a bypass (<code>--no-verify</code>) still leaves an evidence receipt. With <code>guard: block</code>, forbidden-path writes are stopped <b>before the tool runs</b>, the agent sees why and backs off (the denied attempt is chain-recorded too).</p>
       <div class="badges"><span class="stamp blk">real-time block · opt-in</span> <span class="stamp rec">receipt recorded</span></div></div>
     <div class="c rec"><b>🔑 The AI tried to read .env (and failed), then tried to phone home</b>
-      <p>Invisible to git — failed and permission-denied attempts are kept as <b>action classes only</b> (values never stored). Reads and network calls stay record-only; real-time blocking covers forbidden-path <i>writes</i>, nothing more (honest scope).</p>
+      <p>Invisible to git, failed and permission-denied attempts are kept as <b>action classes only</b> (values never stored). Reads and network calls stay record-only; real-time blocking covers forbidden-path <i>writes</i>, nothing more (honest scope).</p>
       <div class="scroll"><pre style="font-size:11.5px"><span class="y">⚠ READ_SECRET_FILE   .env  (failed attempt)</span>
 <span class="y">⚠ EXTERNAL_NETWORK_CALL   api.exfil.example</span></pre></div>
-      <div class="badges" style="margin-top:9px"><span class="stamp rec">recorded — not blocked</span></div></div>
+      <div class="badges" style="margin-top:9px"><span class="stamp rec">recorded, not blocked</span></div></div>
     <div class="c rec"><b>🔁 The AI re-read the same file 11 times and re-ran the same test 4 times</b>
-      <p>Recomputed from the capture log: rereads with no edit in between · duplicate commands (fingerprint only) · the same failure repeating. It may be legitimate double-checking, so the human judges — measured counts only, never converted into token/time "savings" (unmeasurable numbers aren't displayed).</p>
-      <div class="badges"><span class="stamp rec">reported — not blocked</span></div></div>
-    <div class="c"><b>📦 The AI reaches for an unasked <code>npm publish</code></b><p>Commands are classified by their <b>lead token</b> into push · publish · network classes (a quoted "git push" stays out). Turn on <code>forbid_actions</code> + block to stop it before the tool runs — and the deny message confesses it is a bypassable signal, not a lock.</p>
+      <p>Recomputed from the capture log: rereads with no edit in between · duplicate commands (fingerprint only) · the same failure repeating. It may be legitimate double-checking, so the human judges, measured counts only, never converted into token/time "savings" (unmeasurable numbers aren't displayed).</p>
+      <div class="badges"><span class="stamp rec">reported, not blocked</span></div></div>
+    <div class="c"><b>📦 The AI reaches for an unasked <code>npm publish</code></b><p>Commands are classified by their <b>lead token</b> into push · publish · network classes (a quoted "git push" stays out). Turn on <code>forbid_actions</code> + block to stop it before the tool runs, and the deny message confesses it is a bypassable signal, not a lock.</p>
       <div class="badges"><span class="stamp blk">real-time block · opt-in</span> <span class="stamp rec">recorded by default</span></div></div>
   </div>
 </section>
@@ -298,22 +298,22 @@ code{font-family:var(--mono);font-size:.9em;background:var(--paper-2);border:1px
   <p class="sub">agent-receipt is a local audit layer that turns an AI agent's code work and report evidence into an independently verifiable trail. Two subsystems underneath:</p>
   <div class="scroll"><table class="tbl">
     <tr><th>Audit</th><th>Question it answers</th></tr>
-    <tr><td><b>AI Change Audit</b></td><td><b>What did the AI actually do to my repo?</b> Contract-scoped diff evidence · hash-chained ledger · third-party Rekor anchoring · beyond-git action capture (incl. failed &amp; denied attempts) — plus an opt-in real-time guard that stops forbidden-path writes up front.</td></tr>
-    <tr><td><b>AI Evidence Audit</b></td><td><b>Is what the AI said actually true?</b> 15 deterministic check kinds — each carries an evidence grade (A recompute · B compare · C form), and abstains when there's no basis. No LLM judging LLMs. Same input, same verdict, every time.</td></tr>
+    <tr><td><b>AI Change Audit</b></td><td><b>What did the AI actually do to my repo?</b> Contract-scoped diff evidence · hash-chained ledger · third-party Rekor anchoring · beyond-git action capture (incl. failed &amp; denied attempts), plus an opt-in real-time guard that stops forbidden-path writes up front.</td></tr>
+    <tr><td><b>AI Evidence Audit</b></td><td><b>Is what the AI said actually true?</b> 15 deterministic check kinds, each carries an evidence grade (A recompute · B compare · C form), and abstains when there's no basis. No LLM judging LLMs. Same input, same verdict, every time.</td></tr>
   </table></div>
 </section>
 
 <section id="vendors">
   <div class="eyebrow-s">§ Tools</div>
-  <h2>Not just Claude Code — Cursor too</h2>
-  <p class="sub">agent-receipt isn't tied to a single tool. It captures Claude Code and Cursor edits the same way, into one ledger — whether the tool runs on Windows or inside WSL.</p>
-  <div class="scroll"><pre><span class="c"># Bridge Cursor (Windows) to agent-receipt (WSL) — one line</span>
+  <h2>Not just Claude Code, Cursor too</h2>
+  <p class="sub">agent-receipt isn't tied to a single tool. It captures Claude Code and Cursor edits the same way, into one ledger, whether the tool runs on Windows or inside WSL.</p>
+  <div class="scroll"><pre><span class="c"># Bridge Cursor (Windows) to agent-receipt (WSL), one line</span>
 agent-receipt capture install-cursor <span class="y">--wsl-bridge</span>
 <span class="c">#   Cursor (Windows) ─ afterFileEdit ─▶ wsl.exe ─▶ 🧾 agent-receipt (WSL)</span>
 <span class="c">#   garbled in transit (BOM / encoding)? it recovers on its own</span></pre></div>
   <div class="who" style="margin-top:14px">
     <div class="c"><b>🖱 Wire up Cursor hooks directly</b><p>Every time Cursor saves a file, that action flows into agent-receipt. One install command and the wiring is done.</p></div>
-    <div class="c"><b>🪟 A bridge across Windows and WSL</b><p>Cursor on Windows, the tool in WSL — no problem. <code>--wsl-bridge</code> connects them, and even if the payload is mangled in transit it's recovered and recorded.</p></div>
+    <div class="c"><b>🪟 A bridge across Windows and WSL</b><p>Cursor on Windows, the tool in WSL, no problem. <code>--wsl-bridge</code> connects them, and even if the payload is mangled in transit it's recovered and recorded.</p></div>
     <div class="c"><b>🧩 Vendor-neutral by design</b><p>Each tool's envelope is normalized to one shape. Add more tools and the audit stays the same.</p></div>
   </div>
 </section>
@@ -322,9 +322,9 @@ agent-receipt capture install-cursor <span class="y">--wsl-bridge</span>
   <div class="eyebrow-s">§ Who</div>
   <h2>Who this is for</h2>
   <div class="who">
-    <div class="c"><b>🏗 Agencies &amp; contractors shipping AI-assisted work</b><p>Prove — without a dispute — whether the AI stayed inside the contract and what it actually changed. Hand the client a self-contained proof HTML (<code>share-proof</code>).</p></div>
+    <div class="c"><b>🏗 Agencies &amp; contractors shipping AI-assisted work</b><p>Prove, without a dispute, whether the AI stayed inside the contract and what it actually changed. Hand the client a self-contained proof HTML (<code>share-proof</code>).</p></div>
     <div class="c"><b>📊 Teams whose decisions consume AI research</b><p>Fabricated citations, numbers, versions and commit facts get blocked in CI before they reach a decision. What passes accumulates as receipts.</p></div>
-    <div class="c"><b>🔐 Internal dev teams under security/audit needs</b><p>Sensitive-file reads, exfiltration attempts and change scope — evidenced locally, no server, no account, third-party sealable (Rekor).</p></div>
+    <div class="c"><b>🔐 Internal dev teams under security/audit needs</b><p>Sensitive-file reads, exfiltration attempts and change scope, evidenced locally, no server, no account, third-party sealable (Rekor).</p></div>
   </div>
 </section>
 
@@ -332,21 +332,21 @@ agent-receipt capture install-cursor <span class="y">--wsl-bridge</span>
   <div class="eyebrow-s">§ Workflow</div>
   <h2>How it's used</h2>
   <p class="sub">Workflows, not command menus.</p>
-  <div class="scroll"><pre><span class="c"># Scenario A — before an AI-written report reaches a decision</span>
+  <div class="scroll"><pre><span class="c"># Scenario A, before an AI-written report reaches a decision</span>
 agent-receipt research verify --file report.md --out vr/r1.json
 <span class="c">#   a single fabrication → exit 1 (CI stops it)</span>
 agent-receipt graph view --dir vr --out browser.html    <span class="c"># triage what accumulates</span>
 agent-receipt graph diff --base-dir vr-old --head-dir vr <span class="c"># regression gate: NEW failures only</span>
 
-<span class="c"># Scenario B — before AI-assisted code ships (four verbs)</span>
+<span class="c"># Scenario B, before AI-assisted code ships (four verbs)</span>
 agent-receipt quickstart --write           <span class="c"># once: contract + policy + capture hooks (print-first, idempotent)</span>
 agent-receipt begin --objective "refund API" <span class="c"># baseline + session objective (recorded as self-report)</span>
 <span class="c">…the agent works…</span>
 agent-receipt done                         <span class="c"># 4-value verdict + sealed receipt + next steps ①②③</span>
-agent-receipt share --client               <span class="c"># ten-second proof (condensed view — same seal, stated)</span>
-agent-receipt review approve --receipt …   <span class="c"># approve / reject / note — the review is recorded</span>
+agent-receipt share --client               <span class="c"># ten-second proof (condensed view, same seal, stated)</span>
+agent-receipt review approve --receipt …   <span class="c"># approve / reject / note, the review is recorded</span>
 
-<span class="c"># Scenario C — operate the pile · check what you were handed</span>
+<span class="c"># Scenario C, operate the pile · check what you were handed</span>
 agent-receipt inbox --out inbox.html       <span class="c"># status board: FAIL-only · denied-path · unreviewed presets</span>
 agent-receipt share --bundle               <span class="c"># hand-off folder (receipt + signature + verify guide)</span>
 agent-receipt verify-proof received-pb/    <span class="c"># recipient side: one offline command catches tampering</span></pre></div>
@@ -355,7 +355,7 @@ agent-receipt verify-proof received-pb/    <span class="c"># recipient side: one
 <section id="kinds">
   <div class="eyebrow-s">§ Kernel</div>
   <h2>15 deterministic checks <span style="font-family:var(--mono);font-size:13px;color:var(--mut);font-weight:600">+ A/B/C evidence grades</span></h2>
-  <p class="sub">One kernel registry — the code is the spec (<code>agent-receipt spec --format json</code>). Each check carries a <b>grade</b> (A=recompute · B=compare · C=form), and when there's neither proof nor failure it <b>abstains</b> — no over-assurance.</p>
+  <p class="sub">One kernel registry, the code is the spec (<code>agent-receipt spec --format json</code>). Each check carries a <b>grade</b> (A=recompute · B=compare · C=form), and when there's neither proof nor failure it <b>abstains</b>, no over-assurance.</p>
   <div class="scroll"><table class="tbl">
     <tr><th>kind</th><th>verifies</th></tr>
     <tr><td><b>citation</b></td><td>the quote is literally in the cited source</td></tr>
@@ -363,57 +363,57 @@ agent-receipt verify-proof received-pb/    <span class="c"># recipient side: one
     <tr><td><b>range</b> <span style="color:var(--brand);font-size:11px">new in 0.16</span></td><td>a stated number falls within the declared bounds <code>[min, max]</code> (inclusive)</td></tr>
     <tr><td><b>date</b></td><td>format-agnostic date match ("Mar 1, 2026" ≡ "2026-03-01")</td></tr>
     <tr><td><b>hash / signature</b></td><td>SHA-256 integrity · real Ed25519 verification</td></tr>
-    <tr><td><b>commit / fileChanged / diffContains</b></td><td>"commit X exists / changed file Y / its diff contains Z" — against actual git history</td></tr>
+    <tr><td><b>commit / fileChanged / diffContains</b></td><td>"commit X exists / changed file Y / its diff contains Z", against actual git history</td></tr>
     <tr><td><b>schema / version</b></td><td>JSON-Schema subset conformity · real semver-range satisfaction (^3.23.8 ⊨ 3.24.0)</td></tr>
     <tr><td><b>file / artifact</b></td><td>a claimed path exists · a build output matches declared shape constraints</td></tr>
     <tr><td><b>receipt</b></td><td>a cited receipt exists and its seal replays clean</td></tr>
-    <tr><td><b>link</b></td><td style="color:var(--mut)">URL well-formedness — advisory only</td></tr>
+    <tr><td><b>link</b></td><td style="color:var(--mut)">URL well-formedness, advisory only</td></tr>
   </table></div>
 </section>
 
 <section id="deeper">
   <div class="eyebrow-s">§ 0.16 · harder evidence</div>
   <h2>Proven in numbers · mapped to clauses · forgery caught</h2>
-  <p class="sub">Not "trust me" — "reproduce it." From the checker's own accuracy to regulation clauses, supply-chain attestation, and halting an action — what grew in 0.16. All deterministic, local, honestly labeled.</p>
+  <p class="sub">Not "trust me", "reproduce it." From the checker's own accuracy to regulation clauses, supply-chain attestation, and halting an action, what grew in 0.16. All deterministic, local, honestly labeled.</p>
   <div class="who">
-    <div class="c"><b>📊 Benchmark harness <code>bench</code></b><p>Puts a <b>number</b> on how accurate the checker is — precision/recall on a labeled set + <b>N-run reproducibility</b> (same input → same verdict, 1000 out of 1000). If reproducibility ever breaks, CI <code>exit 1</code>. <span style="color:var(--faint)">Seed-set accuracy is in-sample — not a world-accuracy claim.</span></p></div>
-    <div class="c"><b>🅰 Evidence grades A / B / C + abstain</b><p>Not every pass carries the same weight. <b>A</b>=recompute (number·hash·signature) &gt; <b>B</b>=compare (citation·git) &gt; <b>C</b>=form. When there's no basis to judge, it <b>abstains</b> — never over-assures.</p></div>
+    <div class="c"><b>📊 Benchmark harness <code>bench</code></b><p>Puts a <b>number</b> on how accurate the checker is, precision/recall on a labeled set + <b>N-run reproducibility</b> (same input → same verdict, 1000 out of 1000). If reproducibility ever breaks, CI <code>exit 1</code>. <span style="color:var(--faint)">Seed-set accuracy is in-sample, not a world-accuracy claim.</span></p></div>
+    <div class="c"><b>🅰 Evidence grades A / B / C + abstain</b><p>Not every pass carries the same weight. <b>A</b>=recompute (number·hash·signature) &gt; <b>B</b>=compare (citation·git) &gt; <b>C</b>=form. When there's no basis to judge, it <b>abstains</b>, never over-assures.</p></div>
     <div class="c"><b>🌳 Merkle transparency log</b><p>Even if someone silently rewrites the log's past and recomputes what follows, a <b>previously published root + consistency proof</b> catches that re-chain (fork). RFC6962 · O(log n) inclusion · <code>ledger merkle</code>.</p></div>
     <div class="c"><b>🔗 in-toto attestation <code>predicate</code></b><p>Wraps a verification receipt in the standard type <code>claim-verification/v1</code> so it drops straight into the <b>supply-chain attestation</b> ecosystem (in-toto·Sigstore). subject digest = the sealed receipt's hash.</p></div>
-    <div class="c"><b>📋 Regulation crosswalk <code>controls --crosswalk</code></b><p>Maps each verification capability to <b>EU AI Act·SOC 2·ISO 42001</b> clauses as <b>evidence</b> — not a compliance claim; "evidence relevant to", with a per-clause "does not prove".</p></div>
-    <div class="c"><b>🛑 Action-halt gate <code>gate</code></b><p>When verification fails, it <b>halts the action</b> — CI <code>exit 1</code>, or in hook mode a PreToolUse deny that stops the tool <i>before</i> it runs (opt-in, explicitly wired).</p></div>
+    <div class="c"><b>📋 Regulation crosswalk <code>controls --crosswalk</code></b><p>Maps each verification capability to <b>EU AI Act·SOC 2·ISO 42001</b> clauses as <b>evidence</b>, not a compliance claim; "evidence relevant to", with a per-clause "does not prove".</p></div>
+    <div class="c"><b>🛑 Action-halt gate <code>gate</code></b><p>When verification fails, it <b>halts the action</b>, CI <code>exit 1</code>, or in hook mode a PreToolUse deny that stops the tool <i>before</i> it runs (opt-in, explicitly wired).</p></div>
     <div class="c"><b>📡 OpenTelemetry emission <code>otel</code></b><p>Emits verification events as <b>OTLP</b> into your existing observability / GenAI dashboards. No SDK bundled (<b>deps 0</b>) · deterministic traceId.</p></div>
-    <div class="c"><b>💸 Model-swap audit <code>cost --audit-swap</code></b><p>When the declared model differs from the model that actually answered, it <b>computes the price delta</b> — catching a <b>downgrade</b> (a premium model promised, a cheaper one served = suspected overcharge).</p></div>
+    <div class="c"><b>💸 Model-swap audit <code>cost --audit-swap</code></b><p>When the declared model differs from the model that actually answered, it <b>computes the price delta</b>, catching a <b>downgrade</b> (a premium model promised, a cheaper one served = suspected overcharge).</p></div>
   </div>
 </section>
 
 <section id="v020">
   <div class="eyebrow-s">§ 0.17→0.20 · review-ready receipts</div>
   <h2>Judge it · make it readable · record the review</h2>
-  <p class="sub">It doesn't stop at generating a receipt — the session closes with a verdict, reads in ten seconds, and carries a recorded approve/reject. All local, all deterministic, self-reports always labeled.</p>
+  <p class="sub">It doesn't stop at generating a receipt, the session closes with a verdict, reads in ten seconds, and carries a recorded approve/reject. All local, all deterministic, self-reports always labeled.</p>
   <div class="who">
-    <div class="c"><b>⚖️ 4-value session verdict <span style="font-weight:400;color:var(--mut);font-size:11.5px">0.17</span></b><p><code>done</code> closes the session as <b>PASS · warnings · FAIL · incomplete (◌)</b> — <b>a gate, not a score</b> (numeric scores are banned by test). Every verdict carries <code>[rule-id]</code> facts; incomplete comes with a <b>how-to-fix</b> line.</p></div>
-    <div class="c"><b>📜 codified rules + exit gate <span style="font-weight:400;color:var(--mut);font-size:11.5px">0.18</span></b><p>All 12 rules live in a code registry + doc kept in lockstep by a test. <b>A warning never auto-escalates to FAIL</b> — opt in to a CI exit gate with <code>fail_on_done</code> if you want one.</p></div>
-    <div class="c"><b>💡 why it was expensive <span style="font-weight:400;color:var(--mut);font-size:11.5px">0.18</span></b><p>Session cost decomposed into <b>input · output · cache-read · cache-creation</b> (same formula as the total — the numbers cannot disagree) + fixed signals that disclose their trigger. <b>Zero judgment words</b> — banned by test.</p></div>
+    <div class="c"><b>⚖️ 4-value session verdict <span style="font-weight:400;color:var(--mut);font-size:11.5px">0.17</span></b><p><code>done</code> closes the session as <b>PASS · warnings · FAIL · incomplete (◌)</b>, <b>a gate, not a score</b> (numeric scores are banned by test). Every verdict carries <code>[rule-id]</code> facts; incomplete comes with a <b>how-to-fix</b> line.</p></div>
+    <div class="c"><b>📜 codified rules + exit gate <span style="font-weight:400;color:var(--mut);font-size:11.5px">0.18</span></b><p>All 12 rules live in a code registry + doc kept in lockstep by a test. <b>A warning never auto-escalates to FAIL</b>, opt in to a CI exit gate with <code>fail_on_done</code> if you want one.</p></div>
+    <div class="c"><b>💡 why it was expensive <span style="font-weight:400;color:var(--mut);font-size:11.5px">0.18</span></b><p>Session cost decomposed into <b>input · output · cache-read · cache-creation</b> (same formula as the total, the numbers cannot disagree) + fixed signals that disclose their trigger. <b>Zero judgment words</b>, banned by test.</p></div>
     <div class="c"><b>🧾 ten-second proof page <span style="font-weight:400;color:var(--mut);font-size:11.5px">0.19–0.20</span></b><p>One <code>share</code> page: the contract as <b>plain sentences</b> (KO/EN), signals in <b>four buckets in the reviewer's reading order</b> (scope → contract-designated critical → validation → behavior), plus a session <b>timeline</b>. <code>--client</code> = a condensed view of the same seal (names what it omits) · <code>--bundle</code> = hand-off folder + verify guide.</p></div>
-    <div class="c"><b>✍️ recorded review <code>review</code> <span style="font-weight:400;color:var(--mut);font-size:11.5px">0.20</span></b><p><code>review approve|reject|note</code> — the receipt becomes a <b>reviewed document</b>. The record (labeled self-reported, not an authority) badges the inbox, the proof page and the PR comment.</p></div>
+    <div class="c"><b>✍️ recorded review <code>review</code> <span style="font-weight:400;color:var(--mut);font-size:11.5px">0.20</span></b><p><code>review approve|reject|note</code>, the receipt becomes a <b>reviewed document</b>. The record (labeled self-reported, not an authority) badges the inbox, the proof page and the PR comment.</p></div>
     <div class="c"><b>📥 receipt inbox <span style="font-weight:400;color:var(--mut);font-size:11.5px">0.20</span></b><p>Filter the pile by verdict · denied paths · critical paths · review status, with <b>fact-named presets</b> (FAIL only · denied-path touched · critical + no checks · unreviewed) shareable by URL hash. Zero server · neutral counts (not a judgment).</p></div>
-    <div class="c"><b>🔁 one-command re-verification <code>verify-proof</code> <span style="font-weight:400;color:var(--mut);font-size:11.5px">0.20</span></b><p>The recipient re-checks a hand-off bundle <b>offline in one command</b> — seal recompute · signature · evidence replay. Failures explained in <b>plain words</b> ("someone changed it after it was generated").</p></div>
-    <div class="c"><b>🚦 action-class signals <span style="font-weight:400;color:var(--mut);font-size:11.5px">0.20</span></b><p><code>git push</code> · <code>npm publish</code> · network commands classified by <b>lead token</b> (a quoted "git push" stays out) — turn on <code>forbid_actions</code> to record or block. The deny message confesses it is <b>a signal, not a lock</b>.</p></div>
+    <div class="c"><b>🔁 one-command re-verification <code>verify-proof</code> <span style="font-weight:400;color:var(--mut);font-size:11.5px">0.20</span></b><p>The recipient re-checks a hand-off bundle <b>offline in one command</b>, seal recompute · signature · evidence replay. Failures explained in <b>plain words</b> ("someone changed it after it was generated").</p></div>
+    <div class="c"><b>🚦 action-class signals <span style="font-weight:400;color:var(--mut);font-size:11.5px">0.20</span></b><p><code>git push</code> · <code>npm publish</code> · network commands classified by <b>lead token</b> (a quoted "git push" stays out), turn on <code>forbid_actions</code> to record or block. The deny message confesses it is <b>a signal, not a lock</b>.</p></div>
   </div>
 </section>
 
 <section id="gallery">
   <div class="eyebrow-s">§ Gallery</div>
   <h2>Gallery of fabrications</h2>
-  <p class="sub">Each opens live in the playground — the kernel judges it in your browser.</p>
+  <p class="sub">Each opens live in the playground, the kernel judges it in your browser.</p>
   <div class="gal">
-    <a href="/en/playground#p=soc2"><b>📋 The quiet upgrade</b><span>"Type I completed" → "Type II passed" — citation not-found</span></a>
-    <a href="/en/playground#p=numdrift"><b>🔢 Number drift</b><span>source says 52%, claim says 58% — number mismatch</span></a>
-    <a href="/en/playground#p=datedrift"><b>📅 Date drift</b><span>Mar 1 becomes Apr 1 — format-agnostic mismatch</span></a>
-    <a href="/en/playground#p=verdrift"><b>📦 Version drift</b><span>claimed 2.0.0 vs declared ^1.4.0 — real semver</span></a>
-    <a href="/en/playground#p=schema"><b>🧩 Missing required field</b><span>config lacks a required key — exact path</span></a>
-    <a href="/en/playground#p=sum"><b>🧮 Recomputed sum</b><span>11+14+16 really is 42 — verified, not trusted</span></a>
+    <a href="/en/playground#p=soc2"><b>📋 The quiet upgrade</b><span>"Type I completed" → "Type II passed", citation not-found</span></a>
+    <a href="/en/playground#p=numdrift"><b>🔢 Number drift</b><span>source says 52%, claim says 58%, number mismatch</span></a>
+    <a href="/en/playground#p=datedrift"><b>📅 Date drift</b><span>Mar 1 becomes Apr 1, format-agnostic mismatch</span></a>
+    <a href="/en/playground#p=verdrift"><b>📦 Version drift</b><span>claimed 2.0.0 vs declared ^1.4.0, real semver</span></a>
+    <a href="/en/playground#p=schema"><b>🧩 Missing required field</b><span>config lacks a required key, exact path</span></a>
+    <a href="/en/playground#p=sum"><b>🧮 Recomputed sum</b><span>11+14+16 really is 42, verified, not trusted</span></a>
   </div>
 </section>
 
@@ -425,8 +425,8 @@ agent-receipt verify-proof received-pb/    <span class="c"># recipient side: one
     <li><b>Not a legal-compliance guarantee.</b> It supplies evidence for review, nothing more.</li>
     <li><b>Not an LLM-reasoning evaluator.</b> It checks whether the evidence exists, not whether the conclusion is wise.</li>
     <li><b>Not total surveillance of everything an AI does.</b> What it can and cannot see is stated in the docs.</li>
-    <li><b>Not a bill-cutter.</b> It shows your real cost from actual usage data, but never promises a "save 30%" figure — it points to where the money leaks and signals when to stop; you act on it.</li>
-    <li class="is"><b>Instead — it shows what this session cost, signals waste and drift, and leaves a verifiable trail for AI work and AI evidence.</b></li>
+    <li><b>Not a bill-cutter.</b> It shows your real cost from actual usage data, but never promises a "save 30%" figure, it points to where the money leaks and signals when to stop; you act on it.</li>
+    <li class="is"><b>Instead, it shows what this session cost, signals waste and drift, and leaves a verifiable trail for AI work and AI evidence.</b></li>
   </ul>
 </section>
 
@@ -434,9 +434,9 @@ agent-receipt verify-proof received-pb/    <span class="c"># recipient side: one
   <div class="eyebrow-s">§ FAQ</div>
   <h2>FAQ</h2>
   <details><summary>Why not just have another LLM check the first LLM?</summary>
-    <p>A model checking a model can hallucinate its own "yes, that's accurate." Every verdict here is recomputable arithmetic/string/crypto — same input, same answer, on any machine. That's also why it works as a CI gate: exit codes don't have moods.</p></details>
+    <p>A model checking a model can hallucinate its own "yes, that's accurate." Every verdict here is recomputable arithmetic/string/crypto, same input, same answer, on any machine. That's also why it works as a CI gate: exit codes don't have moods.</p></details>
   <details><summary>What does a pass actually guarantee?</summary>
-    <p><b>Faithfulness, not truth.</b> A pass means the claim matches its cited source / recomputation. If the source itself is wrong, a faithful citation still passes — claiming otherwise would be a lie, so this tool doesn't.</p></details>
+    <p><b>Faithfulness, not truth.</b> A pass means the claim matches its cited source / recomputation. If the source itself is wrong, a faithful citation still passes, claiming otherwise would be a lie, so this tool doesn't.</p></details>
   <details><summary>Where does my data go?</summary>
     <p>Nowhere. Local-first: no account, no server, no telemetry. The only network calls are explicitly opt-in: <code>--fetch</code> (re-fetch a cited URL) and <code>anchor --upload</code> (register a receipt <i>hash</i> to the public Rekor transparency log).</p></details>
 </section>
@@ -456,7 +456,7 @@ agent-receipt verify-proof received-pb/    <span class="c"># recipient side: one
 
 <footer>
   <div><b>agent-receipt</b> · MIT · a <a href="https://github.com/koscom2023-beep">Promptia Labs</a> project</div>
-  <div class="tag">— local-first · no account · no server · let the receipts speak —</div>
+  <div class="tag">, local-first · no account · no server · let the receipts speak,</div>
 </footer>
 
 <script type="module">
@@ -489,8 +489,8 @@ async function inspect(file) {
   const r = await replayLite(obj);
   if (!r.ok) { $("drop-out").innerHTML = '<span class="stamp blk">not a verification receipt</span> <span style="color:var(--mut)">only kind=verification-receipt files (Work Receipt replay is CLI replay --pack)</span>'; return; }
   let h = r.tampered
-    ? '<span class="stamp blk">✗ TAMPERED — seal recompute mismatch</span>'
-    : '<span class="stamp ok">✓ INTACT — seal recomputes clean</span>';
+    ? '<span class="stamp blk">✗ TAMPERED, seal recompute mismatch</span>'
+    : '<span class="stamp ok">✓ INTACT, seal recomputes clean</span>';
   h += '<div class="kv">'
     + '<span class="k">contentHash</span><span>' + (r.contentHashOk ? '<span style="color:var(--green)">✓ match</span>' : '<span style="color:var(--red)">✗ mismatch</span>') + '</span>'
     + '<span class="k">receiptId</span><span>' + (r.receiptIdOk ? '<span style="color:var(--green)">✓ match</span>' : '<span style="color:var(--red)">✗ mismatch</span>') + '</span>'
@@ -498,7 +498,7 @@ async function inspect(file) {
     + '<span class="k">verdict / surface</span><span>' + esc(r.verdict) + ' · ' + esc(r.surface) + ' · ' + r.resultCount + ' claims</span>'
     + '<span class="k">verifiedAt</span><span>' + esc(r.verifiedAt) + ' <span style="color:var(--mut)">(self-reported)</span></span>'
     + '</div>'
-    + '<div class="mut" style="margin-top:8px;font-size:12px">Scope: only whether this file changed since it was sealed (integrity) — truth of contents, input re-hash and commit re-lookup are CLI <code>replay --receipt</code>.</div>';
+    + '<div class="mut" style="margin-top:8px;font-size:12px">Scope: only whether this file changed since it was sealed (integrity), truth of contents, input re-hash and commit re-lookup are CLI <code>replay --receipt</code>.</div>';
   $("drop-out").innerHTML = h;
 }
 const dz = $("drop");

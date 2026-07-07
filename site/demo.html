@@ -1,5 +1,5 @@
 <!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>증거 브라우저(Evidence Browser) — 검증 영수증</title><style>
+<title>증거 브라우저(Evidence Browser), 검증 영수증</title><style>
 :root{
   --bg:#f1f2f4;--bg-raised:#f8f9fa;--bg-hover:#e9ebee;--border:#dadde2;--border-soft:#e6e8eb;
   --text:#24292f;--mut:#57606a;--pass:#1a7f37;--fail:#d03b3b;--warn:#9a6700;--accent:#0969da;
@@ -51,23 +51,23 @@ function ok(b){return b===true?'<span class="pass">✅</span>':b===false?'<span 
 function st(s){return s==='verified'||s==='valid'?'<span class="pass">✅ '+esc(s)+'</span>':s==='not-found'||s==='mismatch'||s==='invalid'?'<span class="fail">❌ '+esc(s)+'</span>':'<span class="mut">· '+esc(s||'-')+'</span>'}
 function cd(l,n,c){return '<div class="cd '+(c==='mut'?'':(c||''))+'"><div class="n">'+n+'</div><div class="l">'+l+'</div></div>'}
 const EXC=S.exceptions||{};const excTotal=Object.values(EXC).reduce((a,b)=>a+(b||0),0);
-const EXC_INFO={seal_failed:['봉인확인실패','영수증 봉인 재계산이 안 맞음 — 저장 후 내용이 바뀌었을 수 있음(변조 의심). 화면의 ⚠ 표시와 같은 건을 분류한 것.'],ungrounded_decision:['날조근거 결정','회의 검증에서 근거가 출처에 없다고 판정된 결정(council 영수증 실패). 결정이 지어낸 근거 위에 서 있었다는 뜻.'],source_unreachable:['출처 도달실패','라이브 재대조(--fetch)에서 인용한 출처에 접속하지 못함(링크 소멸/차단). 영수증 자체 기록에서 집계.']};
+const EXC_INFO={seal_failed:['봉인확인실패','영수증 봉인 재계산이 안 맞음, 저장 후 내용이 바뀌었을 수 있음(변조 의심). 화면의 ⚠ 표시와 같은 건을 분류한 것.'],ungrounded_decision:['날조근거 결정','회의 검증에서 근거가 출처에 없다고 판정된 결정(council 영수증 실패). 결정이 지어낸 근거 위에 서 있었다는 뜻.'],source_unreachable:['출처 도달실패','라이브 재대조(--fetch)에서 인용한 출처에 접속하지 못함(링크 소멸/차단). 영수증 자체 기록에서 집계.']};
 const EXC_ROWS={seal_failed:r=>!(r.integrity&&r.integrity.contentHashOk&&r.integrity.receiptIdOk),ungrounded_decision:r=>r.surface==='council'&&r.verdict==='fail',source_unreachable:r=>(r.unreachable||0)>0};
-function excDetail(){let h='<div class="card"><div class="big warn">예외 '+excTotal+'건 — 분류</div><div class="mut" style="margin-top:2px">이미 기록된 사실의 재분류(접힘 후 집계)일 뿐 — 상태/처리흐름 없음. 없어지는 조건도 각 원인이 사라지는 것뿐.</div></div>';
+function excDetail(){let h='<div class="card"><div class="big warn">예외 '+excTotal+'건, 분류</div><div class="mut" style="margin-top:2px">이미 기록된 사실의 재분류(접힘 후 집계)일 뿐, 상태/처리흐름 없음. 없어지는 조건도 각 원인이 사라지는 것뿐.</div></div>';
 for(const k of Object.keys(EXC_INFO)){const n=EXC[k]||0;const info=EXC_INFO[k];const rows=FOLDED.filter(EXC_ROWS[k]);
 h+='<div class="card'+(n?' accent-fail':'')+'"><b>'+esc(info[0])+' <span class="'+(n?'fail':'mut')+'">'+n+'건</span></b> <span class="mut">('+esc(k)+')'+(k==='source_unreachable'&&n?' · 영수증 '+rows.length+'개에서 합계':'')+'</span><div class="mut" style="margin-top:4px">'+esc(info[1])+'</div>';
 if(rows.length){h+='<div style="margin-top:8px">';
 rows.forEach(r=>{h+='<div class="lnk" data-r="'+esc(r.file||'')+'">→ '+esc(r.verifiedAt||'-')+' · '+esc((r.subject||'').slice(0,40))+(r.occurrences>1?' <span class="badge rep">×'+r.occurrences+'</span>':'')+'</div>'});
 h+='</div>'}
 h+='</div>'}
-h+='<div class="card mut">gate 우회(작업영수증 트랙)는 여기 없음 — 이 화면은 검증 영수증만 읽는 구조라서(스펙 명시).</div>';
+h+='<div class="card mut">gate 우회(작업영수증 트랙)는 여기 없음, 이 화면은 검증 영수증만 읽는 구조라서(스펙 명시).</div>';
 el('detail').innerHTML=h;wire()}
 el('dash').innerHTML=cd('전체',S.total||0)+(S.fileCount&&S.fileCount!==S.total?cd('파일',S.fileCount,'mut'):'')+cd('통과',S.pass||0,'pass')+cd('실패',S.fail||0,'fail')+
 (NEWCNT!==null?cd('신규 실패',NEWCNT,(NEWCNT?'fail':'pass')):'')+
 cd('최다 실패',S.mostFailedCheck||'-')+cd('검증후 변동',S.driftCount||0,(S.driftCount?'warn':''))+cd('봉인확인실패',S.tamperedCount||0,(S.tamperedCount?'fail':''))+
 (excTotal?'<div class="cd warn" id="exc-chip" style="cursor:pointer" title="클릭하면 분류가 열립니다"><div class="n">'+excTotal+'</div><div class="l">예외 · 분류보기</div></div>':'');
 if(excTotal)el('exc-chip').onclick=excDetail;
-if(HTRUNC){const n=document.createElement('div');n.className='mut';n.style.cssText='padding:4px 24px;font-size:12px';n.textContent='이력 사전계산 '+HTRUNC.shown+'/'+HTRUNC.total+'건 — 나머지는 CLI: graph history --claim <지문>';el('dash').after(n)}
+if(HTRUNC){const n=document.createElement('div');n.className='mut';n.style.cssText='padding:4px 24px;font-size:12px';n.textContent='이력 사전계산 '+HTRUNC.shown+'/'+HTRUNC.total+'건, 나머지는 CLI: graph history --claim <지문>';el('dash').after(n)}
 const TABS=[['subjects','상태판(Subjects)'],['byCheck','Check별 실패'],['byModel','Model별'],['bySubject','Subject별'],['byCommit','Commit별'],['byReason','Reason별'],['receipts','전체 영수증']];
 let cur=Object.keys(IX.byCheck||{}).length?'byCheck':'receipts';
 function tabs(){el('tabs').innerHTML=TABS.map(t=>{const n=t[0]==='receipts'?FOLDED.length:t[0]==='subjects'?SUBS.length:Object.keys(IX[t[0]]||{}).length;
@@ -82,7 +82,7 @@ r.innerHTML='<b>'+esc((s.subject||'').slice(0,40))+'</b> '+(s.fail?'<span class=
 '<div class="mut">영수증 '+s.receipts+' · pass '+s.pass+' · 실패 이벤트 '+s.failureEvents+(s.tamperedReceipts?' · ⚠ 봉인확인실패 '+s.tamperedReceipts:'')+'</div>';
 r.onclick=()=>subjectDetail(s);L.appendChild(r)});return}
 const g=IX[cur]||{};const keys=Object.keys(g).sort((a,b)=>g[b].length-g[a].length);
-if(!keys.length){L.innerHTML='<div class="row mut">실패 없음 — 전부 PASS</div>';return}
+if(!keys.length){L.innerHTML='<div class="row mut">실패 없음, 전부 PASS</div>';return}
 keys.forEach(k=>{const h=document.createElement('div');h.className='ghead';h.innerHTML='<b>'+esc(k)+'</b> <span class="mut">'+g[k].length+'건</span>';L.appendChild(h);
 g[k].forEach(e=>{const r=document.createElement('div');r.className='row';
 r.innerHTML='<span class="fail">❌ '+esc(e.check)+'</span> <span class="mut">'+esc(e.status)+'</span> · claim #'+e.claimIndex+' '+esc((e.statement||'').slice(0,42))+
@@ -93,7 +93,7 @@ r.onclick=()=>failureDetail(e);L.appendChild(r)})})}
 function wire(){el('detail').querySelectorAll('[data-r]').forEach(x=>x.onclick=()=>{const d=FOLDED.find(y=>y.file===x.dataset.r||(y.allFiles||[]).includes(x.dataset.r));if(d)detail(d)});
 el('detail').querySelectorAll('[data-h]').forEach(x=>x.onclick=()=>historyDetail(x.dataset.h))}
 function subjectDetail(s){
-let h='<div class="card"><div class="big">'+esc(s.subject)+'</div><div class="mut">subject 상태판 — 카운트 롤업(판단 아님)</div>';
+let h='<div class="card"><div class="big">'+esc(s.subject)+'</div><div class="mut">subject 상태판, 카운트 롤업(판단 아님)</div>';
 h+='<div class="chk"><span class="k">영수증</span>'+s.receipts+'<span class="k">PASS</span><span class="pass">'+s.pass+'</span><span class="k">FAIL</span><span class="'+(s.fail?'fail':'mut')+'">'+s.fail+'</span>'+
 '<span class="k">실패 이벤트</span>'+s.failureEvents+'<span class="k">봉인확인실패</span>'+(s.tamperedReceipts?'<span class="fail">'+s.tamperedReceipts+'</span>':'0')+
 '<span class="k">기간(자가보고)</span><span class="mut">'+esc(s.firstVerifiedAt||'-')+' ~ '+esc(s.lastVerifiedAt||'-')+'</span></div>';
@@ -125,10 +125,10 @@ h+='<div class="card mut">참고: 시간축=verifiedAt(자가보고) · 해소=�
 el('detail').innerHTML=h;wire()}
 function failureDetail(e){const d=DATA.find(x=>x.file===e.file)||{};const c=(d.claims||[])[e.claimIndex-1]||{};
 const f=(c.failures||[]).find(x=>x.check===e.check&&x.status===e.status)||{};
-let h='<div class="card"><div class="big fail">❌ '+esc(e.check)+' — '+esc(e.status)+'</div>';
+let h='<div class="card"><div class="big fail">❌ '+esc(e.check)+', '+esc(e.status)+'</div>';
 h+='<div class="mut">최근 '+esc(e.verifiedAt||'-')+' (자가보고)'+(e.occurrences>1?' · <b class="warn">'+e.occurrences+'개 파일로 반복</b>':'')+'</div>';
 h+='<div style="margin-top:8px">이유: '+esc(f.reason||e.reason)+'</div>';
-if(f.evidence)h+='<div>증거 — 기대값: <code>'+esc(f.evidence.expected)+'</code> ↔ 실제값: <code>'+esc(f.evidence.actual)+'</code></div>';
+if(f.evidence)h+='<div>증거, 기대값: <code>'+esc(f.evidence.expected)+'</code> ↔ 실제값: <code>'+esc(f.evidence.actual)+'</code></div>';
 if(f.hint)h+='<div class="mut">조치(기계적·표시만): '+esc(f.hint)+'</div>';h+='</div>';
 h+='<div class="card"><b>영향받은 주장 #'+e.claimIndex+'</b><div style="margin:4px 0">'+esc(c.statement||e.statement)+'</div><div class="chk">';
 (["citation","number","date","hash","signature","link","commit","fileChanged","diffContains","schema","version","file","receipt","artifact"]).forEach(k=>{const ch=c.checks||{};if(ch[k]!=null){h+='<span class="k">'+k+'</span>'+st(ch[k])}});h+='</div></div>';
@@ -143,18 +143,18 @@ div.innerHTML='<span class="'+(v?'pass':'fail')+'">'+(v?'✅ 통과':'❌ 실패
 div.onclick=()=>detail(d);L.appendChild(div)})}
 function detail(d){const ig=d.integrity||{};let h='<div class="card"><div class="big">'+(d.verdict==='fail'?'<span class="fail">❌ 실패</span>':'<span class="pass">✅ 통과</span>')+
 ' <span class="mut">'+esc(d.verifiedAt||'-')+' (자가보고)</span></div>';
-if(d.occurrences>1)h+='<div class="mut">이 결과는 <b class="warn">'+d.occurrences+'개 파일</b>로 반복 기록됨(같은 입력 재검증 등) — 시각: '+(d.verifiedAtAll||[]).map(esc).join(' · ')+'</div>';
+if(d.occurrences>1)h+='<div class="mut">이 결과는 <b class="warn">'+d.occurrences+'개 파일</b>로 반복 기록됨(같은 입력 재검증 등), 시각: '+(d.verifiedAtAll||[]).map(esc).join(' · ')+'</div>';
 h+='<div class="chk"><span class="k">영수증 무결성</span>'+ok(ig.contentHashOk&&ig.receiptIdOk)+
 '<span class="k">내용 해시</span>'+ok(ig.contentHashOk)+'<span class="k">영수증 ID</span>'+ok(ig.receiptIdOk)+
 '<span class="k">커밋 존재</span>'+ok(ig.commitRecheck)+'<span class="k">입력 불변</span>'+ok(ig.inputMatch)+'</div>';
 h+='<div class="mut">receiptId <code>'+esc(d.receiptId||'')+'</code></div></div>';
 const VLABEL={failed:'실패',verified:'검증됨',advisory:'참고'};
 (d.claims||[]).forEach((c,i)=>{const ch=c.checks||{};const v=c.verdict;const failed=(c.failures||[]).length;
-h+='<div class="card"><div><b>주장 #'+(i+1)+'</b> — '+esc((c.statement||'').slice(0,80))+' → <b class="'+(v==='failed'?'fail':v==='verified'?'pass':'mut')+'">'+esc(VLABEL[v]||v||'')+'</b></div><div class="chk">';
+h+='<div class="card"><div><b>주장 #'+(i+1)+'</b>, '+esc((c.statement||'').slice(0,80))+' → <b class="'+(v==='failed'?'fail':v==='verified'?'pass':'mut')+'">'+esc(VLABEL[v]||v||'')+'</b></div><div class="chk">';
 (["citation","number","date","hash","signature","link","commit","fileChanged","diffContains","schema","version","file","receipt","artifact"]).forEach(k=>{if(ch[k]!=null){h+='<span class="k">'+k+'</span>'+st(ch[k])}});h+='</div>';
 if(failed){h+='<div style="margin-top:8px;font-weight:600">실패 목록</div>';(c.failures||[]).forEach(f=>{
-h+='<div class="rz"><b class="fail">'+esc(f.check)+'</b> — '+esc(f.status)+'<div class="mut">이유: '+esc(f.reason)+'</div>'+
-(f.evidence?'<div>증거 — 기대값: <code>'+esc(f.evidence.expected)+'</code> · 실제값: <code>'+esc(f.evidence.actual)+'</code></div>':'')+
+h+='<div class="rz"><b class="fail">'+esc(f.check)+'</b>, '+esc(f.status)+'<div class="mut">이유: '+esc(f.reason)+'</div>'+
+(f.evidence?'<div>증거, 기대값: <code>'+esc(f.evidence.expected)+'</code> · 실제값: <code>'+esc(f.evidence.actual)+'</code></div>':'')+
 '<div class="mut">조치(기계적·표시만): '+esc(f.hint)+'</div></div>'})}
 if(c.fingerprint)h+='<div class="mut">지문 <code>'+esc((c.fingerprint||'').slice(0,21))+'…</code> · <span class="lnk" data-h="'+esc(c.fingerprint)+'">이력 →</span></div>';
 h+='</div>'});
