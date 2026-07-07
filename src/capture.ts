@@ -404,6 +404,11 @@ export function loadCapturedActions(gitChangedPaths: Set<string> = new Set()): A
   if (records.length === 0) return null;
   return aggregateActions(records, gitChangedPaths);
 }
+// v0.20 결정3(타임라인): 원시 레코드 읽기 노출 — ts·seq·op 를 렌더러(share-proof)가 결정론 렌더.
+// 값(본문) 미저장 원칙 그대로 — 레코드에 이미 값이 없다(경로/호스트/분류만).
+export function loadCaptureRecords(): CaptureRecord[] {
+  return readRecords();
+}
 // D4: git 변경 ↔ capture 기록 대사(reconcileCapture)를 Receipt 동결용으로 로드. 기록 없으면 null(=capture 미사용).
 export function loadReconciliation(gitChanged: Set<string> = new Set()): ReconResult | null {
   const records = readRecords();

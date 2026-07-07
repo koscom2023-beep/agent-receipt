@@ -166,4 +166,18 @@ for (const id of ids) assert.ok(doc.includes(`\`${id}\``), `docs/VERDICT.md 에 
 assert.ok(doc.includes("자동 승격되지 않는다"), "docs 에 승격 없음 명문");
 assert.ok(doc.includes("fail_on_done"), "docs 에 fail_on_done 표");
 
-console.log("verdict.test: OK — 4값 게이트·reasons 뒷받침·점수0·hash 바이트불변·계약 스냅샷·라벨 병기 + P1(규칙 레지스트리·[id] reason·INCOMPLETE 세분+fix·fail_on_done 임계·docs 일치)");
+// ════════ v0.20 결정2 — 계약 자연어화(고정 템플릿·한/영·결정론) ════════
+import { renderContractProse } from "../dist/verdict.js";
+const prose = renderContractProse(snap);
+assert.deepEqual(prose, renderContractProse(snap), "같은 계약 → 같은 문장(결정론)");
+for (const d2 of snap.deniedGlobs) {
+  assert.ok(prose.ko.includes(d2) && prose.en.includes(d2), `denied 전수 포함: ${d2}`);
+}
+assert.ok(prose.ko.includes("구현") && prose.en.includes("implementation"), "kind 한/영 매핑");
+assert.ok(prose.ko.includes("기계 강제 아님") && prose.en.includes("advisory"), "advisory 정직 라벨");
+assert.ok(prose.ko.includes("30개 이하") && prose.en.includes("≤30"), "budget 문장");
+const prose2 = renderContractProse(snap2);
+assert.ok(prose2.ko.includes("금지 경로는 지정되지 않았습니다") && prose2.en.includes("No denied paths"), "빈 계약 정직 문장");
+assert.ok(!/권장|추천/.test(prose.ko + prose2.ko), "권장 어휘 금지");
+
+console.log("verdict.test: OK — 4값 게이트·reasons 뒷받침·점수0·hash 바이트불변·계약 스냅샷·라벨 병기 + P1(규칙 레지스트리·[id] reason·INCOMPLETE 세분+fix·fail_on_done 임계·docs 일치) + v0.20(계약 자연어 결정론·denied 전수·한영)");

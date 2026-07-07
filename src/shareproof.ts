@@ -6,11 +6,13 @@ import { splitActionsForDisplay, COVERED_TOOLS } from "./capture.js";
 import { redactText, redactJsonText } from "./redact.js";
 import { LIMIT_NOTE } from "./disclosure.js";
 import { listReceipts, loadRekorAnchor, loadSavedReceipt, rekorAnchorPath, type RekorAnchor } from "./receiptStore.js";
-import { renderVerdictLine, renderContractLine } from "./verdict.js";
+import { renderVerdictLine, renderContractLine, renderContractProse } from "./verdict.js";
 import { buildViewData, buildSummary } from "./graph.js";
 import { costLines } from "./cost.js";
 import { summarizeCurrentSession } from "./transcript.js";
 import { publicKeyRelPath } from "./keys.js";
+import { loadCaptureRecords } from "./capture.js";
+import * as g from "./git.js";
 
 // ── share-proof v0 (council B) — 외주사가 클라이언트에 보내는 로컬 self-contained HTML 증거 ──
 // 원칙: 자동로드 0(외부 CDN/img/script "src" 없음 — 열람만으로 유출 0) · 모든 동적 문자열 esc(injection 방어)
@@ -49,6 +51,45 @@ export interface ProofExtras {
   evidence?: ProofEvidence | null;
   evidenceDirLabel?: string | null; // 표기용(어느 디렉터리를 요약했나)
   costLines?: string[] | null; // 생성 시점 세션 비용 줄(cost.ts costLines 재사용)
+  timeline?: ProofTimeline | null; // v0.20 결정3 — 세션 타임라인(결정론 렌더)
+}
+
+// ── v0.20 결정3: 세션 타임라인 — capture 레코드(ts·seq·op) 결정론 / capture 없으면 git 커밋 시각 축약판 ──
+export interface ProofTimelineEvent {
+  ts: string;
+  label: string; // 값 미포함(경로/호스트/분류/커밋제목만)
+}
+export interface ProofTimeline {
+  source: "capture" | "git"; // 정직 라벨 — 어느 원천의 타임라인인가
+  events: ProofTimelineEvent[]; // 시간순
+  folded: number; // 상한으로 접힌 이전 이벤트 수(0=전부 표시) — 인쇄에도 명시
+}
+export const TIMELINE_MAX_EVENTS = 500; // Perf 상한 — 대형 세션 방어(측정 전 추가 최적화 금지)
+export function buildProofTimeline(cwd: string = process.cwd()): ProofTimeline | null {
+  try {
+    const records = loadCaptureRecords();
+    if (records.length) {
+      const events = records.map((r) => ({
+        ts: r.ts,
+        label: `${r.op}${r.path ? ` ${r.path}` : r.host ? ` ${r.host}` : r.cmdKind ? ` (${r.cmdKind})` : ""}`,
+      }));
+      const folded = Math.max(0, events.length - TIMELINE_MAX_EVENTS);
+      return { source: "capture", events: events.slice(-TIMELINE_MAX_EVENTS), folded };
+    }
+  } catch {
+    /* capture 읽기 실패 = git 축약판으로(가짜 타임라인 금지) */
+  }
+  try {
+    const commits = g.recentCommits(20);
+    if (!commits.length) return null;
+    return {
+      source: "git",
+      events: commits.reverse().map((c) => ({ ts: c.ts, label: `commit ${c.hash} — ${c.subject}` })),
+      folded: 0,
+    };
+  } catch {
+    return null;
+  }
 }
 
 /** 순수함수: Receipt(+선택 Rekor 앵커·선택 extras) → 고객 전달용 self-contained HTML(자동로드 리소스 0·script 0). */
@@ -121,6 +162,30 @@ export function toProofHtml(r: Receipt, anchor?: RekorAnchor | null, extras?: Pr
   <p class="meta">Not included — generate with <code>agent-receipt share-proof --evidence-dir .agent-guard/vreceipts</code> to embed a neutral pass/fail rollup of this session's evidence checks.</p>
 </section>`;
 
+  // ── v0.20 결정1·2: 10초 요약 블록(탭 위 고정) — 전 수치가 Receipt 필드 그대로(신규 계산 0·"권장" 어휘 금지) ──
+  const prose = r.contractSnapshot ? renderContractProse(r.contractSnapshot) : null;
+  const guardDenied = r.actions ? r.actions.filter((a) => a.denied).length : null;
+  const checksPassed = r.checks.filter((c) => c.ok).length;
+  const signals = r.verdict?.reasons ?? [];
+  const execSummary = `
+  <section class="exec">
+  ${prose ? `<p class="meta"><b>${esc(prose.ko)}</b></p>\n  <p class="meta">${esc(prose.en)}</p>` : ""}
+  <p class="meta">Changed: <strong>${r.touched.length}</strong> file(s) (+${r.magnitude.added} / -${r.magnitude.deleted} lines, ${r.magnitude.newFiles} new) · Critical paths: ${critTxt} · Checks: ${r.checks.length ? `${checksPassed}/${r.checks.length} OK` : "none"}${guardDenied !== null ? ` · Guard-denied events: <strong>${guardDenied}</strong>` : ""}</p>
+  ${signals.length ? `<p class="meta">Signals (verdict facts, restated — a pointer, <strong>not a judgment</strong> and not the whole):</p>\n  <ul class="actions">${signals.map((s2) => `<li>${esc(s2)}</li>`).join("\n")}</ul>` : ""}
+  </section>`;
+
+  // ── v0.20 결정3: 세션 타임라인 — capture(행위) / git(커밋 시각 축약판·정직 라벨) ──
+  const tl = extras?.timeline ?? null;
+  const timelineSection = tl
+    ? `
+  <section>
+  <h2>Session timeline${tl.source === "capture" ? " (captured actions)" : " (git commit times)"}</h2>
+  ${tl.source === "git" ? `<p class="meta">Behavior-level timeline appears when capture hooks are installed — showing commit times only.</p>` : ""}
+  <ul class="actions">${tl.events.map((e) => `<li><code>${esc(e.ts)}</code> ${esc(e.label)}</li>`).join("\n")}</ul>
+  ${tl.folded ? `<p class="meta">+ ${tl.folded} earlier event(s) folded — the fold is stated here (and in print), not hidden.</p>` : ""}
+  </section>`
+    : "";
+
   // ── P2 D5: Cost 탭 — 생성 시점 세션 추정(있으면) / 정직한 빈 상태 ──
   const cl = extras?.costLines ?? null;
   const costPane = cl && cl.length
@@ -167,7 +232,7 @@ export function toProofHtml(r: Receipt, anchor?: RekorAnchor | null, extras?: Pr
 <div class="wrap">
   <h1>AI Work Receipt</h1>
   <p class="meta">Scope evidence for <code>${esc(r.contractId)}</code>${r.title ? ` — ${esc(r.title)}` : ""}</p>${r.verdict ? `\n  <p class="meta"><b>${esc(renderVerdictLine(r.verdict))}</b></p>` : ""}${r.contractSnapshot ? `\n  <p class="meta">${esc(renderContractLine(r.contractSnapshot))}</p>` : ""}
-  <div class="status">${statusTxt}</div>
+  <div class="status">${statusTxt}</div>${execSummary}
   <div class="tabs">
   <input class="tabradio" type="radio" name="proof-tab" id="pt-change" checked>
   <input class="tabradio" type="radio" name="proof-tab" id="pt-evidence">
@@ -184,7 +249,7 @@ export function toProofHtml(r: Receipt, anchor?: RekorAnchor | null, extras?: Pr
     <tr><td class="k">Integrity (contentHash)</td><td class="hash">${esc(r.contentHash)}</td></tr>
     <tr><td class="k">Generated</td><td>${esc(r.timestamp)}</td></tr>
   </table>
-  ${beyondGit}${coverageSection}${anchorSection}
+  ${beyondGit}${coverageSection}${anchorSection}${timelineSection}
   </div>
   <div class="pane pane-evidence">
   ${evidencePane}
@@ -224,7 +289,7 @@ function buildExtras(opts: ShareProofOpts, cwd: string): ProofExtras {
       cost = null; // 비용 읽기 실패 = 미포함(가짜 숫자 금지)
     }
   }
-  return { evidence, evidenceDirLabel: opts.evidenceDir ?? null, costLines: cost };
+  return { evidence, evidenceDirLabel: opts.evidenceDir ?? null, costLines: cost, timeline: buildProofTimeline(cwd) };
 }
 
 /**

@@ -103,6 +103,44 @@ check("extras 주입 — evidence 롤업(중립·판단 없음) + cost 라벨", 
   assert.ok(!h.includes("<script"), "extras 주입 후에도 script 0");
 });
 
+// ════════ v0.20 결정1·2·3 — 요약 블록(탭 위)·계약 자연어 병기·세션 타임라인 ════════
+check("요약 블록 — 수치가 Receipt 필드와 일치(사실-드리프트 차단)", () => {
+  const rr = {
+    ...r,
+    verdict: { verdict: "PASS_WITH_WARNINGS", reasons: ["[critical-path] 고위험 경로 변경: src/pay/**"] },
+    contractSnapshot: {
+      contractId: "demo", kind: "implementation", allowedGlobs: 2,
+      deniedGlobs: [".env*", "secrets/**"], forbiddenActions: ["push"], budget: null, contractHash: "sha256:x",
+    },
+  };
+  const h = toProofHtml(rr);
+  assert.ok(h.indexOf('class="exec"') < h.indexOf('class="tabs"'), "요약이 탭 위에 고정");
+  assert.ok(h.includes("Changed: <strong>1</strong> file(s) (+2 / -0 lines, 0 new)"), "변경 규모 = magnitude 그대로");
+  assert.ok(h.includes("Guard-denied events: <strong>0</strong>"), "가드 거부 기록 N(사실·capture 있을 때)");
+  assert.ok(h.includes("이번 세션은 구현 작업으로 계약되었습니다") && h.includes(".env*"), "계약 자연어 ko + denied 전수");
+  assert.ok(h.includes("This session was contracted as implementation work"), "계약 자연어 en 병기");
+  assert.ok(h.includes("[critical-path]"), "신호 = 판정 사실 재배치(rule-id 그대로)");
+  assert.ok(h.includes("not a judgment"), "판단 아님 명시");
+  assert.ok(!/권장|추천/.test(h), "권장 어휘 금지(점수화 뒷문 차단)");
+});
+check("타임라인 — capture 원천 + 접힘 명시(인쇄 포함) 결정론", () => {
+  const mk = (n) => Array.from({ length: n }, (_, i) => ({ ts: `2026-01-01T00:00:${String(i % 60).padStart(2, "0")}Z`, label: `write f${i}.ts` }));
+  const h = toProofHtml(r, null, { timeline: { source: "capture", events: mk(3), folded: 7 } });
+  assert.ok(h.includes("Session timeline (captured actions)"), "capture 라벨");
+  assert.ok(h.includes("write f2.ts"), "이벤트 렌더");
+  assert.ok(h.includes("+ 7 earlier event(s) folded") && h.includes("not hidden"), "접힘 명시(숨김 아님)");
+  const h2 = toProofHtml(r, null, { timeline: { source: "capture", events: mk(3), folded: 7 } });
+  assert.equal(h, h2, "같은 타임라인 → 같은 HTML(결정론)");
+});
+check("타임라인 — git 축약판 정직 라벨(capture 미설치)", () => {
+  const h = toProofHtml(r, null, { timeline: { source: "git", events: [{ ts: "2026-01-01T00:00:00Z", label: "commit abc — init" }], folded: 0 } });
+  assert.ok(h.includes("git commit times") && h.includes("capture hooks are installed"), "축약판 사유 명시");
+});
+check("타임라인 없음/요약 후에도 script 0·외부 URL 0 불변", () => {
+  const h = toProofHtml(r, null, { timeline: null });
+  assert.ok(!h.includes("<script") && !h.includes("http://") && !h.includes("https://"), "보안 불변");
+});
+
 if (fail.length) {
   console.error(`shareproof: ${fail.length} FAIL\n  ` + fail.join("\n  "));
   process.exit(1);

@@ -186,3 +186,49 @@ export function renderContractLine(s: ContractSnapshot): string {
 export function renderVerdictLine(v: VerdictResult): string {
   return `판정: ${v.verdict} ${VERDICT_MARK[v.verdict]}  (게이트 판정 — 점수 아님)`;
 }
+
+// ── v0.20 결정2: 계약 자연어화 — 고정 템플릿 슬롯 치환(한/영 병기·LLM 0·결정론) ──
+// done 헤더는 현행 압축줄(renderContractLine) 유지 — share-proof 만 문장형을 병기한다(같은 스냅샷 SSOT).
+const KIND_KO: Record<string, string> = {
+  implementation: "구현",
+  recon: "정찰(읽기 위주)",
+  docs: "문서",
+  test: "테스트",
+  "measure-first": "측정 우선",
+  "observe-only": "관찰 전용",
+  "release-check": "배포 점검",
+};
+export function renderContractProse(s: ContractSnapshot): { ko: string; en: string } {
+  const kindKo = s.kind ? (KIND_KO[s.kind] ?? s.kind) : "종류 미지정";
+  const kindEn = s.kind ?? "unspecified-kind";
+  const denied = s.deniedGlobs; // 위험표면 — 전수 나열(수용기준)
+  const koParts: string[] = [];
+  koParts.push(`이번 세션은 ${kindKo} 작업으로 계약되었습니다.`);
+  koParts.push(
+    denied.length
+      ? `${denied.join(", ")} 은(는) 건드리지 않기로 했습니다.`
+      : "금지 경로는 지정되지 않았습니다.",
+  );
+  if (s.forbiddenActions.length) koParts.push(`하지 않기로 약속한 행위(권고·기계 강제 아님): ${s.forbiddenActions.join(", ")}.`);
+  if (s.budget) {
+    const b: string[] = [];
+    if (s.budget.maxTouchedFiles !== undefined) b.push(`변경 파일 ${s.budget.maxTouchedFiles}개 이하`);
+    if (s.budget.maxNewFiles !== undefined) b.push(`새 파일 ${s.budget.maxNewFiles}개 이하`);
+    if (b.length) koParts.push(`변경 예산: ${b.join(" · ")}.`);
+  }
+  const enParts: string[] = [];
+  enParts.push(`This session was contracted as ${kindEn} work.`);
+  enParts.push(
+    denied.length
+      ? `It agreed not to touch: ${denied.join(", ")}.`
+      : "No denied paths were specified.",
+  );
+  if (s.forbiddenActions.length) enParts.push(`Actions it promised not to take (advisory, not machine-enforced): ${s.forbiddenActions.join(", ")}.`);
+  if (s.budget) {
+    const b: string[] = [];
+    if (s.budget.maxTouchedFiles !== undefined) b.push(`≤${s.budget.maxTouchedFiles} touched files`);
+    if (s.budget.maxNewFiles !== undefined) b.push(`≤${s.budget.maxNewFiles} new files`);
+    if (b.length) enParts.push(`Change budget: ${b.join(" · ")}.`);
+  }
+  return { ko: koParts.join(" "), en: enParts.join(" ") };
+}
