@@ -52,6 +52,7 @@ import { runIndex } from "./receiptindex.js";
 import { runGenClaim, runGenClaimLlmPrompt, runGenClaimFromLlm } from "./genclaim.js";
 import { runCaptureIngest, runCaptureShow, runCaptureReset, runCaptureInstall, runCaptureUninstall, runCaptureVerify, runCaptureInstallCursor } from "./capture.js";
 import { runShareProof, runShareProofFromSaved, latestReceiptExists } from "./shareproof.js";
+import { runQuickstart } from "./quickstart.js";
 import { runResearchVerify } from "./research.js";
 import { runBench } from "./bench.js";
 import { runMerkle } from "./merkle.js";
@@ -108,10 +109,13 @@ agent-receipt — AI 코딩 세션 비용·git 작업 증빙 (로컬 · git 만 
 
   agent-receipt cost                                     이번 세션 토큰 비용(로컬 Claude Code transcript · 추정 · 청구서 아님)
 
-작업 증빙 흐름 (이 셋):
-  agent-receipt begin [--cursor|--claude] [--kind ...]   작업 시작(baseline + 지시문)
-  agent-receipt done                                     작업 종료(verify+check+receipt 저장)
-  agent-receipt share-proof                              클라이언트 전달용 증거 HTML 생성
+핵심 4동사 (대부분 이걸로 충분):
+  agent-receipt begin [--cursor|--claude] [--kind ...]   작업 시작(baseline + 계약)
+  agent-receipt done                                     작업 종료(판정 + receipt 저장)
+  agent-receipt share [--client|--bundle]                증거 공유(= share-proof · 요약+3축 탭 HTML)
+  agent-receipt review                                   commit 전 사람 체크리스트(read-only)
+
+  quickstart:  agent-receipt quickstart [--write]        처음이면 이것부터(인쇄 우선 · --write 에서만 기록)
 
   왜 PASS/FAIL 인지 + 이 도구가 못 보는 것:   agent-receipt explain
   전체 명령(세션·정찰·증빙·정책·연동 등):     agent-receipt help --all
@@ -124,7 +128,10 @@ function printHelpAll(): void {
   console.log(`
 agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
 
-■ 핵심 루프(대부분 이 7개면 충분):
+■ 1층 — 핵심 4동사(대부분 이걸로 충분 · v0.20):
+  begin / done / share(= share-proof 별칭) / review    + 처음이면: quickstart [--write](인쇄 우선)
+
+■ 2층 — 핵심 루프 상세:
   begin [--cursor|--claude] [--kind <recon|implementation|docs|test|measure-first|observe-only|release-check>]
   cost / done / share-proof [--receipt <p>] [--out <p>] [--evidence-dir <d>] [--with-cost] [--bundle] / next / audit-pack / prepare-commit [--message <m>] [--include-linked-tests] / explain
 
@@ -215,7 +222,8 @@ function runPre(contract: Contract): void {
 }
 
 function main(): void {
-  const command = process.argv[2];
+  const rawCommand = process.argv[2];
+  const command = rawCommand === "share" ? "share-proof" : rawCommand; // v0.20 결정5 — share 별칭(동일 코드경로·산출 동일)
 
   // 버전 — 계약/git 불필요, help·unknown 처리보다 먼저. --version / -v / version 동일 출력. exit 0.
   if (command === "--version" || command === "-v" || command === "version") {
@@ -321,6 +329,10 @@ function main(): void {
       return v !== undefined ? Number(v) : undefined;
     };
     runMerkle(process.argv[3], { file: getArg("--file"), dir: getArg("--dir"), index: mnum("--index"), oldSize: mnum("--old-size"), oldRoot: getArg("--old-root") });
+  }
+  if (command === "quickstart") {
+    // v0.20 결정5 — 첫 성공 경험: 인쇄 우선·--write 에서만 실제 기록(자기 CLI 순차 호출·재구현 0).
+    runQuickstart(hasFlag("--write"));
   }
   if (command === "predicate") {
     // predicate 는 git 불필요 — verification receipt 를 in-toto Statement(claim-verification/v1)로 명명·출력.
@@ -447,7 +459,7 @@ function main(): void {
   // 둘 다 없으면 아래 switch 에서 현재 상태로 fresh build(계약 필요).
   if (command === "share-proof") {
     const rp = getArg("--receipt");
-    const spOpts = { out: getArg("--out"), redact: hasFlag("--redact"), evidenceDir: getArg("--evidence-dir"), withCost: hasFlag("--with-cost"), bundle: hasFlag("--bundle") }; // P2 D5·D6
+    const spOpts = { out: getArg("--out"), redact: hasFlag("--redact"), evidenceDir: getArg("--evidence-dir"), withCost: hasFlag("--with-cost"), bundle: hasFlag("--bundle"), client: hasFlag("--client") }; // P2 D5·D6 + v0.20 결정5(--client)
     if (rp || latestReceiptExists()) runShareProofFromSaved(rp, spOpts);
   }
   if (command === "approve") {
@@ -614,7 +626,7 @@ function main(): void {
 
     case "share-proof": {
       requireRepo();
-      runShareProof(contract, contractPath, { out: getArg("--out"), redact: hasFlag("--redact"), evidenceDir: getArg("--evidence-dir"), withCost: hasFlag("--with-cost"), bundle: hasFlag("--bundle") }); // P2 D5·D6
+      runShareProof(contract, contractPath, { out: getArg("--out"), redact: hasFlag("--redact"), evidenceDir: getArg("--evidence-dir"), withCost: hasFlag("--with-cost"), bundle: hasFlag("--bundle"), client: hasFlag("--client") }); // P2 D5·D6 + v0.20
       break;
     }
 

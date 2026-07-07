@@ -52,6 +52,7 @@ export interface ProofExtras {
   evidenceDirLabel?: string | null; // 표기용(어느 디렉터리를 요약했나)
   costLines?: string[] | null; // 생성 시점 세션 비용 줄(cost.ts costLines 재사용)
   timeline?: ProofTimeline | null; // v0.20 결정3 — 세션 타임라인(결정론 렌더)
+  client?: boolean; // v0.20 결정5 — 축약판(요약+판정+타임라인 중심·기술 상세 생략·'전체판 별도' 자백)
 }
 
 // ── v0.20 결정3: 세션 타임라인 — capture 레코드(ts·seq·op) 결정론 / capture 없으면 git 커밋 시각 축약판 ──
@@ -239,7 +240,10 @@ export function toProofHtml(r: Receipt, anchor?: RekorAnchor | null, extras?: Pr
   <input class="tabradio" type="radio" name="proof-tab" id="pt-cost">
   <div class="tablabels"><label for="pt-change">Change</label><label for="pt-evidence">Evidence</label><label for="pt-cost">Cost</label></div>
   <div class="pane pane-change">
-  <table>
+  ${extras?.client
+    ? `<p class="meta">Condensed client view — technical detail is intentionally omitted here. The <strong>full technical receipt</strong> (default share-proof) and the <strong>preservation bundle</strong> (--bundle) are separate artifacts.</p>
+  ${anchorSection}${timelineSection}`
+    : `<table>
     <tr><td class="k">Result</td><td>${pass ? "Stayed within agreed scope" : "Out-of-scope / contract violation — see details"}</td></tr>
     <tr><td class="k">Branch</td><td><code>${esc(r.branch.current)}</code>${r.branch.expected ? ` (expected <code>${esc(r.branch.expected)}</code>)` : ""}</td></tr>
     <tr><td class="k">Commit (HEAD)</td><td><code>${esc(r.headHash)}</code></td></tr>
@@ -249,7 +253,7 @@ export function toProofHtml(r: Receipt, anchor?: RekorAnchor | null, extras?: Pr
     <tr><td class="k">Integrity (contentHash)</td><td class="hash">${esc(r.contentHash)}</td></tr>
     <tr><td class="k">Generated</td><td>${esc(r.timestamp)}</td></tr>
   </table>
-  ${beyondGit}${coverageSection}${anchorSection}${timelineSection}
+  ${beyondGit}${coverageSection}${anchorSection}${timelineSection}`}
   </div>
   <div class="pane pane-evidence">
   ${evidencePane}
@@ -274,6 +278,7 @@ export interface ShareProofOpts {
   evidenceDir?: string;
   withCost?: boolean;
   bundle?: boolean;
+  client?: boolean; // v0.20 결정5 — 축약판
 }
 
 // extras 조립 — opt-in 플래그일 때만 IO(기본 경로 IO 불변).
@@ -289,7 +294,7 @@ function buildExtras(opts: ShareProofOpts, cwd: string): ProofExtras {
       cost = null; // 비용 읽기 실패 = 미포함(가짜 숫자 금지)
     }
   }
-  return { evidence, evidenceDirLabel: opts.evidenceDir ?? null, costLines: cost, timeline: buildProofTimeline(cwd) };
+  return { evidence, evidenceDirLabel: opts.evidenceDir ?? null, costLines: cost, timeline: buildProofTimeline(cwd), ...(opts.client ? { client: true } : {}) };
 }
 
 /**

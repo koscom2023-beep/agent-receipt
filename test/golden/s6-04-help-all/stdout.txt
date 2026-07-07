@@ -1,7 +1,10 @@
 
 agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
 
-■ 핵심 루프(대부분 이 7개면 충분):
+■ 1층 — 핵심 4동사(대부분 이걸로 충분 · v0.20):
+  begin / done / share(= share-proof 별칭) / review    + 처음이면: quickstart [--write](인쇄 우선)
+
+■ 2층 — 핵심 루프 상세:
   begin [--cursor|--claude] [--kind <recon|implementation|docs|test|measure-first|observe-only|release-check>]
   cost / done / share-proof [--receipt <p>] [--out <p>] [--evidence-dir <d>] [--with-cost] [--bundle] / next / audit-pack / prepare-commit [--message <m>] [--include-linked-tests] / explain
 

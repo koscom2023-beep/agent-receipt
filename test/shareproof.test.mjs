@@ -136,6 +136,15 @@ check("타임라인 — git 축약판 정직 라벨(capture 미설치)", () => {
   const h = toProofHtml(r, null, { timeline: { source: "git", events: [{ ts: "2026-01-01T00:00:00Z", label: "commit abc — init" }], folded: 0 } });
   assert.ok(h.includes("git commit times") && h.includes("capture hooks are installed"), "축약판 사유 명시");
 });
+check("--client 축약판 — 기술 상세 생략 + '전체판 별도' 자백 + 요약은 유지", () => {
+  const h = toProofHtml(r, null, { client: true, timeline: { source: "git", events: [{ ts: "2026-01-01T00:00:00Z", label: "commit abc — init" }], folded: 0 } });
+  assert.ok(!h.includes("Integrity (contentHash)"), "기술표 생략");
+  assert.ok(!h.includes("Beyond-git actions"), "상세 생략");
+  assert.ok(h.includes("Condensed client view") && h.includes("separate artifacts"), "전체판 별도 자백");
+  assert.ok(h.includes('class="exec"'), "요약 블록은 유지");
+  assert.ok(h.includes("Session timeline"), "타임라인 유지");
+  assert.ok(!h.includes("<script"), "script 0 불변");
+});
 check("타임라인 없음/요약 후에도 script 0·외부 URL 0 불변", () => {
   const h = toProofHtml(r, null, { timeline: null });
   assert.ok(!h.includes("<script") && !h.includes("http://") && !h.includes("https://"), "보안 불변");

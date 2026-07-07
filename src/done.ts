@@ -112,6 +112,11 @@ export function runDone(
   }
 
   console.log(line);
+  // v0.20 결정4 — 판정별 다음 행동(기존 명령 안내만·신규 로직 0·강제 아님)
+  if (vr.verdict === "PASS") console.log("다음 행동: 공유 `agent-receipt share-proof`(별칭 share) · PR 은 GitHub Action 영수증 코멘트.");
+  else if (vr.verdict === "PASS_WITH_WARNINGS") console.log("다음 행동: 위 신호부터 확인 — `agent-receipt prepare-commit`(우선 검토 후보) · `capture show`(가드/반복 상세).");
+  else if (vr.verdict === "FAIL") console.log("다음 행동: `agent-receipt explain` 으로 위반 상세 확인 → 수정 → `done` 재실행.");
+  else console.log("다음 행동: 위 '고치는 법'대로 `agent-receipt begin` 후 재측정."); // INCOMPLETE
   console.log("다음: 사람이 직접 stage/commit 하세요.");
   console.log("  → 커밋 전 확인:  agent-receipt commit-check");
   console.log("  → 증거 묶음:     agent-receipt audit-pack [--claim <claim.json>]");

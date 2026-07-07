@@ -10,6 +10,7 @@ receipt 저장: .agent-guard/receipts/receipt-<TS>.json
 검사: 명령 없음(통과 처리)
 원장 적립: .agent-guard/ledger.jsonl
 ────────────────────────────────────────────────────────
+다음 행동: 공유 `agent-receipt share-proof`(별칭 share) · PR 은 GitHub Action 영수증 코멘트.
 다음: 사람이 직접 stage/commit 하세요.
   → 커밋 전 확인:  agent-receipt commit-check
   → 증거 묶음:     agent-receipt audit-pack [--claim <claim.json>]
