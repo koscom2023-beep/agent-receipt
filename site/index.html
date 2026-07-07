@@ -287,6 +287,8 @@ code{font-family:var(--mono);font-size:.9em;background:var(--paper-2);border:1px
     <div class="c rec"><b>🔁 AI가 같은 파일을 11번 다시 읽고, 같은 테스트를 4번 되풀이함</b>
       <p>기록을 되짚어 세어 봅니다. 고치지도 않고 다시 읽은 파일, 똑같이 반복한 명령, 되풀이된 실패까지. 물론 정상적인 재확인일 수도 있으니 판단은 사람 몫입니다. 그래서 횟수만 세어 보여줄 뿐, ‘얼마 아꼈다’ 같은 잴 수 없는 숫자는 지어내지 않습니다.</p>
       <div class="badges"><span class="stamp rec">리포트 — 차단 아님</span></div></div>
+    <div class="c"><b>📦 AI가 시키지도 않은 <code>npm publish</code>를 치려 함</b><p>명령의 <b>첫 토큰</b>으로 push·publish·네트워크 클래스를 분류해 기록합니다(따옴표 속 "git push"는 안 잡음). <code>forbid_actions</code>+block을 켜면 실행 전에 멈추고 — 거부 메시지가 스스로 "우회 가능한 신호등"이라고 자백합니다.</p>
+      <div class="badges"><span class="stamp blk">실시간 차단 · opt-in</span> <span class="stamp rec">기록 기본</span></div></div>
   </div>
 </section>
 
@@ -336,14 +338,18 @@ agent-receipt research verify --file report.md --out vr/r1.json
 agent-receipt graph view --dir vr --out browser.html    <span class="c"># 쌓인 결과 한눈에 보기 (증거 브라우저)</span>
 agent-receipt graph diff --base-dir vr-old --head-dir vr <span class="c"># 새로 생긴 실패만 잡아내는 회귀 게이트</span>
 
-<span class="c"># 시나리오 B — AI에게 코드를 맡기고, 커밋·납품하기 전에</span>
-agent-receipt init --preset generic       <span class="c"># 계약: 손대도 되는 범위 정하기 (+ 선택: 예산)</span>
-agent-receipt policy init --profile strict <span class="c"># (선택) 금지 경로 쓰기를 실행 전에 차단</span>
-agent-receipt begin                        <span class="c"># 기준점 잡기 + 에이전트에게 줄 지시문</span>
+<span class="c"># 시나리오 B — AI에게 코드를 맡기고, 커밋·납품하기 전에 (네 동사면 끝)</span>
+agent-receipt quickstart --write           <span class="c"># 처음 한 번: 계약+정책+기록 훅 (인쇄 우선·멱등)</span>
+agent-receipt begin --objective "환불 API"  <span class="c"># 기준점 + 세션 목적(자가보고로 기록)</span>
 <span class="c">…에이전트가 일하는 동안…</span>
-agent-receipt done                         <span class="c"># 검증하고, 검사하고, 봉인해 작업 영수증 발행</span>
-agent-receipt cost                         <span class="c"># 이번 세션에 쓴 실제 토큰 비용</span>
-agent-receipt share-proof                  <span class="c"># 클라이언트·감사팀에 건넬 증거 HTML</span></pre></div>
+agent-receipt done                         <span class="c"># 4값 판정 + 봉인 영수증 + 다음 행동 ①②③</span>
+agent-receipt share --client               <span class="c"># 10초 증거 페이지(축약 뷰 — 같은 봉인값 명시)</span>
+agent-receipt review approve --receipt …   <span class="c"># 승인/반려/메모 — 검토가 기록으로 남음</span>
+
+<span class="c"># 시나리오 C — 쌓인 세션 굴리기 · 받은 증거 검사하기</span>
+agent-receipt inbox --out inbox.html       <span class="c"># 상태판: FAIL만·금지경로·미검토 프리셋으로 거르기</span>
+agent-receipt share --bundle               <span class="c"># 전달 폴더(영수증+서명+검증 안내서)</span>
+agent-receipt verify-proof received-pb/    <span class="c"># 받은 쪽: 오프라인 한 명령으로 위조 검사</span></pre></div>
 </section>
 
 <section id="kinds">
@@ -378,6 +384,22 @@ agent-receipt share-proof                  <span class="c"># 클라이언트·�
     <div class="c"><b>🛑 행위 중단 게이트 <code>gate</code></b><p>검증이 실패하면 <b>행위를 중단</b>합니다 — CI는 <code>exit 1</code>, 훅 모드는 PreToolUse deny로 도구 실행 <i>전에</i> 막습니다(opt-in·명시 배선).</p></div>
     <div class="c"><b>📡 OpenTelemetry 방출 <code>otel</code></b><p>검증 이벤트를 <b>OTLP</b>로 방출해 기존 관측 파이프라인·GenAI 대시보드에 편입합니다. SDK 미번들(<b>deps 0</b>)·결정론 traceId.</p></div>
     <div class="c"><b>💸 모델치환 감사 <code>cost --audit-swap</code></b><p>선언한 모델과 실제 응답 모델이 다르면 <b>비용차를 계산</b>합니다 — premium을 약속하고 싼 모델을 서빙한 <b>다운그레이드(과대청구 의심)</b>를 잡아냅니다.</p></div>
+  </div>
+</section>
+
+<section id="v020">
+  <div class="eyebrow-s">§ 0.17→0.20 · 검토가 끝난 영수증</div>
+  <h2>판정하고 · 읽히게 만들고 · 검토를 기록합니다</h2>
+  <p class="sub">영수증을 "생성하는" 데서 멈추지 않습니다 — 세션을 판정으로 닫고, 리뷰어가 10초에 읽게 만들고, 승인·반려까지 기록으로 남깁니다. 전부 로컬·전부 결정론·자가보고엔 항상 라벨.</p>
+  <div class="who">
+    <div class="c"><b>⚖️ 세션 판정 4값 <span style="font-weight:400;color:var(--mut);font-size:11.5px">0.17</span></b><p><code>done</code>이 세션을 <b>PASS · 경고 · FAIL · 미완(◌)</b>으로 닫습니다 — <b>점수가 아니라 게이트</b>(숫자 점수는 테스트가 금지). 모든 판정엔 <code>[rule-id]</code> 사실이 붙고, 미완이면 <b>고치는 법</b>까지 한 줄.</p></div>
+    <div class="c"><b>📜 판정 규칙 명문 + exit 게이트 <span style="font-weight:400;color:var(--mut);font-size:11.5px">0.18</span></b><p>12개 규칙 전부가 코드 레지스트리+문서로 공개(둘이 어긋나면 테스트 실패). <b>경고는 실패로 자동 승격되지 않습니다</b> — 원하면 <code>fail_on_done</code>으로 CI exit 게이트만 opt-in.</p></div>
+    <div class="c"><b>💡 왜 비쌌나 <span style="font-weight:400;color:var(--mut);font-size:11.5px">0.18</span></b><p>세션 비용을 <b>입력·출력·캐시읽기·캐시생성</b>으로 분해(합계 공식이 총액과 동일 — 두 숫자가 싸울 수 없음) + 발동 조건을 자백하는 고정 신호. <b>판정어 0</b> — "낭비" 같은 말은 테스트가 금지.</p></div>
+    <div class="c"><b>🧾 10초 증거 페이지 <span style="font-weight:400;color:var(--mut);font-size:11.5px">0.19–0.20</span></b><p><code>share</code> 한 장이 계약을 <b>문장으로</b>(한/영), 신호를 <b>리뷰어가 읽는 순서 4버킷</b>(범위→계약이 지정한 고위험→검사→행위)으로, 세션 <b>타임라인</b>까지. <code>--client</code>=같은 봉인값의 축약 뷰(뺀 걸 명시) · <code>--bundle</code>=전달 폴더+검증 안내서.</p></div>
+    <div class="c"><b>✍️ 승인·반려 기록 <code>review</code> <span style="font-weight:400;color:var(--mut);font-size:11.5px">0.20</span></b><p><code>review approve|reject|note</code> — 영수증이 <b>"검토가 끝난 문서"</b>가 됩니다. 기록은 자가보고(권위 아님) 라벨과 함께 inbox 배지·증거 페이지·PR 코멘트에 표시.</p></div>
+    <div class="c"><b>📥 영수증 상태판 <code>inbox</code> <span style="font-weight:400;color:var(--mut);font-size:11.5px">0.20</span></b><p>쌓인 영수증을 판정·금지경로·고위험·검토 상태로 거르고, <b>사실 조건명 프리셋</b>(FAIL만·금지경로 접촉·고위험+검사없음·미검토)을 URL로 공유. 서버 0 · 중립 카운트(판단 아님).</p></div>
+    <div class="c"><b>🔁 받은 쪽 원클릭 재검증 <code>verify-proof</code> <span style="font-weight:400;color:var(--mut);font-size:11.5px">0.20</span></b><p>전달받은 증거 묶음을 <b>오프라인 한 명령</b>으로 재검사 — 봉인 재계산·전자서명·evidence replay. 실패 사유는 <b>사람말</b>로("생성 후 누군가 고쳤습니다").</p></div>
+    <div class="c"><b>🚦 행위 클래스 신호등 <span style="font-weight:400;color:var(--mut);font-size:11.5px">0.20</span></b><p><code>git push</code>·<code>npm publish</code>·네트워크 명령을 <b>첫 토큰</b>으로 분류(따옴표 속 문자열은 안 잡음) — <code>forbid_actions</code>를 켜면 기록/차단. 자물쇠가 아니라 <b>신호등</b>이라고 스스로 자백합니다.</p></div>
   </div>
 </section>
 

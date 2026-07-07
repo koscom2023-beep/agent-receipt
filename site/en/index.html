@@ -287,6 +287,8 @@ code{font-family:var(--mono);font-size:.9em;background:var(--paper-2);border:1px
     <div class="c rec"><b>🔁 The AI re-read the same file 11 times and re-ran the same test 4 times</b>
       <p>Recomputed from the capture log: rereads with no edit in between · duplicate commands (fingerprint only) · the same failure repeating. It may be legitimate double-checking, so the human judges — measured counts only, never converted into token/time "savings" (unmeasurable numbers aren't displayed).</p>
       <div class="badges"><span class="stamp rec">reported — not blocked</span></div></div>
+    <div class="c"><b>📦 The AI reaches for an unasked <code>npm publish</code></b><p>Commands are classified by their <b>lead token</b> into push · publish · network classes (a quoted "git push" stays out). Turn on <code>forbid_actions</code> + block to stop it before the tool runs — and the deny message confesses it is a bypassable signal, not a lock.</p>
+      <div class="badges"><span class="stamp blk">real-time block · opt-in</span> <span class="stamp rec">recorded by default</span></div></div>
   </div>
 </section>
 
@@ -336,14 +338,18 @@ agent-receipt research verify --file report.md --out vr/r1.json
 agent-receipt graph view --dir vr --out browser.html    <span class="c"># triage what accumulates</span>
 agent-receipt graph diff --base-dir vr-old --head-dir vr <span class="c"># regression gate: NEW failures only</span>
 
-<span class="c"># Scenario B — before AI-assisted code ships</span>
-agent-receipt init --preset generic       <span class="c"># contract: what the agent may touch (+ optional budget)</span>
-agent-receipt policy init --profile strict <span class="c"># (optional) block forbidden-path writes before the tool runs</span>
-agent-receipt begin                        <span class="c"># baseline + paste-in agent instructions</span>
+<span class="c"># Scenario B — before AI-assisted code ships (four verbs)</span>
+agent-receipt quickstart --write           <span class="c"># once: contract + policy + capture hooks (print-first, idempotent)</span>
+agent-receipt begin --objective "refund API" <span class="c"># baseline + session objective (recorded as self-report)</span>
 <span class="c">…the agent works…</span>
-agent-receipt done                         <span class="c"># verify + check + sealed Work Receipt</span>
-agent-receipt cost                         <span class="c"># this session's real token cost</span>
-agent-receipt share-proof                  <span class="c"># proof HTML for the client / audit team</span></pre></div>
+agent-receipt done                         <span class="c"># 4-value verdict + sealed receipt + next steps ①②③</span>
+agent-receipt share --client               <span class="c"># ten-second proof (condensed view — same seal, stated)</span>
+agent-receipt review approve --receipt …   <span class="c"># approve / reject / note — the review is recorded</span>
+
+<span class="c"># Scenario C — operate the pile · check what you were handed</span>
+agent-receipt inbox --out inbox.html       <span class="c"># status board: FAIL-only · denied-path · unreviewed presets</span>
+agent-receipt share --bundle               <span class="c"># hand-off folder (receipt + signature + verify guide)</span>
+agent-receipt verify-proof received-pb/    <span class="c"># recipient side: one offline command catches tampering</span></pre></div>
 </section>
 
 <section id="kinds">
@@ -378,6 +384,22 @@ agent-receipt share-proof                  <span class="c"># proof HTML for the 
     <div class="c"><b>🛑 Action-halt gate <code>gate</code></b><p>When verification fails, it <b>halts the action</b> — CI <code>exit 1</code>, or in hook mode a PreToolUse deny that stops the tool <i>before</i> it runs (opt-in, explicitly wired).</p></div>
     <div class="c"><b>📡 OpenTelemetry emission <code>otel</code></b><p>Emits verification events as <b>OTLP</b> into your existing observability / GenAI dashboards. No SDK bundled (<b>deps 0</b>) · deterministic traceId.</p></div>
     <div class="c"><b>💸 Model-swap audit <code>cost --audit-swap</code></b><p>When the declared model differs from the model that actually answered, it <b>computes the price delta</b> — catching a <b>downgrade</b> (a premium model promised, a cheaper one served = suspected overcharge).</p></div>
+  </div>
+</section>
+
+<section id="v020">
+  <div class="eyebrow-s">§ 0.17→0.20 · review-ready receipts</div>
+  <h2>Judge it · make it readable · record the review</h2>
+  <p class="sub">It doesn't stop at generating a receipt — the session closes with a verdict, reads in ten seconds, and carries a recorded approve/reject. All local, all deterministic, self-reports always labeled.</p>
+  <div class="who">
+    <div class="c"><b>⚖️ 4-value session verdict <span style="font-weight:400;color:var(--mut);font-size:11.5px">0.17</span></b><p><code>done</code> closes the session as <b>PASS · warnings · FAIL · incomplete (◌)</b> — <b>a gate, not a score</b> (numeric scores are banned by test). Every verdict carries <code>[rule-id]</code> facts; incomplete comes with a <b>how-to-fix</b> line.</p></div>
+    <div class="c"><b>📜 codified rules + exit gate <span style="font-weight:400;color:var(--mut);font-size:11.5px">0.18</span></b><p>All 12 rules live in a code registry + doc kept in lockstep by a test. <b>A warning never auto-escalates to FAIL</b> — opt in to a CI exit gate with <code>fail_on_done</code> if you want one.</p></div>
+    <div class="c"><b>💡 why it was expensive <span style="font-weight:400;color:var(--mut);font-size:11.5px">0.18</span></b><p>Session cost decomposed into <b>input · output · cache-read · cache-creation</b> (same formula as the total — the numbers cannot disagree) + fixed signals that disclose their trigger. <b>Zero judgment words</b> — banned by test.</p></div>
+    <div class="c"><b>🧾 ten-second proof page <span style="font-weight:400;color:var(--mut);font-size:11.5px">0.19–0.20</span></b><p>One <code>share</code> page: the contract as <b>plain sentences</b> (KO/EN), signals in <b>four buckets in the reviewer's reading order</b> (scope → contract-designated critical → validation → behavior), plus a session <b>timeline</b>. <code>--client</code> = a condensed view of the same seal (names what it omits) · <code>--bundle</code> = hand-off folder + verify guide.</p></div>
+    <div class="c"><b>✍️ recorded review <code>review</code> <span style="font-weight:400;color:var(--mut);font-size:11.5px">0.20</span></b><p><code>review approve|reject|note</code> — the receipt becomes a <b>reviewed document</b>. The record (labeled self-reported, not an authority) badges the inbox, the proof page and the PR comment.</p></div>
+    <div class="c"><b>📥 receipt inbox <span style="font-weight:400;color:var(--mut);font-size:11.5px">0.20</span></b><p>Filter the pile by verdict · denied paths · critical paths · review status, with <b>fact-named presets</b> (FAIL only · denied-path touched · critical + no checks · unreviewed) shareable by URL hash. Zero server · neutral counts (not a judgment).</p></div>
+    <div class="c"><b>🔁 one-command re-verification <code>verify-proof</code> <span style="font-weight:400;color:var(--mut);font-size:11.5px">0.20</span></b><p>The recipient re-checks a hand-off bundle <b>offline in one command</b> — seal recompute · signature · evidence replay. Failures explained in <b>plain words</b> ("someone changed it after it was generated").</p></div>
+    <div class="c"><b>🚦 action-class signals <span style="font-weight:400;color:var(--mut);font-size:11.5px">0.20</span></b><p><code>git push</code> · <code>npm publish</code> · network commands classified by <b>lead token</b> (a quoted "git push" stays out) — turn on <code>forbid_actions</code> to record or block. The deny message confesses it is <b>a signal, not a lock</b>.</p></div>
   </div>
 </section>
 
