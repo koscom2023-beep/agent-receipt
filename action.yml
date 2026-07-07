@@ -25,6 +25,15 @@ inputs:
     description: "agent-receipt version to run (pinned for reproducibility)"
     required: false
     default: "0.14.0"
+  proof-url:
+    description: "Optional link slot rendered as **proof** in the PR comment (e.g. a hosted proof bundle) — value is caller-provided, never invented"
+    default: ""
+  work-receipt:
+    description: "Optional Work Receipt json path — adds a mechanical PR-files vs receipt.touched symmetric-diff section to the comment (opt-in; needs base.sha history — checkout with fetch-depth: 0)"
+    default: ""
+  warn-no-receipt:
+    description: "Warn in the comment when work-receipt is set but missing/unreadable (opt-in; absence is stated, not judged)"
+    default: "false"
   comment:
     description: "Post/update a PR comment with the receipt summary (mechanical projection of the sealed receipt — the receipt stays the source of truth). Opt-in; needs a pull_request event and a token that can write issues. Failure is non-blocking."
     required: false
@@ -70,7 +79,19 @@ runs:
         set +e
         if [ ! -f "$RECEIPT_OUT" ]; then echo "::warning::agent-receipt: no sealed receipt at $RECEIPT_OUT — skipping comment (non-blocking)"; exit 0; fi
         BODY_FILE="$(mktemp)"
-        node "${{ github.action_path }}/scripts/pr-comment-body.mjs" "$RECEIPT_OUT" > "$BODY_FILE"
+        EXTRA_ARGS=()
+        if [ -n "${{ inputs.proof-url }}" ]; then EXTRA_ARGS+=(--proof-url "${{ inputs.proof-url }}"); fi
+        if [ -n "${{ inputs.work-receipt }}" ]; then
+          PRF="$(mktemp)"
+          git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.sha }}" > "$PRF" 2>/dev/null || true
+          if [ -s "$PRF" ]; then
+            EXTRA_ARGS+=(--work-receipt "${{ inputs.work-receipt }}" --pr-files "$PRF")
+            if [ "${{ inputs.warn-no-receipt }}" = "true" ]; then EXTRA_ARGS+=(--warn-no-receipt); fi
+          else
+            echo "::warning::agent-receipt: PR file diff unavailable (shallow checkout? use fetch-depth: 0) — skipping mismatch section (non-blocking)"
+          fi
+        fi
+        node "${{ github.action_path }}/scripts/pr-comment-body.mjs" "$RECEIPT_OUT" "${EXTRA_ARGS[@]}" > "$BODY_FILE"
         if [ $? -ne 0 ]; then echo "::warning::agent-receipt: comment body build failed — skipping (non-blocking; receipt still sealed at $RECEIPT_OUT)"; exit 0; fi
         MARKER='<!-- agent-receipt-verify -->'
         CID=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate --jq ".[] | select(.body | startswith(\"$MARKER\")) | .id" 2>/dev/null | head -1)

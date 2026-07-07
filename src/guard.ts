@@ -16,13 +16,14 @@ import { loadContract } from "./schema.js";
 export interface GuardVerdict {
   action: "none" | "warn" | "deny";
   rule?: string; // 매칭된 glob
-  origin?: "contract.denied_paths" | "policy.forbidAlways";
+  origin?: "contract.denied_paths" | "policy.forbidAlways" | "policy.forbid_actions";
   reason?: string; // deny 시 에이전트에게 노출되는 문장(재시도 금지 + 해제 경로 포함)
 }
 
 export interface GuardTarget {
   op: string;
   path?: string;
+  cmdKind?: string; // v0.21 결정10 — 명령 분류(capture 첫 토큰 파스) — forbid_actions 대조용
 }
 
 // 패턴의 기준틀 = 프로젝트 루트(policy.yaml/contract 가 있는 hook cwd). 실훅 payload 는 절대경로라
@@ -36,6 +37,28 @@ function relToCwd(p: string, cwd: string): string {
 
 export function evalGuard(t: GuardTarget, cwd: string = process.cwd()): GuardVerdict {
   try {
+    // v0.21 결정10 — 행위 클래스 가드(opt-in): 명령 분류/네트워크 op 가 policy.forbid_actions 에 있으면 warn/deny.
+    // 정직(자백): 첫 토큰 파스 기반이라 우회 가능(스크립트·별칭·서브셸) — 자물쇠가 아니라 신호등. fail-open 유지.
+    const actionClass = t.op === "network" ? "network" : t.op === "command" ? t.cmdKind : undefined;
+    if (actionClass) {
+      const { policy } = loadPolicySafe(cwd);
+      if (policy?.forbid_actions.includes(actionClass as never)) {
+        const rule = `policy.forbid_actions:${actionClass}`;
+        if ((policy.guard ?? "warn") === "block") {
+          return {
+            action: "deny",
+            rule,
+            origin: "policy.forbid_actions",
+            reason:
+              `[agent-receipt guard] this ${actionClass} action is forbidden by policy forbid_actions. ` +
+              `Token-parse based — bypassable by scripts/aliases (a signal, not a lock). Do NOT retry the exact command; report and continue with allowed work. ` +
+              `(lift: edit .agent-guard/policy.yaml — remove '${actionClass}' from forbid_actions or set guard: warn)`,
+          };
+        }
+        return { action: "warn", rule, origin: "policy.forbid_actions" };
+      }
+      if (t.op === "command") return { action: "none" }; // 명령은 여기까지(경로 가드는 write/delete 전용)
+    }
     if ((t.op !== "write" && t.op !== "delete") || !t.path) return { action: "none" };
     const target = relToCwd(t.path, cwd);
     const { policy } = loadPolicySafe(cwd);

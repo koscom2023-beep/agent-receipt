@@ -77,6 +77,33 @@ check("결손 필드 내성(빈 영수증) — 크래시 없이 마커+verdict �
   assert.ok(b.includes("?"));
 });
 
+// ════════ v0.21 결정9 — proof 링크 슬롯·대칭차·no-receipt 경고(전부 opt-in) ════════
+import { fileMismatch } from "../scripts/pr-comment-body.mjs";
+
+check("opts 비면 기존과 byte 동일(기존 사용자 불변)", () => {
+  assert.equal(buildBody(passReceipt), buildBody(passReceipt, {}));
+});
+check("proof-url 슬롯 — 호출자 제공 값만(발명 0)", () => {
+  const b = buildBody(passReceipt, { proofUrl: "https://example.test/pb" });
+  assert.ok(b.includes("**proof**: https://example.test/pb"));
+  assert.ok(!buildBody(passReceipt).includes("**proof**"), "미제공 시 줄 없음");
+});
+check("fileMismatch — 대칭차·정렬·판단 0", () => {
+  const m = fileMismatch(["b.ts", "a.ts", "same.ts"], ["same.ts", "z.ts"]);
+  assert.deepEqual(m, { prOnly: ["a.ts", "b.ts"], receiptOnly: ["z.ts"] });
+});
+check("mismatch 섹션 — 일치=✅·차이=목록·10건 절단", () => {
+  const eq = buildBody(passReceipt, { mismatch: { prOnly: [], receiptOnly: [] } });
+  assert.ok(eq.includes("match ✅") && eq.includes("not a judgment"));
+  const many = { prOnly: Array.from({ length: 12 }, (_, i) => `p${i}.ts`), receiptOnly: ["r.ts"] };
+  const b = buildBody(passReceipt, { mismatch: many });
+  assert.ok(b.includes("in PR only: `p0.ts`") && b.includes("… 2 more (PR only)") && b.includes("in receipt only: `r.ts`"));
+});
+check("no-receipt 경고 — 부재를 서술(판단 없음)", () => {
+  const b = buildBody(passReceipt, { workReceiptMissing: true });
+  assert.ok(b.includes("no work receipt attached") && b.includes("not judged"));
+});
+
 console.log(`action-comment.test: ${pass} passed, ${fail.length} failed`);
 if (fail.length) {
   for (const f of fail) console.error("  ✗ " + f);

@@ -32,6 +32,9 @@ const PolicySchema = z.object({
   //   미설정=현행 그대로(receipt.ok 만). 판정/출력은 불변 — exit 코드만 올림(발동 시 done 이 원인 1줄 자백).
   //   ⚠ warn 임계는 고위험 경로(critical_paths)를 일상적으로 만지는 repo 에 비권장(알람 피로 — DA 지적).
   fail_on_done: z.enum(["fail", "incomplete", "warn"]).optional(),
+  // v0.21 결정10 — 행위 클래스 금지(opt-in): capture 의 명령 분류(첫 토큰 파스)가 이 목록과 맞으면
+  //   guard 모드(warn=기록/block=pre-deny)로 처리. 정직: 패턴 기반=우회 가능(스크립트/별칭/서브셸) — 자물쇠 아니라 신호등.
+  forbid_actions: z.array(z.enum(["push", "publish", "network", "test", "build", "lint", "install"])).default([]),
 });
 
 // 0.9: 모드별 self-report 체크리스트(도구는 git diff 만 봄 — 의미 위반은 자동검출 불가, 사람/AI self-report).
@@ -178,6 +181,7 @@ function runPolicyShow(cwd: string): never {
   console.log(line);
   if (policy.mode !== "standard") console.log(`mode           : ${policy.mode}`);
   if (policy.guard !== "warn") console.log(`guard          : ${policy.guard} (금지 경로 쓰기 실시간 차단)`); // 기본(warn)은 미표시 — 기존 출력 불변
+  if (policy.forbid_actions.length) console.log(`forbid_actions : ${policy.forbid_actions.join(", ")} (행위 클래스 — guard 모드로 warn/block·첫 토큰 파스·우회 가능)`); // 비면 미표시 — 기존 출력 불변
   if (policy.fail_on_done) console.log(`fail_on_done   : ${policy.fail_on_done} (done 판정이 임계 이상이면 exit 1 — warn 임계는 고위험 경로를 일상 수정하는 repo 에 비권장)`); // 미설정은 미표시 — 기존 출력 불변
   console.log(`requireReceipt : ${policy.requireReceipt}`);
   console.log(`requireClaims  : ${policy.requireClaims}`);

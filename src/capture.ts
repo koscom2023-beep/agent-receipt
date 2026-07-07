@@ -42,7 +42,7 @@ export interface CaptureRecord {
   guard?: "warn" | "deny"; // 실시간 가드 판정(pre·write/delete 만) — warn=표시만, deny=차단 방출됨(policy guard: block). guard.ts
   guardRule?: string; // 매칭 근거 "origin:glob" (예: policy.forbidAlways:.env*)
   cmdHash?: string; // Bash 명령의 sha256 앞 16hex — *본문 미저장* 원칙 유지(동일 명령 반복 비교 전용 지문·값 복원 불가)
-  cmdKind?: "test" | "build" | "lint" | "install" | "other"; // 명령 분류(정규식·본문 미저장) — 반복 표시용
+  cmdKind?: "test" | "build" | "lint" | "install" | "push" | "publish" | "network" | "other"; // 명령 분류(본문 미저장) — 반복 표시·행위 카테고리(v0.21 결정10: push/publish/network=첫 토큰 파스)
 }
 
 export interface CaptureChainResult {
@@ -185,7 +185,19 @@ const CMD_TEST = /\b(vitest|jest|mocha|pytest|go test|cargo test|(?:npm|pnpm|yar
 const CMD_BUILD = /\b(tsc\b|next build|vite build|cargo build|go build|(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?build|make\b)\b/;
 const CMD_LINT = /\b(eslint|ruff|flake8|prettier|(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?lint)\b/;
 const CMD_INSTALL = /\b((?:npm|pnpm)\s+(?:i|ci|install)\b|yarn(?:\s+install)?\b|pip3?\s+install|cargo add)\b/;
+// v0.21 결정10 — 행위 클래스는 첫 토큰(+서브커맨드) 파스: 인자/따옴표 속 문자열("echo git push")은 안 잡는다(오탐 차단·Test 수용기준).
+const NETWORK_CMDS = new Set(["curl", "wget", "nc", "ncat", "ssh", "scp", "rsync"]);
+function leadTokens(cmd: string): string[] {
+  const toks = cmd.trim().split(/\s+/);
+  let i = 0;
+  while (i < toks.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(toks[i] ?? "")) i++; // 선행 ENV=val 스킵
+  return toks.slice(i, i + 2);
+}
 function classifyCmdKind(cmd: string): NonNullable<CaptureRecord["cmdKind"]> {
+  const [t0 = "", t1 = ""] = leadTokens(cmd);
+  if (t0 === "git" && t1 === "push") return "push";
+  if (["npm", "pnpm", "yarn", "bun"].includes(t0) && t1 === "publish") return "publish";
+  if (NETWORK_CMDS.has(t0)) return "network";
   if (CMD_TEST.test(cmd)) return "test";
   if (CMD_BUILD.test(cmd)) return "build";
   if (CMD_LINT.test(cmd)) return "lint";
@@ -631,7 +643,9 @@ export function runCaptureIngest(event: string | undefined, vendor: HookVendor |
   if (ph === "pre") {
     for (const r of recs) {
       // 경로 가드(write/delete)와 루프 개입(command)은 상호배타 — op 로 분기. 둘 다 fail-open.
-      const v = r.op === "command" ? evalLoopGuard(r, env.sessionId) : evalGuard(r);
+      // v0.21 결정10 — 행위 클래스 가드(forbid_actions)가 우선, none 이면 명령은 기존 loop-guard 로.
+      const gv = evalGuard(r);
+      const v = gv.action !== "none" ? gv : r.op === "command" ? evalLoopGuard(r, env.sessionId) : gv;
       if (v.action === "none") continue;
       r.guard = v.action === "deny" ? "deny" : "warn";
       if (v.rule) r.guardRule = v.origin ? `${v.origin}:${v.rule}` : v.rule;
