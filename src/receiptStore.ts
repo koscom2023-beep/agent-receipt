@@ -122,8 +122,23 @@ export function approvalPath(receiptAbs: string): string {
 export function signaturePath(receiptAbs: string): string {
   return receiptAbs + ".sig.json";
 }
+// 사이드카 status 판독(SSOT) — status 없는 구파일 = approved(하위호환)·rejected/needs-review 는 승인 아님·손상 JSON = null(가짜 상태 금지).
+// 0.20 review reject/note 가 같은 .approval.json 을 확장하므로, "파일 존재=승인" 판정은 반려를 승인으로 둔갑시킨다(감사 결함) — 반드시 status 를 본다.
+export type ApprovalSidecarStatus = "approved" | "rejected" | "needs-review";
+export function approvalStatusFor(receiptAbs: string): ApprovalSidecarStatus | null {
+  const p = approvalPath(receiptAbs);
+  if (!existsSync(p)) return null;
+  try {
+    const a = JSON.parse(readFileSync(p, "utf8")) as Record<string, unknown>;
+    return a.status === "rejected" || a.status === "needs-review" || a.status === "approved"
+      ? (a.status as ApprovalSidecarStatus)
+      : "approved";
+  } catch {
+    return null;
+  }
+}
 export function hasApproval(receiptAbs: string): boolean {
-  return existsSync(approvalPath(receiptAbs));
+  return approvalStatusFor(receiptAbs) === "approved"; // 존재≠승인 — 반려/보류 사이드카는 승인 아님
 }
 export function hasSignature(receiptAbs: string): boolean {
   return existsSync(signaturePath(receiptAbs));

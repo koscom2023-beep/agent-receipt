@@ -108,3 +108,30 @@ if (fail.length) {
   process.exit(1);
 }
 console.log(`review-sidecar.test: OK (${pass}) — 4필드+구키·inbox 배지/키6종·share 표면·하위호환·note 보존/최초 needs-review`);
+
+// ── 감사 fix(2026-07-07): 반려≠승인 — hasApproval/approvalsCountFor status-aware ──
+{
+  const dir = join(process.env.TMPDIR || "/tmp", `ar-reject-${process.pid}`);
+  rmSync(dir, { recursive: true, force: true });
+  const rp = join(dir, ".agent-guard", "receipts", "receipt-2026-01-01T00-00-00-000Z.json");
+  mkdirSync(dirname(rp), { recursive: true });
+  writeFileSync(rp, JSON.stringify({ ok: true, summary: "t" }));
+  const side = rp + ".approval.json";
+  // ① rejected 사이드카 = 승인 아님
+  writeFileSync(side, JSON.stringify({ status: "rejected", reviewer: "r", reviewedAt: "t", note: "no" }));
+  const rs = await import("../dist/receiptStore.js");
+  assert.equal(rs.hasApproval(rp), false, "rejected 사이드카가 승인으로 둔갑");
+  assert.equal(rs.approvalsCountFor(rp), 0, "rejected 인데 approvalsCount 1");
+  assert.equal(rs.approvalStatusFor(rp), "rejected");
+  // ② needs-review = 승인 아님
+  writeFileSync(side, JSON.stringify({ status: "needs-review", reviewer: "r", reviewedAt: "t", note: "" }));
+  assert.equal(rs.hasApproval(rp), false, "needs-review 가 승인으로 둔갑");
+  // ③ legacy(status 없음) = approved 하위호환 유지
+  writeFileSync(side, JSON.stringify({ approver: "old", approvedAt: "t" }));
+  assert.equal(rs.hasApproval(rp), true, "legacy 사이드카 하위호환 깨짐");
+  assert.equal(rs.approvalStatusFor(rp), "approved");
+  // ④ 손상 JSON = 승인 아님(가짜 상태 금지)
+  writeFileSync(side, "{broken");
+  assert.equal(rs.hasApproval(rp), false, "손상 사이드카가 승인 취급");
+  console.log("reject≠approval: 4 pass");
+}

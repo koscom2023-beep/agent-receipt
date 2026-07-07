@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, isAbsolute, join, relative } from "node:path";
 import * as g from "./git.js";
-import { parseReceiptJson, receiptsDirAbs, RECEIPTS_REL } from "./receiptStore.js";
+import { approvalStatusFor, parseReceiptJson, receiptsDirAbs, RECEIPTS_REL } from "./receiptStore.js";
 
 function abs(p: string, cwd: string): string {
   return isAbsolute(p) ? p : join(cwd, p);
@@ -57,11 +57,10 @@ function writeSidecar(rpath: string, status: ReviewStatus, note: string): Review
 /** 사이드카 읽기 — 없으면 null(미검토). status 없는 구파일 = approved(하위호환). inbox/share-proof 가 사용. */
 export function reviewStatusFor(receiptAbs: string): ReviewRecord | null {
   const p = sidecarPath(receiptAbs);
-  if (!existsSync(p)) return null;
+  const status = approvalStatusFor(receiptAbs) as ReviewStatus | null; // status 판독 SSOT=receiptStore(반려≠승인 판정과 동일 규칙)
+  if (status === null) return null;
   try {
     const a = JSON.parse(readFileSync(p, "utf8")) as Record<string, unknown>;
-    const status: ReviewStatus =
-      a.status === "rejected" || a.status === "needs-review" || a.status === "approved" ? (a.status as ReviewStatus) : "approved";
     return {
       status,
       reviewer: String(a.reviewer ?? a.approver ?? "unknown"),
