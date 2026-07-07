@@ -194,7 +194,7 @@ code{font-family:var(--mono);font-size:.9em;background:var(--paper-2);border:1px
   <div class="eyebrow">local-first · no account · no server</div>
   <h1>agent-receipt</h1>
   <div class="thesis"><b>Contract</b> an AI coding session, <b>judge</b> it when it ends, keep a <b>verifiable receipt</b>.</div>
-  <div class="sub-hero">Checks the contract scope (allowed/denied paths) against the <span class="h">real git diff</span> and closes the session with a <span class="h">4-value verdict</span> (PASS · warnings · FAIL · incomplete) — the diff is the evidence, not the agent's self-report. The same engine verifies a report's <span class="h">quotes, numbers and commit claims</span>, and shows what the session actually cost. No server, no account — all on your machine.</div>
+  <div class="sub-hero">Checks the contract scope (allowed/denied paths) against the <span class="h">real git diff</span> and closes the session with a <span class="h">4-value verdict</span> (PASS · warnings · FAIL · incomplete) — the diff is the evidence, not the agent's self-report. The verdict ships as a <span class="h">ten-second proof page</span> (four review buckets in the order reviewers actually read), with <span class="h">approve/reject records</span>, <span class="h">one-command re-verification for the recipient (verify-proof)</span>, and a local <span class="h">inbox</span> over the pile — the whole flow is four verbs: <span class="h">begin · done · share · review</span>. The same engine verifies a report's <span class="h">quotes, numbers and commit claims</span>, and shows what the session actually cost. No server, no account — all on your machine.</div>
   <div class="sub-hero" style="font-size:12.5px;color:var(--faint)">Why trust it — deterministic verdicts (same input → same verdict) · sealed receipts (sha256, replayable) · third-party seal (Rekor) · in-toto · Merkle. All local.</div>
   <div class="btns">
     <a class="btn p" href="/en/playground">Catch a fabrication in your browser →</a>
@@ -250,7 +250,7 @@ code{font-family:var(--mono);font-size:.9em;background:var(--paper-2);border:1px
 <section id="axes">
   <div class="eyebrow-s">§ Three audits</div>
   <h2>agent-receipt leaves three things behind</h2>
-  <p class="sub">One philosophy — "what the AI did and said, as a local receipt anyone can verify later." Three axes hang off it.</p>
+  <p class="sub">One philosophy — "what the AI did and said, as a local receipt anyone can verify later." Three axes hang off it. From v0.20 the receipt becomes a <b>reviewed document</b> — approve/reject records, a local inbox, and one-command verification for the recipient.</p>
   <div class="who">
     <div class="c"><b>🧾 Change Audit</b><p><b>What did the AI actually change</b> in your repo? — checked against the contract scope, recorded in a hash-chained ledger, plus beyond-git actions (even failed / denied ones). <a href="#prevents" style="color:var(--brand)">Incidents it prevents →</a></p></div>
     <div class="c"><b>🔎 Evidence Audit</b><p><b>Is the AI's stated evidence real?</b> — quotes, numbers, dates, git claims, versions checked against their sources by 15 deterministic checks. No LLM judging LLMs. <a href="#kinds" style="color:var(--brand)">The checks →</a></p></div>

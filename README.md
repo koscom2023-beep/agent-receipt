@@ -28,28 +28,32 @@ agent-receipt done: my-task
 > **agent-receipt proves — and, if you opt in, prevents.**
 > Its core job is mechanical, after-the-fact **evidence** — of what landed in git, and of whether stated evidence matches its sources (**git-based evidence for compliance review — not a compliance guarantee**). On top of that, an opt-in **real-time scope guard** (`policy guard: block`) stops writes to contract/policy-forbidden paths *before the tool runs* — the denied attempt itself becomes chained evidence. Default stays warn-only: nothing blocks unless you ask it to.
 
+The receipt is **review-ready** (v0.20): it opens with a ten-second executive block (plain-sentence contract KO/EN · four review buckets in the reviewer's reading order · session timeline), carries an optional self-reported `--objective`, and closes with a recorded human decision — `review approve | reject | note`. The recipient re-checks the whole hand-off **offline in one command** (`verify-proof`), and the pile becomes a filterable local **`inbox`**.
+
 One-page setup (contract → guard → receipt → PR comment): [docs/QUICKSTART.md](https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/docs/QUICKSTART.md)
 
 ---
 
 ## Quick Start
 
-Install globally and run the everyday **two-command loop**:
+Install globally — first time? `agent-receipt quickstart` prints exactly what each setup step writes (and only writes under `--write`). The everyday flow is **four verbs**:
 
 ```bash
 npm install -g @promptia-labs/agent-receipt
 cd <your repo>
-agent-receipt init --preset promptia          # or: generic   (scaffold .agent-guard/contract.yaml)
-agent-receipt policy init --profile promptia   # (optional) standing rules → .agent-guard/policy.yaml
+agent-receipt quickstart --write               # contract + policy + capture hooks (print-first; idempotent)
 
-agent-receipt begin --cursor                   # baseline + paste-in agent instructions (or --claude)
+agent-receipt begin --kind implementation --objective "refund API, no billing-model changes"
 #   … the agent works …
-agent-receipt done                             # verify + check + save the AI Work Receipt + summary
-agent-receipt commit-check                     # gate before you commit (prints a trailer; never commits)
-#   … you stage & commit yourself …
-agent-receipt audit-pack                       # bundle the evidence (review-ready)
-agent-receipt reset                            # clear the baseline for the next task
+agent-receipt done                             # 4-value verdict + receipt + ordered next steps ①②③
+agent-receipt share                            # ten-second proof HTML (= share-proof · --client / --bundle)
+agent-receipt review approve --receipt <p>     # or: reject / note — recorded on the receipt (self-reported)
+
+agent-receipt inbox                            # the pile, filterable (FAIL only · denied-path · unreviewed …)
+agent-receipt verify-proof <bundle-dir>        # recipient side: re-check a hand-off bundle offline
 ```
+
+The longer loop is still there when you want it — `commit-check` (pre-commit gate), `audit-pack` (evidence bundle), `reset` (clear baseline):
 
 Re-verify a saved bundle later with `agent-receipt replay --pack <dir>`. Full command list: `agent-receipt help --all`.
 

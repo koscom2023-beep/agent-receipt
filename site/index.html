@@ -194,7 +194,7 @@ code{font-family:var(--mono);font-size:.9em;background:var(--paper-2);border:1px
   <div class="eyebrow">로컬 우선 · 계정 없음 · 서버 없음</div>
   <h1>agent-receipt</h1>
   <div class="thesis">AI 코딩 세션을 <b>계약</b>하고, 끝나면 <b>판정</b>하고, <b>검증 가능한 영수증</b>으로 남깁니다.</div>
-  <div class="sub-hero">허용/금지 범위(계약)와 <span class="h">실제 git diff</span>를 대조해 세션을 <span class="h">4값 판정</span>(PASS·경고·FAIL·미완)으로 닫습니다 — AI의 자기보고가 아니라 diff가 증거. 같은 엔진이 보고서의 <span class="h">인용·숫자·커밋 주장</span>까지 검증하고, 세션이 태운 실제 비용도 보여줍니다. 서버 없이, 계정 없이 — 전부 내 컴퓨터에서.</div>
+  <div class="sub-hero">허용/금지 범위(계약)와 <span class="h">실제 git diff</span>를 대조해 세션을 <span class="h">4값 판정</span>(PASS·경고·FAIL·미완)으로 닫습니다 — AI의 자기보고가 아니라 diff가 증거. 판정은 <span class="h">10초 요약 증거 페이지</span>(리뷰어가 읽는 순서 그대로 4버킷)로 공유되고, <span class="h">승인·반려 기록</span>과 <span class="h">받은 쪽 원클릭 재검증(verify-proof)</span>·쌓인 영수증 상태판(inbox)까지 — 흐름은 네 동사면 끝: <span class="h">begin · done · share · review</span>. 같은 엔진이 보고서의 <span class="h">인용·숫자·커밋 주장</span>까지 검증하고, 세션이 태운 실제 비용도 보여줍니다. 서버 없이, 계정 없이 — 전부 내 컴퓨터에서.</div>
   <div class="sub-hero" style="font-size:12.5px;color:var(--faint)">믿는 근거 — 결정론 판정(같은 입력=같은 판정) · 봉인 영수증(sha256 재검증) · 제3자 봉인(Rekor) · in-toto · Merkle. 전부 로컬.</div>
   <div class="btns">
     <a class="btn p" href="/playground">브라우저에서 날조 잡아보기 →</a>
@@ -250,7 +250,7 @@ code{font-family:var(--mono);font-size:.9em;background:var(--paper-2);border:1px
 <section id="axes">
   <div class="eyebrow-s">§ 세 가지 감사</div>
   <h2>agent-receipt는 세 가지를 남깁니다</h2>
-  <p class="sub">하나의 철학 — "AI가 한 일과 한 말을, 나중에 누구든 검증할 수 있는 로컬 영수증으로." 그 아래 세 축이 붙습니다.</p>
+  <p class="sub">하나의 철학 — "AI가 한 일과 한 말을, 나중에 누구든 검증할 수 있는 로컬 영수증으로." 그 아래 세 축이 붙고, v0.20부터 영수증은 <b>검토가 끝난 문서</b>가 됩니다(승인/반려 기록·inbox 상태판·받는 쪽 원클릭 검증).</p>
   <div class="who">
     <div class="c"><b>🧾 변경 감사 <span style="font-weight:400;color:var(--mut);font-size:11.5px">Change Audit</span></b><p>AI가 저장소에서 <b>실제로 무엇을 바꿨나</b> — 계약 범위와 대조하고, 해시체인 원장에 남기고, git엔 안 보이는 행동(실패·거부까지)도 기록. <a href="#prevents" style="color:var(--brand)">막는 사고 →</a></p></div>
     <div class="c"><b>🔎 근거 감사 <span style="font-weight:400;color:var(--mut);font-size:11.5px">Evidence Audit</span></b><p>AI가 댄 <b>근거가 진짜인가</b> — 인용·숫자·날짜·git 주장·버전을 15종 결정론 검사로 출처와 대조. LLM에게 LLM을 채점시키지 않음. <a href="#kinds" style="color:var(--brand)">검사 종류 →</a></p></div>
