@@ -58,7 +58,7 @@ writeFileSync(join(d2, "f.txt"), "x\n");
 execFileSync("git", ["add", "-A"], { cwd: d2, stdio: "ignore" });
 execFileSync("git", ["commit", "-m", "init"], { cwd: d2, stdio: "ignore" });
 run(d2, ["init", "--preset", "generic"]);
-run(d2, ["begin", "--kind", "implementation"]);
+run(d2, ["begin", "--kind", "implementation", "--objective", "환불 API 추가(모델 변경 없음)"]);
 writeFileSync(join(d2, "f.txt"), "x\ny\n");
 const doneOut = run(d2, ["done"]);
 check("사전조건: done PASS + 다음행동(share) 안내", () => {
@@ -71,6 +71,15 @@ run(d2, ["share-proof", "--out", "a.html"]);
 run(d2, ["share", "--out", "b.html"]);
 check("share 별칭 = share-proof 와 byte 동일", () => {
   assert.equal(readFileSync(join(d2, "a.html"), "utf8"), readFileSync(join(d2, "b.html"), "utf8"));
+});
+check("배치A-6: objective — receipt 기록 + share-proof 자가보고 접두(세탁 차단)", () => {
+  const rdir = join(d2, ".agent-guard", "receipts");
+  const rj = JSON.parse(readFileSync(join(rdir, readdirSync(rdir).filter((n) => n.endsWith(".json") && !n.includes("approval")).sort().pop()), "utf8"));
+  assert.equal(rj.session.objective, "환불 API 추가(모델 변경 없음)", "session.objective 기록");
+  const h = readFileSync(join(d2, "a.html"), "utf8");
+  assert.ok(h.includes("Session objective (self-reported, unverified") && h.includes("환불 API"), "자가보고 접두 고정");
+  const idx = h.indexOf("Session objective");
+  assert.ok(idx > h.indexOf("contracted as"), "계약 문장 아래 배치(최상단 아님 — DA-2)");
 });
 
 // 4) done INCOMPLETE 분기 — begin 없는 새 repo

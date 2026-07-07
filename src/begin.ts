@@ -12,7 +12,7 @@ const line = "─".repeat(56);
  *   policy 확인(있으면) → start(baseline) → prompt 출력 → 다음 명령 안내.
  * start 가 이미 있으면(재시작) baseline 은 건너뛰고 prompt 만 다시 보여준다(편의). exit 0/1.
  */
-export function runBegin(contract: Contract, variant: PromptVariant, kind?: SessionKind, cwd: string = process.cwd()): never {
+export function runBegin(contract: Contract, variant: PromptVariant, kind?: SessionKind, objective?: string, cwd: string = process.cwd()): never {
   console.log("");
   console.log(line);
   console.log(`agent-receipt begin: ${contract.id}`);
@@ -27,7 +27,8 @@ export function runBegin(contract: Contract, variant: PromptVariant, kind?: Sess
   }
 
   // 2) baseline 기록.
-  const res = startCore(contract, cwd, kind);
+  const res = startCore(contract, cwd, kind, objective);
+  if (objective) console.log(`세션 목적(자가보고·미검증): ${objective}`); // 배치A-6 — 기록 사실 고지
   if (!res.ok && res.reason === "denied-dirty") {
     console.error(res.message);
     process.exit(1);

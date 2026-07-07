@@ -5,7 +5,7 @@ agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
   begin / done / share(= share-proof 별칭) / review    + 처음이면: quickstart [--write](인쇄 우선)
 
 ■ 2층 — 핵심 루프 상세:
-  begin [--cursor|--claude] [--kind <recon|implementation|docs|test|measure-first|observe-only|release-check>]
+  begin [--cursor|--claude] [--kind <recon|implementation|docs|test|measure-first|observe-only|release-check>] [--objective "<한 줄>"]   목적=자가보고(미검증) — receipt/share-proof 에 기록
   cost / done / share-proof [--receipt <p>] [--out <p>] [--evidence-dir <d>] [--with-cost] [--bundle] / next / audit-pack / prepare-commit [--message <m>] [--include-linked-tests] / explain
 
 ■ 세션 / 정찰 / 구현:

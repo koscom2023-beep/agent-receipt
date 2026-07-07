@@ -32,7 +32,7 @@ export interface Receipt {
   outOfScope: string[];
   deniedHits: string[];
   violations: string[];
-  session: { applied: boolean; reason: string | null; baselineHead: string; kind?: SessionKind } | null;
+  session: { applied: boolean; reason: string | null; baselineHead: string; kind?: SessionKind; objective?: string } | null;
   checks: { name: string; exitCode: number; requiredExit: number; ok: boolean }[];
   magnitude: Magnitude; // 변경 규모(full working tree 기준 — baseline-relative 아님)
   criticalPaths: CriticalPath[]; // 고위험 경로 touched/untouched (코드 상수 — 계약 필드 아님)
@@ -145,6 +145,7 @@ export function buildReceipt(contract: Contract, contractPath?: string, opts: Bu
           reason: sess.reason,
           baselineHead: sess.session.baselineHead,
           ...(sess.session.kind ? { kind: sess.session.kind } : {}),
+          ...(sess.session.objective ? { objective: sess.session.objective } : {}), // 배치A-6 — 자가보고(미검증)·hash 제외(session 자체가 hash 입력 밖)
         }
       : null,
     checks: chk.commands.map((c) => ({ name: c.name, exitCode: c.exitCode, requiredExit: c.requiredExit, ok: c.ok })),
@@ -221,7 +222,7 @@ export function toReceiptMd(r: Receipt): string {
   L.push("");
   L.push("## Session (baseline)");
   if (!r.session) L.push("- none");
-  else L.push(`- applied: ${r.session.applied}${r.session.reason ? ` (${r.session.reason})` : ""}, baselineHead: \`${r.session.baselineHead}\`${r.session.kind ? `, kind: ${r.session.kind}` : ""}`);
+  else L.push(`- applied: ${r.session.applied}${r.session.reason ? ` (${r.session.reason})` : ""}, baselineHead: \`${r.session.baselineHead}\`${r.session.kind ? `, kind: ${r.session.kind}` : ""}${r.session.objective ? `, objective(자가보고): ${r.session.objective}` : ""}`);
   L.push("");
   L.push("## Checks");
   if (r.checks.length) for (const c of r.checks) L.push(`- ${c.name}: ${c.ok ? "OK" : "✗"} (exit ${c.exitCode}, expected ${c.requiredExit})`);

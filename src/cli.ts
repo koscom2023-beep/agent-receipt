@@ -112,7 +112,7 @@ agent-receipt — AI 코딩 세션 비용·git 작업 증빙 (로컬 · git 만 
   agent-receipt cost                                     이번 세션 토큰 비용(로컬 Claude Code transcript · 추정 · 청구서 아님)
 
 핵심 4동사 (대부분 이걸로 충분):
-  agent-receipt begin [--cursor|--claude] [--kind ...]   작업 시작(baseline + 계약)
+  agent-receipt begin [--kind ...] [--objective "<한 줄>"]   작업 시작(baseline + 계약 · 목적=자가보고 기록)
   agent-receipt done                                     작업 종료(판정 + receipt 저장)
   agent-receipt share [--client|--bundle]                증거 공유(= share-proof · 요약+3축 탭 HTML)
   agent-receipt review                                   commit 전 사람 체크리스트(read-only)
@@ -134,7 +134,7 @@ agent-receipt — 전체 명령 (git 작업트리 기준 — git 만 증거)
   begin / done / share(= share-proof 별칭) / review    + 처음이면: quickstart [--write](인쇄 우선)
 
 ■ 2층 — 핵심 루프 상세:
-  begin [--cursor|--claude] [--kind <recon|implementation|docs|test|measure-first|observe-only|release-check>]
+  begin [--cursor|--claude] [--kind <recon|implementation|docs|test|measure-first|observe-only|release-check>] [--objective "<한 줄>"]   목적=자가보고(미검증) — receipt/share-proof 에 기록
   cost / done / share-proof [--receipt <p>] [--out <p>] [--evidence-dir <d>] [--with-cost] [--bundle] / next / audit-pack / prepare-commit [--message <m>] [--include-linked-tests] / explain
 
 ■ 세션 / 정찰 / 구현:
@@ -571,7 +571,7 @@ function main(): void {
 
     case "begin": {
       requireRepo();
-      runBegin(contract, promptVariant, getKind());
+      runBegin(contract, promptVariant, getKind(), getArg("--objective")); // 배치A-6
       break;
     }
 

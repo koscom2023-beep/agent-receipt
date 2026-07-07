@@ -33,6 +33,7 @@ export interface SessionData {
   contractId: string;
   gitBranch: string;
   kind?: SessionKind; // 0.9 optional — 없으면 기존 동작(하위호환)
+  objective?: string; // 배치A-6 optional — 세션 목적(자가보고·미검증 — GitLab 3질문의 ② "뭘 하려던 것이었나" 기록)
   unstagedAtStart: string[];
   stagedAtStart: string[];
   untrackedAtStart: string[];
@@ -43,7 +44,7 @@ export type StartResult =
   | { ok: false; created: false; reason: "denied-dirty" | "exists"; message: string };
 
 // ── 비-exit 코어: baseline 기록 시도. begin/orchestrator 재사용. 안전조건 둘은 그대로(차단). ──
-export function startCore(contract: Contract, cwd: string = process.cwd(), kind?: SessionKind): StartResult {
+export function startCore(contract: Contract, cwd: string = process.cwd(), kind?: SessionKind, objective?: string): StartResult {
   const unstaged = g.unstagedFiles();
   const staged = g.stagedFiles();
   const untracked = g.untrackedFiles();
@@ -84,6 +85,7 @@ export function startCore(contract: Contract, cwd: string = process.cwd(), kind?
     contractId: contract.id,
     gitBranch: g.currentBranch(),
     ...(kind ? { kind } : {}),
+    ...(objective ? { objective } : {}), // 자가보고 — 값은 기록만(검증 아님)
     unstagedAtStart: unstaged,
     stagedAtStart: staged,
     untrackedAtStart: untracked,

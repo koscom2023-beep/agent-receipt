@@ -203,6 +203,7 @@ export function toProofHtml(r: Receipt, anchor?: RekorAnchor | null, extras?: Pr
   const execSummary = `
   <section class="exec">
   ${prose ? `<p class="meta"><b>${esc(prose.ko)}</b></p>\n  <p class="meta">${esc(prose.en)}</p>` : ""}
+  ${r.session?.objective ? `<p class="meta">Session objective (self-reported, unverified · 자가보고): ${esc(r.session.objective)}</p>` : ""}
   ${extras?.review ? `<p class="meta"><strong>Review recorded: ${esc(extras.review.status)}</strong> by ${esc(extras.review.reviewer)} at ${esc(extras.review.reviewedAt)} (self-reported — a record, not an authority)${extras.review.note ? ` — ${esc(extras.review.note)}` : ""}</p>` : ""}
   <p class="meta">Changed: <strong>${r.touched.length}</strong> file(s) (+${r.magnitude.added} / -${r.magnitude.deleted} lines, ${r.magnitude.newFiles} new) · Critical paths: ${critTxt} · Checks: ${r.checks.length ? `${checksPassed}/${r.checks.length} OK` : "none"}${guardDenied !== null ? ` · Guard-denied events: <strong>${guardDenied}</strong>` : ""}</p>
   <p class="meta">Review focus — 판정 사실의 재배치(a pointer, <strong>not a judgment</strong> and not the whole):</p>
