@@ -5,6 +5,7 @@ import { discoverContract } from "./discover.js";
 import { loadSession } from "./session.js";
 import { runVerify } from "./checks.js";
 import { printReport } from "./output.js";
+import { t } from "./lang.js";
 
 /**
  * 인자 없이 `agent-receipt` 만 실행했을 때의 단일명령 라우팅.
@@ -15,10 +16,15 @@ import { printReport } from "./output.js";
 export function runDefault(): never {
   const cPath = discoverContract();
 
-  // 1) 계약 없음 → init 안내 (한 명령)
+  // 1) 계약 없음 = 신규 사용자 → 딱딱한 "계약 없음" 대신 환영 + quickstart 우선(U1·U3).
   if (!cPath) {
-    console.log("\nagent-receipt — 계약이 없습니다.");
-    console.log("  다음: agent-receipt init --preset promptia   (또는 generic)\n");
+    console.log("");
+    console.log(t("welcome.hi"));
+    console.log(`  ${t("model.oneline")}`);
+    console.log("");
+    console.log(t("welcome.start"));
+    console.log(t("welcome.then"));
+    console.log("");
     process.exit(0);
   }
 

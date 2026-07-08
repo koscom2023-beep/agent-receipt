@@ -1,4 +1,7 @@
 
-agent-receipt — 계약이 없습니다.
-  다음: agent-receipt init --preset promptia   (또는 generic)
+agent-receipt — AI 코딩 세션을 계약하고, 끝나면 판정하고, 검증 가능한 영수증으로 남깁니다.
+  이 도구는 두 가지를 남깁니다: AI가 한 일(Work Receipt = git 실측)과 AI가 한 말(Verification Receipt = 근거 대조).
+
+처음이면:  agent-receipt quickstart          (각 설정 단계가 무엇을 쓰는지 인쇄만 · 파일 무변경)
+그다음:    quickstart --write → begin → (작업) → done → share
 

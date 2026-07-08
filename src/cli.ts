@@ -52,6 +52,7 @@ import { runIndex } from "./receiptindex.js";
 import { runGenClaim, runGenClaimLlmPrompt, runGenClaimFromLlm } from "./genclaim.js";
 import { runCaptureIngest, runCaptureShow, runCaptureReset, runCaptureInstall, runCaptureUninstall, runCaptureVerify, runCaptureInstallCursor } from "./capture.js";
 import { runMcpTap, runTapCli } from "./tap.js";
+import { t } from "./lang.js";
 import { runShareProof, runShareProofFromSaved, latestReceiptExists } from "./shareproof.js";
 import { runQuickstart } from "./quickstart.js";
 import { runVerifyProof } from "./verifyproof.js";
@@ -109,6 +110,8 @@ function requireRepo(): void {
 function printHelp(): void {
   console.log(`
 agent-receipt — AI 코딩 세션 비용·git 작업 증빙 (로컬 · git 만 증거)
+
+  ${t("model.oneline")}
 
   agent-receipt cost                                     이번 세션 토큰 비용(로컬 Claude Code transcript · 추정 · 청구서 아님)
 

@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { POLICY_REL } from "./policy.js";
+import { t } from "./lang.js";
 
 // v0.20 결정5 (council 2026-07-07) — quickstart: 첫 성공 경험을 한 명령으로.
 // 원칙: **인쇄 우선(print-first)** — 기본은 뭘 할지 보여주기만 하고 파일시스템 무변경.
@@ -19,6 +20,7 @@ interface Step {
 }
 
 export function runQuickstart(write: boolean, cwd: string = process.cwd()): never {
+  // U2 — 핵심 셋업은 계약+정책 둘뿐(자동). capture 는 첫 세션 부담(공유 설정 수정)이라 선택으로 강등(자동 실행 안 함).
   const steps: Step[] = [
     {
       cmd: ["init", "--preset", "generic"],
@@ -30,15 +32,12 @@ export function runQuickstart(write: boolean, cwd: string = process.cwd()): neve
       writes: `${POLICY_REL} — 프로젝트 상시 규칙(가드 warn 기본)`,
       skipIf: join(cwd, POLICY_REL),
     },
-    {
-      cmd: ["capture", "install", "--write"],
-      writes: ".claude/settings.json 병합 — git 너머 행위 기록 훅(⚠️ 공유 설정 수정·동시 세션 영향)",
-      note: "Claude Code 밖(Cursor 등)이라면 대신 `capture install-cursor` 참고.",
-    },
   ];
   console.log("");
   console.log(line);
   console.log(`agent-receipt quickstart ${write ? "(--write · 실제 기록)" : "(인쇄 전용 — 파일시스템 무변경)"}`);
+  console.log(line);
+  console.log(t("qs.core")); // 핵심 = 세 동사(begin·done·share) · 아래는 그 준비
   console.log(line);
   const cliPath = process.argv[1] ?? "agent-receipt";
   let n = 0;
@@ -56,6 +55,11 @@ export function runQuickstart(write: boolean, cwd: string = process.cwd()): neve
   console.log(`[${n + 1}] agent-receipt begin --kind implementation`);
   console.log("    만드는 것: 세션 baseline — 이때부터 '세션 단위' 측정(없으면 판정 INCOMPLETE ◌)");
   console.log("    (begin 은 kind 선택이 필요해 quickstart 가 대신 실행하지 않습니다.)");
+  console.log(line);
+  // U2 — capture 는 선택(나중에). 첫 성공에 불필요하므로 항상 인쇄만(--write 여도 자동 실행 안 함).
+  console.log(t("qs.captureLater"));
+  console.log("    agent-receipt capture install --write   .claude/settings.json 병합(⚠️ 공유 설정 수정·동시 세션 영향)");
+  console.log("    Claude Code 밖(Cursor 등)이면: agent-receipt capture install-cursor");
   console.log(line);
   if (!write) {
     console.log("지금은 인쇄만 했습니다 — 실제 기록: agent-receipt quickstart --write");
