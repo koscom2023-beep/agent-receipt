@@ -615,6 +615,8 @@ export interface GraphHtmlOpts {
   baseData?: ViewRow[]; // --base-dir 스냅샷 — 주면 신규 실패에 isNew 마킹(안 주면 출력 불변)
   match?: DiffMatchMode; // 신규 판정 매칭(--match 승계·기본 statement)
 }
+import { sharedTokens } from "./htmlstyle.js";
+
 export function buildGraphHtml(data: ViewRow[], opts: GraphHtmlOpts = {}): string {
   // 체크종류 목록 SSOT — 커널 CHECK_KINDS 를 그대로 임베드(하드코딩 중복 금지·새 체크 추가 시 여기 안 고쳐도 됨).
   const checkKindsJs = JSON.stringify(CHECK_KINDS);
@@ -650,13 +652,7 @@ export function buildGraphHtml(data: ViewRow[], opts: GraphHtmlOpts = {}): strin
   }).replace(/</g, "\\u003c");
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>증거 브라우저(Evidence Browser) — 검증 영수증</title><style>
-:root{
-  --bg:#f1f2f4;--bg-raised:#f8f9fa;--bg-hover:#e9ebee;--border:#dadde2;--border-soft:#e6e8eb;
-  --text:#24292f;--mut:#57606a;--pass:#1a7f37;--fail:#d03b3b;--warn:#9a6700;--accent:#0969da;
-  --pass-bg:#1a7f3717;--fail-bg:#d03b3b14;--warn-bg:#9a670014;--accent-bg:#0969da14;
-  --font-ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Pretendard,Roboto,"Helvetica Neue",Arial,sans-serif;
-  --font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-}
+${sharedTokens()}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-ui);font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
 header{padding:18px 24px;border-bottom:1px solid var(--border)}h1{margin:0;font-size:19px;font-weight:700;letter-spacing:-.015em;font-family:var(--font-mono)}.sub{color:var(--mut);font-size:13px;margin-top:5px}

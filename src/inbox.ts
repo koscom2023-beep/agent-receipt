@@ -135,6 +135,8 @@ function esc(s: string): string {
 }
 
 // 정적 HTML(내부 도구 — evidence-browser 형제·외부 리소스 0·데이터 임베드+바닐라 필터).
+import { sharedTokens, sharedBase, verdictVisual } from "./htmlstyle.js";
+
 export function buildInboxHtml(d: InboxData): string {
   const rowsJson = JSON.stringify(d.rows).replace(/</g, "\\u003c");
   const s = d.summary;
@@ -142,22 +144,24 @@ export function buildInboxHtml(d: InboxData): string {
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>agent-receipt inbox</title>
 <style>
- body{font:14px/1.5 system-ui,sans-serif;margin:0;background:#f7f7f8;color:#1a1a1a}
+${sharedTokens()}
+${sharedBase()}
+ body{font:14px/1.5 var(--font-ui);margin:0}
  .wrap{max-width:960px;margin:1.5rem auto;padding:0 1rem}
  h1{font-size:1.1rem} .meta{color:#666;font-size:.85rem}
  .cards{display:flex;gap:.5rem;flex-wrap:wrap;margin:.6rem 0}
- .card{background:#fff;border:1px solid #e3e3e6;border-radius:8px;padding:.4rem .7rem;font-size:.85rem}
- table{border-collapse:collapse;width:100%;background:#fff;border:1px solid #e3e3e6;font-size:.85rem}
+ .card{background:var(--paper-raised);border:1px solid var(--rule);border-radius:8px;padding:.4rem .7rem;font-size:.85rem}
+ table{border-collapse:collapse;width:100%;background:var(--paper-raised);border:1px solid var(--rule);font-size:.85rem}
  th,td{border-bottom:1px solid #eee;padding:.35rem .5rem;text-align:left}
  th{background:#fafafa;color:#555} code{font:.8rem ui-monospace,monospace}
- .v-PASS{color:#0a7d33}.v-FAIL{color:#c00}.v-PASS_WITH_WARNINGS{color:#8a6d00}.v-INCOMPLETE,.v-none{color:#777}
+ .v-PASS{color:var(--pass)}.v-FAIL{color:var(--fail)}.v-PASS_WITH_WARNINGS{color:var(--warn)}.v-INCOMPLETE,.v-none{color:var(--incomplete)}
  select,label{font-size:.85rem;margin-right:.6rem}
 </style></head><body><div class="wrap">
 <h1>agent-receipt inbox — Work Receipts</h1>
 <p class="meta">기준(asOf): ${esc(d.asOf ?? "(없음)")} · 창: ${d.windowDays === null ? "전체" : `최근 ${d.windowDays}일`} · 표시 ${s.total} / 스캔 ${s.scanned}${s.broken ? ` · <b>파싱 실패 ${s.broken}건</b>` : ""} — 읽기전용·중립 카운트(판단 아님)</p>
 <div class="cards">
- <span class="card">PASS ${s.byVerdict.PASS}</span><span class="card">⚠️ ${s.byVerdict.PASS_WITH_WARNINGS}</span>
- <span class="card">FAIL ${s.byVerdict.FAIL}</span><span class="card">◌ ${s.byVerdict.INCOMPLETE}</span>
+ <span class="card ${verdictVisual("PASS").cls}">${verdictVisual("PASS").icon} PASS ${s.byVerdict.PASS}</span><span class="card ${verdictVisual("PASS_WITH_WARNINGS").cls}">${verdictVisual("PASS_WITH_WARNINGS").icon} 경고 ${s.byVerdict.PASS_WITH_WARNINGS}</span>
+ <span class="card ${verdictVisual("FAIL").cls}">${verdictVisual("FAIL").icon} FAIL ${s.byVerdict.FAIL}</span><span class="card ${verdictVisual("INCOMPLETE").cls}">${verdictVisual("INCOMPLETE").icon} INCOMPLETE ${s.byVerdict.INCOMPLETE}</span>
  <span class="card">판정 없음(구버전) ${s.byVerdict.none}</span>
  <span class="card">금지경로 접촉 세션 ${s.deniedTouched}</span><span class="card">고위험경로 세션 ${s.criticalTouched}</span>
  <span class="card">검토: ✓${s.byReview.approved} ✗${s.byReview.rejected} ◌${s.byReview["needs-review"]} 미검토 ${s.byReview.unreviewed}</span>

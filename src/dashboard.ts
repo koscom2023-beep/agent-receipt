@@ -1,4 +1,5 @@
 import { mkdirSync, writeFileSync } from "node:fs";
+import { sharedTokens, sharedBase } from "./htmlstyle.js";
 import { dirname, isAbsolute, join } from "node:path";
 import { listReceipts, parseReceiptJson, criticalTouchedCount } from "./receiptStore.js";
 
@@ -52,11 +53,13 @@ export function runDashboard(outArg: string | undefined, cwd: string = process.c
 <html lang="ko"><head><meta charset="utf-8">
 <title>agent-receipt dashboard</title>
 <style>
-  body{font:14px/1.5 system-ui,sans-serif;margin:2rem;color:#222}
+${sharedTokens()}
+${sharedBase()}
+  body{font:14px/1.5 var(--font-ui);margin:2rem}
   h1{font-size:1.2rem} .meta{color:#666;font-size:.85rem}
   table{border-collapse:collapse;width:100%;margin-top:1rem}
-  th,td{border:1px solid #ddd;padding:.4rem .6rem;text-align:left;font-size:.85rem}
-  th{background:#f5f5f5} .pass{color:#0a0;font-weight:600} .fail{color:#c00;font-weight:600}
+  th,td{border:1px solid var(--rule);padding:.4rem .6rem;text-align:left;font-size:.85rem}
+  th{background:var(--rule-soft)} .pass{color:var(--pass);font-weight:600} .fail{color:var(--fail);font-weight:600}
   .hash{font-family:monospace;font-size:.75rem;color:#666;word-break:break-all}
   .timeline{margin-top:1rem;line-height:1}
   .cell{display:inline-block;width:10px;height:16px;margin:0 1px;border-radius:2px;vertical-align:middle}

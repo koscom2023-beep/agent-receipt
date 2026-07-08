@@ -6,6 +6,7 @@ import { splitActionsForDisplay, COVERED_TOOLS } from "./capture.js";
 import { redactText, redactJsonText } from "./redact.js";
 import { LIMIT_NOTE } from "./disclosure.js";
 import { listReceipts, loadRekorAnchor, loadSavedReceipt, rekorAnchorPath, type RekorAnchor } from "./receiptStore.js";
+import { sharedTokens, sharedBase, verdictVisual, limitsDetails } from "./htmlstyle.js";
 import { renderVerdictLine, renderContractLine, renderContractProse } from "./verdict.js";
 import { buildViewData, buildSummary } from "./graph.js";
 import { costLines } from "./cost.js";
@@ -98,8 +99,7 @@ export function buildProofTimeline(cwd: string = process.cwd()): ProofTimeline |
 /** 순수함수: Receipt(+선택 Rekor 앵커·선택 extras) → 고객 전달용 self-contained HTML(자동로드 리소스 0·script 0). */
 export function toProofHtml(r: Receipt, anchor?: RekorAnchor | null, extras?: ProofExtras): string {
   const pass = r.ok;
-  const statusTxt = pass ? "PASS ✓" : "FAIL ✗";
-  const statusColor = pass ? "#0a7d33" : "#c00";
+  const statusTxt = pass ? "PASS ✓" : "FAIL ✗"; // 히어로 hero-sub 에서 사용(receipt.ok 사실)
   const hit = r.criticalPaths.filter((c) => c.touched.length);
   const critTxt = hit.length ? hit.map((c) => esc(c.glob)).join(", ") : "none touched";
 
@@ -241,10 +241,21 @@ export function toProofHtml(r: Receipt, anchor?: RekorAnchor | null, extras?: Pr
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AI Work Receipt — ${esc(r.contractId)}</title>
 <style>
-  body{font:15px/1.6 system-ui,-apple-system,sans-serif;margin:0;background:#f7f7f8;color:#1a1a1a}
-  .wrap{max-width:680px;margin:2rem auto;background:#fff;border:1px solid #e3e3e6;border-radius:12px;padding:2rem 2.2rem}
+${sharedTokens()}
+${sharedBase()}
+  body{font:15px/1.6 var(--font-ui);margin:0}
+  .wrap{max-width:680px;margin:2rem auto;background:var(--paper-raised);border:1px solid var(--rule);border-radius:12px;padding:2rem 2.2rem}
   h1{font-size:1.25rem;margin:0 0 .2rem} h2{font-size:1rem;margin:1.4rem 0 .4rem}
-  .status{display:inline-block;font-weight:700;font-size:1.1rem;color:${statusColor};margin:.4rem 0 1rem}
+  /* U6 — 첫 3초 히어로: 판정을 스크롤 0에 크게(색+아이콘+텍스트 3중·U8). */
+  .doctype{color:var(--ink-soft);font-size:.8rem;letter-spacing:.02em;text-transform:uppercase;margin:0 0 .5rem}
+  .hero{display:flex;flex-direction:column;gap:.2rem;padding:1rem 1.1rem;border-radius:12px;border:1px solid var(--rule);border-left:6px solid var(--incomplete);background:var(--paper);margin:0 0 1rem}
+  .hero.v-pass{border-left-color:var(--pass);background:var(--pass-bg)}
+  .hero.v-fail{border-left-color:var(--fail);background:var(--fail-bg)}
+  .hero.v-warn{border-left-color:var(--warn);background:var(--warn-bg)}
+  .hero.v-incomplete{border-left-color:var(--incomplete);background:var(--incomplete-bg)}
+  .hero-badge{font-size:1.5rem;font-weight:800;letter-spacing:-.01em}
+  .hero.v-pass .hero-badge{color:var(--pass)}.hero.v-fail .hero-badge{color:var(--fail)}.hero.v-warn .hero-badge{color:var(--warn)}.hero.v-incomplete .hero-badge{color:var(--incomplete)}
+  .hero-sub{color:var(--ink);font-size:.9rem}.hero-mag{color:var(--ink-soft);font-size:.82rem}
   .meta{color:#666;font-size:.85rem;margin:.2rem 0}
   table{border-collapse:collapse;width:100%;margin:.4rem 0;font-size:.9rem}
   td{border-bottom:1px solid #eee;padding:.35rem .2rem;vertical-align:top}
@@ -267,9 +278,12 @@ export function toProofHtml(r: Receipt, anchor?: RekorAnchor | null, extras?: Pr
   @media print{.tabs .pane{display:block!important}.tablabels,.tabs>input.tabradio{display:none!important}} /* DA-3: 인쇄=전 패널 펼침(증거 숨김 금지) */
 </style></head><body>
 <div class="wrap">
-  <h1>AI Work Receipt</h1>
-  <p class="meta">Scope evidence for <code>${esc(r.contractId)}</code>${r.title ? ` — ${esc(r.title)}` : ""}</p>${r.verdict ? `\n  <p class="meta"><b>${esc(renderVerdictLine(r.verdict))}</b></p>` : ""}${r.contractSnapshot ? `\n  <p class="meta">${esc(renderContractLine(r.contractSnapshot))}</p>` : ""}
-  <div class="status">${statusTxt}</div>${execSummary}
+  <p class="doctype">AI Work Receipt · <code>${esc(r.contractId)}</code>${r.title ? ` — ${esc(r.title)}` : ""}</p>
+  <div class="hero ${verdictVisual(r.verdict?.verdict ?? (pass ? "PASS" : "FAIL")).cls}">
+    <span class="hero-badge">${verdictVisual(r.verdict?.verdict ?? (pass ? "PASS" : "FAIL")).icon} ${esc(verdictVisual(r.verdict?.verdict ?? (pass ? "PASS" : "FAIL")).label)}</span>
+    <span class="hero-sub">${statusTxt}${r.contractSnapshot ? ` · ${esc(renderContractLine(r.contractSnapshot))}` : ""}</span>
+    <span class="hero-mag">Changed ${r.touched.length} file(s) · +${r.magnitude.added} / -${r.magnitude.deleted} · Checks ${r.checks.length ? `${checksPassed}/${r.checks.length}` : "none"}${guardDenied ? ` · Guard-denied ${guardDenied}` : ""}</span>
+  </div>${r.verdict ? `\n  <p class="meta">${esc(renderVerdictLine(r.verdict))}</p>` : ""}${execSummary}
   <div class="tabs">
   <input class="tabradio" type="radio" name="proof-tab" id="pt-change" checked>
   <input class="tabradio" type="radio" name="proof-tab" id="pt-evidence">
@@ -307,8 +321,11 @@ export function toProofHtml(r: Receipt, anchor?: RekorAnchor | null, extras?: Pr
   </div>
   </div>
   <footer>
-    ${esc(LIMIT_NOTE)}<br>
-    git-based evidence — <strong>tamper-evident, not non-forgeable</strong>. This is evidence for review, <strong>not a compliance guarantee</strong>. Generated locally; no data left the machine.
+    ${limitsDetails(
+      "Scope &amp; limits · 범위와 한계",
+      `<p>${esc(LIMIT_NOTE)}</p><p>git-based evidence — <strong>tamper-evident, not non-forgeable</strong>. This is evidence for review, <strong>not a compliance guarantee</strong>.</p>`,
+    )}
+    Generated locally; no data left the machine.
   </footer>
 </div>
 </body></html>
