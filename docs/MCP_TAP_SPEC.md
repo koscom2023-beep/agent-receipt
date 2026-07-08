@@ -127,6 +127,7 @@ after:   "supabase": { "command": "agent-receipt",
 | `result.status` | ok / error(JSON-RPC error) / opaque(파싱 불가) / orphan(짝 없는 응답) |
 | `latencyMs` | rpc.id 페어링으로 계산. pending 맵 **상한 4096 + TTL 5분**, 초과·만료는 `unpaired` 마커(3차 결정 9). |
 | `class` | 자문(advisory) 분류(§8). 판정 입력 아님. |
+| `traceparent` | **예약 필드(v0.3.2 · 미사용)** — OTel 스팬 연결은 후속 트레인. 지금은 스키마 자리만 확보(개정 회피 · 4차 ⑥). |
 | `markers` | degraded / dropped:N / bypass / unpaired / orphan-response / canon-failed ... |
 
 ### 5.3 notification / opaque
@@ -200,7 +201,7 @@ capture 와 동일 규약: entryHash = sha256(자신 제외 결정론 직렬화)
 "tapSummary": {
   "records": 214, "byServer": {"supabase": 120}, "byClass": {"db-write": 3},
   "degraded": false, "dropped": 0, "window": {"files": {"supabase-1234.jsonl": {"fromSeq": 100, "toSeq": 314}}},
-  "coverage": { "expectedServers": ["supabase","github"], "observedServers": ["supabase"], "missing": ["github"], "excluded": [], "configDrift": [] }
+  "coverage": { "expectedServers": ["supabase","github"], "observedServers": ["supabase"], "missing": ["github"], "excluded": [], "configDrift": [], "unwrapped": ["remote(transport-http)"] }
 }
 ```
 
@@ -262,4 +263,5 @@ agent-receipt tap probe     [--server <n>]                                     #
 
 - **2차 회의(확정 4):** ① 정규화=자체 구현 JCS(RFC 8785)+공식 벡터 동결·명칭 강등 규율 ② 샘플링 금지·읽기류 무손실 병합 ③ --except 는 "침묵 없는 제외" ④ URI 스킴 이원화+uriDigest+userinfo 제거. 관통 원칙: 숨기지 말고 라벨하라.
 - **3차 회의(코드 실측 수정 14 · 2026-07-08):** 1 세션 경계=커서 스냅샷(초기화 폐기) · 2 --log-dir 절대경로 · 3 복원 정본=sidecar · 4 설치 대상 표 정정(~/.claude.json 실측·라이브 파일 경합 경고) · 5 env 미기록 · 6 canonFailed 폴백 · 7 병합 닫힘 3조건+notifications 포함 · 8 bootId/cleanShutdown 자백 · 9 pending 상한 4096 · 10 expectedServers=sidecar 정본 · 11 등급="controls 위계의 C" 특정 · 12 warn-only 테스트 잠금 · 13 구현 순서(JCS 첫 커밋)+"신규 의존성 0 원칙" 문구 정정(기존 deps 3개 실재) · 14 본 문서의 repo 커밋.
-- 이월: record 로테이션(v1.1) · witness/deploy 조인/evidence-repo/traceparent/ambient 는 각각 별도 회의.
+- **4차 회의(릴리스 트레인 · 2026-07-08 · v0.3.2)**: ① 감쌀 수 없는 서버(transport-http/sse·no-command)는 sidecar.unwrapped + coverage.unwrapped 로 **자백**(침묵=커버리지 거짓말 · HTTP 수요의 실측 데이터 겸용) ② traceparent 예약 필드만 확보(구현은 후속) ③ W2 카운터사인은 릴리스 절차로 흡수(분리된 CI 신원의 재실행+서명 · 키 신뢰 증명 아님 라벨) ④ HTTP 전송·게이트웨이 어댑터·영어 출력 골격은 이번 트레인 제외(수요 pull 대기) ⑤ 야생 호환표는 docs/MCP_TAP_COMPAT.md(실측/미실측/제약 정직 표기).
+- 이월: record 로테이션(v1.1) · witness W1/deploy 조인/evidence-repo/traceparent 구현/ambient 는 각각 별도 회의.

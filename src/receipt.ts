@@ -277,6 +277,7 @@ export function toReceiptMd(r: Receipt): string {
     if (t.dropped) L.push(`- ⚠️ dropped:${t.dropped} (기록 큐 포화 자백 — 중계는 무결)`);
     if (t.coverage.missing.length) L.push(`- 창 내 기록 없는 감싼 서버: ${t.coverage.missing.join(", ")} (미사용/중단 구분 불가 — 사실 신호)`);
     if (t.coverage.excluded.length) L.push(`- 선언된 관측 제외: ${t.coverage.excluded.join(", ")} (침묵 없는 제외)`);
+    if (t.coverage.unwrapped?.length) L.push(`- 감쌀 수 없던 서버: ${t.coverage.unwrapped.join(", ")} (v1 은 stdio 만 — 커버리지 거짓말 방지 자백)`);
     if (t.coverage.configDrift.length) L.push(`- ⚠️ 설정 드리프트: ${t.coverage.configDrift.join(", ")} (install 시점 sidecar 와 불일치)`);
     if ((t.byClass["fs-write"] ?? 0) > 0 && r.touched.length === 0 && r.untracked.length === 0)
       L.push("- ⚠️ tap fs-write 관측·git 변경 0 — 생성후삭제/ignored/저장소 밖 가능(사실 신호 · tap 은 경로 무관측)");

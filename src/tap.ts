@@ -794,7 +794,12 @@ export type SidecarEntry = {
   configHash: string;
   logDir: string;
 };
-export type Sidecar = { version: 1; entries: SidecarEntry[]; excluded: { configPath: string; serverName: string }[] };
+export type Sidecar = {
+  version: 1;
+  entries: SidecarEntry[];
+  excluded: { configPath: string; serverName: string }[];
+  unwrapped?: { configPath: string; serverName: string; reason: string }[]; // 감쌀 수 없어 안 감싼 것(transport-http 등) — 침묵하면 커버리지가 거짓말이 된다(4차 ⑬)
+};
 
 export function tapDirOf(cwd: string = process.cwd()): string {
   return join(cwd, ".agent-guard", "tap");
@@ -805,11 +810,17 @@ function sidecarPath(cwd: string): string {
 export function loadSidecar(cwd: string = process.cwd()): Sidecar {
   try {
     const s = JSON.parse(readFileSync(sidecarPath(cwd), "utf8")) as Sidecar;
-    if (s && Array.isArray(s.entries)) return { version: 1, entries: s.entries, excluded: Array.isArray(s.excluded) ? s.excluded : [] };
+    if (s && Array.isArray(s.entries))
+      return { version: 1, entries: s.entries, excluded: Array.isArray(s.excluded) ? s.excluded : [], unwrapped: Array.isArray(s.unwrapped) ? s.unwrapped : [] };
   } catch {
     /* 없음/손상 → 빈 sidecar */
   }
-  return { version: 1, entries: [], excluded: [] };
+  return { version: 1, entries: [], excluded: [], unwrapped: [] };
+}
+
+function noteUnwrapped(s: Sidecar, configPath: string, serverName: string, reason: string): void {
+  s.unwrapped = s.unwrapped ?? [];
+  if (!s.unwrapped.some((x) => x.configPath === configPath && x.serverName === serverName)) s.unwrapped.push({ configPath, serverName, reason });
 }
 function saveSidecar(s: Sidecar, cwd: string): void {
   mkdirSync(tapDirOf(cwd), { recursive: true });
@@ -892,7 +903,9 @@ function runTapInstall(argv: string[], cwd: string): never {
     for (const [name, entry] of Object.entries(cfg.servers)) {
       if (!entry || typeof entry !== "object") continue;
       if ((entry as { url?: unknown }).url || entry.type === "http" || entry.type === "sse") {
-        console.log(`  - ${name}: stdio 아님(v1 범위 밖) — 건너뜀`);
+        const reason = entry.type === "sse" ? "transport-sse" : "transport-http";
+        console.log(`  - ${name}: stdio 아님(v1 범위 밖) — 건너뜀 · 커버리지에 자백 기록(${reason})`);
+        if (write) noteUnwrapped(sidecar, cfg.path, name, reason); // 침묵 없는 미포장(4차 ⑬ — 수요 실측 데이터 겸용)
         continue;
       }
       if (isWrappedEntry(entry)) {
@@ -908,7 +921,8 @@ function runTapInstall(argv: string[], cwd: string): never {
       }
       const command = typeof entry.command === "string" ? entry.command : "";
       if (!command) {
-        console.log(`  - ${name}: command 없음 — 건너뜀`);
+        console.log(`  - ${name}: command 없음 — 건너뜀 · 커버리지에 자백 기록(no-command)`);
+        if (write) noteUnwrapped(sidecar, cfg.path, name, "no-command");
         continue;
       }
       const args = Array.isArray(entry.args) ? (entry.args as string[]) : [];
@@ -1008,6 +1022,7 @@ function runTapStatus(cwd: string): never {
   console.log("\ntap status");
   console.log(`  감싼 서버: ${sidecar.entries.length}건${sidecar.entries.length ? " — " + sidecar.entries.map((e) => e.serverName).join(", ") : ""}`);
   if (sidecar.excluded.length) console.log(`  선언된 제외: ${sidecar.excluded.map((e) => e.serverName).join(", ")} (침묵 없는 제외)`);
+  if (sidecar.unwrapped?.length) console.log(`  감쌀 수 없던 서버: ${sidecar.unwrapped.map((e) => `${e.serverName}(${e.reason})`).join(", ")} (v1 stdio 한정 자백)`);
   const files = tapLogFiles(cwd);
   if (!files.length) console.log("  로그: 없음");
   for (const f of files) {
@@ -1141,7 +1156,7 @@ export type TapSummary = {
   dropped: number;
   degraded: boolean;
   window: Record<string, { fromSeq: number; toSeq: number }>;
-  coverage: { expectedServers: string[]; observedServers: string[]; missing: string[]; excluded: string[]; configDrift: string[] };
+  coverage: { expectedServers: string[]; observedServers: string[]; missing: string[]; excluded: string[]; configDrift: string[]; unwrapped: string[] };
 };
 
 /** 커서 이후 창의 tap 관측 요약. 레코드 없으면 null(영수증 키 부재=기존 바이트동일). */
@@ -1194,6 +1209,7 @@ export function buildTapSummary(cwd: string = process.cwd()): TapSummary | null 
   const observed = Object.keys(byServer).sort();
   const missing = expected.filter((s) => !observed.includes(s)); // 미사용과 중단을 구분할 수 없다 — 사실 신호(no-records-in-window)
   const excluded = [...new Set(sidecar.excluded.map((e) => e.serverName))];
+  const unwrapped = [...new Set((sidecar.unwrapped ?? []).map((e) => `${e.serverName}(${e.reason})`))]; // 감쌀 수 없던 서버의 자백 — HTTP 수요 실측 데이터 겸용
   const configDrift: string[] = [];
   for (const e of sidecar.entries) {
     const cfg = loadMcpConfig(e.configPath);
@@ -1211,7 +1227,7 @@ export function buildTapSummary(cwd: string = process.cwd()): TapSummary | null 
     }
     if (serverConfigHash(cand) !== e.configHash) configDrift.push(e.serverName);
   }
-  return { records, calls, byServer, byClass, dropped, degraded: dropped > 0, window, coverage: { expectedServers: expected, observedServers: observed, missing, excluded, configDrift } };
+  return { records, calls, byServer, byClass, dropped, degraded: dropped > 0, window, coverage: { expectedServers: expected, observedServers: observed, missing, excluded, configDrift, unwrapped } };
 }
 
 /** `agent-receipt tap <sub>` 라우팅. probe 만 비동기(자체 exit). */

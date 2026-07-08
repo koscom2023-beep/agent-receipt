@@ -82,6 +82,7 @@ export function runDone(
     const cls = Object.entries(ts.byClass).map(([k, v]) => `${k} ${v}`).join(" · ");
     const extra = [
       ts.coverage.excluded.length ? `제외 ${ts.coverage.excluded.join(",")}` : "",
+      ts.coverage.unwrapped?.length ? `미포장 ${ts.coverage.unwrapped.join(",")}` : "",
       ts.coverage.configDrift.length ? `⚠️설정드리프트 ${ts.coverage.configDrift.join(",")}` : "",
       ts.dropped ? `⚠️dropped:${ts.dropped}` : "",
     ].filter(Boolean).join(" · ");

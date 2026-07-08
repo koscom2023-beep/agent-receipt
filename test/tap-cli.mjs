@@ -69,6 +69,7 @@ const origBytes = readFileSync(cfgPath, "utf8");
   assert.equal(sidecar.entries[0].serverName, "alpha");
   assert.deepEqual(sidecar.entries[0].original, { command: process.execPath, args: [fake] }, "복원 정본=sidecar(결정 3)");
   assert.deepEqual(sidecar.excluded, [{ configPath: cfgPath, serverName: "beta" }], "침묵 없는 제외");
+  assert.deepEqual(sidecar.unwrapped, [{ configPath: cfgPath, serverName: "web", reason: "transport-http" }], "감쌀 수 없음도 자백(4차 ⑬)");
   assert.ok(!JSON.stringify(sidecar).includes("beta-secret-val"), "env 값은 sidecar 에도 없음(결정 5)");
 }
 
@@ -105,6 +106,7 @@ const origBytes = readFileSync(cfgPath, "utf8");
   assert.equal(st.code, 0);
   assert.ok(st.out.includes("감싼 서버: 1건") && st.out.includes("alpha"), "status: sidecar 요약");
   assert.ok(st.out.includes("선언된 제외: beta"), "status: 제외 표기");
+  assert.ok(st.out.includes("감쌀 수 없던 서버: web(transport-http)"), "status: 미포장 자백 표기");
   assert.ok(st.out.includes("정상 종료"), "status: 클린 종료 로그 인식");
 
   const sh = cli(dir, "tap", "show", "--by", "class");

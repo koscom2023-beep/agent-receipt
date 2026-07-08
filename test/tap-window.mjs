@@ -59,12 +59,14 @@ function mkCall(log, cls = ["fs-read"], server = "alpha") {
       { configPath: cfgPath, serverName: "beta", original: { command: "node", args: ["b.mjs"] }, configHash: serverConfigHash({ command: "node", args: ["b.mjs"] }), logDir: dir },
     ],
     excluded: [{ configPath: cfgPath, serverName: "gamma" }],
+    unwrapped: [{ configPath: cfgPath, serverName: "remote", reason: "transport-http" }],
   };
   writeFileSync(join(dir, "wrapped.json"), JSON.stringify(sidecar, null, 2));
   const s3 = buildTapSummary(cwd);
   assert.deepEqual(s3.coverage.expectedServers, ["alpha", "beta"], "기대치 정본=sidecar(결정 10)");
   assert.deepEqual(s3.coverage.missing, ["beta"], "창 내 기록 없음=사실 신호");
   assert.deepEqual(s3.coverage.excluded, ["gamma"], "침묵 없는 제외");
+  assert.deepEqual(s3.coverage.unwrapped, ["remote(transport-http)"], "감쌀 수 없음 자백(수요 실측 데이터 겸용)");
   assert.deepEqual(s3.coverage.configDrift, [], "설정 불변=드리프트 없음");
   // 설정 변조 → 드리프트
   writeFileSync(cfgPath, JSON.stringify({ mcpServers: { alpha: { command: "node", args: ["EVIL.mjs"] }, beta: { command: "node", args: ["b.mjs"] } } }, null, 2));
