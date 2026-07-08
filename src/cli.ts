@@ -51,6 +51,7 @@ import { runSelftest } from "./selftest.js";
 import { runIndex } from "./receiptindex.js";
 import { runGenClaim, runGenClaimLlmPrompt, runGenClaimFromLlm } from "./genclaim.js";
 import { runCaptureIngest, runCaptureShow, runCaptureReset, runCaptureInstall, runCaptureUninstall, runCaptureVerify, runCaptureInstallCursor } from "./capture.js";
+import { runMcpTap } from "./tap.js";
 import { runShareProof, runShareProofFromSaved, latestReceiptExists } from "./shareproof.js";
 import { runQuickstart } from "./quickstart.js";
 import { runVerifyProof } from "./verifyproof.js";
@@ -240,6 +241,12 @@ function main(): void {
     if (hasFlag("--all")) printHelpAll();
     else printHelp();
     process.exit(0);
+  }
+
+  // mcp-tap 런타임(관측 전용 stdio 프록시) — 장수 프로세스라 라우터(runDefault=exit)로 흘러가면 안 됨.
+  if (command === "mcp-tap") {
+    runMcpTap(process.argv.slice(3));
+    return;
   }
 
   // 인자 없이 실행(또는 명시적 `run`) → 단일명령 라우팅(상태 기반 안내 / 준비됐으면 verify).
