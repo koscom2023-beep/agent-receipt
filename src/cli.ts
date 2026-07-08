@@ -53,7 +53,7 @@ import { runGenClaim, runGenClaimLlmPrompt, runGenClaimFromLlm } from "./genclai
 import { runCaptureIngest, runCaptureShow, runCaptureReset, runCaptureInstall, runCaptureUninstall, runCaptureVerify, runCaptureInstallCursor } from "./capture.js";
 import { runMcpTap, runTapCli } from "./tap.js";
 import { t } from "./lang.js";
-import { runShareProof, runShareProofFromSaved, latestReceiptExists } from "./shareproof.js";
+import { runShareProof, runShareProofFromSaved, runShareTerm, latestReceiptExists } from "./shareproof.js";
 import { runQuickstart } from "./quickstart.js";
 import { runVerifyProof } from "./verifyproof.js";
 import { runInbox } from "./inbox.js";
@@ -487,6 +487,7 @@ function main(): void {
   // 둘 다 없으면 아래 switch 에서 현재 상태로 fresh build(계약 필요).
   if (command === "share-proof") {
     const rp = getArg("--receipt");
+    if (hasFlag("--term")) runShareTerm(rp); // 터미널 판정 카드(HTML 안 씀·세션 재열람)
     const spOpts = { out: getArg("--out"), redact: hasFlag("--redact"), evidenceDir: getArg("--evidence-dir"), withCost: hasFlag("--with-cost"), bundle: hasFlag("--bundle"), client: hasFlag("--client") }; // P2 D5·D6 + v0.20 결정5(--client)
     if (rp || latestReceiptExists()) runShareProofFromSaved(rp, spOpts);
   }

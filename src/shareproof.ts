@@ -7,6 +7,7 @@ import { redactText, redactJsonText } from "./redact.js";
 import { LIMIT_NOTE } from "./disclosure.js";
 import { listReceipts, loadRekorAnchor, loadSavedReceipt, rekorAnchorPath, type RekorAnchor } from "./receiptStore.js";
 import { sharedTokens, sharedBase, verdictVisual, limitsDetails } from "./htmlstyle.js";
+import { renderTermCard, useColor } from "./termcard.js";
 import { renderVerdictLine, renderContractLine, renderContractProse } from "./verdict.js";
 import { buildViewData, buildSummary } from "./graph.js";
 import { costLines } from "./cost.js";
@@ -478,6 +479,15 @@ export function latestReceiptExists(cwd: string = process.cwd()): boolean {
  * `agent-receipt share-proof [--receipt <path>] [--bundle]` — 저장된 receipt 를 렌더(기본 최신).
  * done/receipt 시점 그대로 클라이언트에 증명. 파싱/형식 실패 = exit 2(계약 불필요).
  */
+// share --term — 저장된 Work Receipt 를 터미널 판정 카드로 stdout 에 출력(HTML 파일 안 씀·세션 재열람용·회의 결정).
+export function runShareTerm(receiptPath: string | undefined, cwd: string = process.cwd()): never {
+  const { receipt: r } = loadSavedReceipt(receiptPath, "share --term", cwd);
+  console.log("");
+  console.log(renderTermCard(r, { color: useColor() }));
+  console.log("");
+  process.exit(0);
+}
+
 export function runShareProofFromSaved(receiptPath: string | undefined, opts: ShareProofOpts, cwd: string = process.cwd()): never {
   if (opts.bundle) runProofBundle(receiptPath, opts, cwd);
   const { abs, receipt: r } = loadSavedReceipt(receiptPath, "share-proof", cwd); // 13차 council: 공용 로더

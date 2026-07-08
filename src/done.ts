@@ -11,6 +11,7 @@ import { sessionCostLine } from "./cost.js";
 import { sessionVerdict, buildContractSnapshot, renderVerdictLine, renderContractLine, failOnDoneTriggers } from "./verdict.js";
 import { loadPolicySafe } from "./policy.js";
 import { LIMIT_NOTE } from "./disclosure.js";
+import { renderTermCard, useColor } from "./termcard.js";
 
 const line = "─".repeat(56);
 
@@ -46,6 +47,12 @@ export function runDone(
   const { policy, error: policyError } = loadPolicySafe(cwd);
   const fod = policy?.fail_on_done;
   const escalated = !!fod && r.ok && failOnDoneTriggers(vr.verdict, fod);
+
+  // 터미널 판정 카드(회의 결정) — TTY 일 때만. 비TTY(파이프·CI·테스트)=아래 기존 출력 100% 불변(회귀 0).
+  if (process.stdout.isTTY) {
+    console.log("");
+    console.log(renderTermCard(r, { color: useColor() }));
+  }
 
   console.log("");
   console.log(line);
