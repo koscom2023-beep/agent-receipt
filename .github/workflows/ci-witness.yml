@@ -1,0 +1,47 @@
+# CI witness (W2 seed) — 릴리스 커밋을 분리된 신원(GitHub Actions)이 재실행해 목격한다.
+# 정직 라벨: 이것은 "CI 가 이 커밋에서 테스트를 다시 돌렸다"는 목격(witness)이지, 키 신뢰(신원) 증명이 아니다.
+#   실질 방어선은 로컬을 다 뚫어도 CI 는 다른 인프라의 다른 신원이라는 점(mcp-tap 회의 W 사다리 W2).
+# 서명 스텝은 저장소 시크릿(AGENT_RECEIPT_CI_KEY)이 있을 때만 켜진다 — 없으면 조용히 건너뛴다(포크·미설정 안전).
+# 이 파일은 저작 시점에 로컬에서 실행되지 않았다(러너=GitHub) — 첫 실행은 push 후 Actions 탭에서 확인.
+name: ci-witness
+on:
+  push:
+    branches: [v0.1-verify-check-split]
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  witness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 자기커밋 검증(statedCommit)이 이력을 보게
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install
+        run: npm ci || npm install
+      - name: Build + full suite (게이트 — 실패 시 witness 실패)
+        run: npm test
+      - name: Self-receipt (분리 신원의 재실행 목격)
+        run: |
+          node dist/cli.js init --preset generic || true
+          node dist/cli.js begin --kind release-check --objective "CI witness: release commit re-run" || true
+          node dist/cli.js done || true
+          node dist/cli.js receipt || true
+      - name: Counter-sign (시크릿 있을 때만 · 없으면 건너뜀)
+        if: ${{ env.HAS_KEY == 'true' }}
+        env:
+          HAS_KEY: ${{ secrets.AGENT_RECEIPT_CI_KEY != '' }}
+        run: |
+          echo "CI key present — offline DSSE sign of the session's verification receipts"
+          node dist/cli.js predicate --sign || true
+      - name: Upload witness artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-witness-receipts
+          path: .agent-guard/receipts/*.json
+          if-no-files-found: warn
+# owner 스텐실(이 워크플로 밖·별도 결정): npm publish --provenance 는 릴리스 시 owner 가 OTP 로.
+#   provenance 게시를 자동화하려면 별 job(id-token: write + npm publish --provenance)을 owner 가 시크릿과 함께 켠다.
