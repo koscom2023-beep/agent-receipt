@@ -319,6 +319,7 @@ agent-receipt capture install-cursor <span class="y">--wsl-bridge</span>
     <div class="c"><b>🖱 Wire up Cursor hooks directly</b><p>Every time Cursor saves a file, that action flows into agent-receipt. One install command and the wiring is done.</p></div>
     <div class="c"><b>🪟 A bridge across Windows and WSL</b><p>Cursor on Windows, the tool in WSL, no problem. <code>--wsl-bridge</code> connects them, and even if the payload is mangled in transit it's recovered and recorded.</p></div>
     <div class="c"><b>🧩 Vendor-neutral by design</b><p>Each tool's envelope is normalized to one shape. Add more tools and the audit stays the same.</p></div>
+    <div class="c"><b>🔌 MCP tap <span class="tag">v0.21</span></b><p>An observation-only proxy between the agent and its MCP servers. Whatever tool connects, every <code>tools/call</code> is recorded value-free (key names, size, digest only) in a hash chain, so git-invisible actions like DB writes and deploys land in the receipt too. Not a gateway, not a blocker, fail-open. Verified on 5 real servers (filesystem, memory, everything, sqlite, git); HTTP servers it can't wrap are confessed honestly in coverage.</p></div>
   </div>
 </section>
 

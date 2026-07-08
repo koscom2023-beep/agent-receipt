@@ -319,6 +319,7 @@ agent-receipt capture install-cursor <span class="y">--wsl-bridge</span>
     <div class="c"><b>🖱 Cursor 훅을 그대로 연결</b><p>Cursor가 파일을 저장할 때마다 그 행동이 agent-receipt로 넘어옵니다. 설치 명령 한 줄이면 배선이 끝나죠.</p></div>
     <div class="c"><b>🪟 Windows와 WSL 사이에 다리</b><p>Cursor는 Windows에서 돌고 도구는 WSL에 있어도 괜찮습니다. <code>--wsl-bridge</code>가 둘을 이어 주고, 전송 도중 payload가 깨져도 그대로 복구해 기록합니다.</p></div>
     <div class="c"><b>🧩 벤더 중립 설계</b><p>도구마다 다른 envelope를 공통 모양으로 정규화합니다. 새 도구가 늘어도 감사 방식은 바뀌지 않아요.</p></div>
+    <div class="c"><b>🔌 MCP tap <span class="tag">v0.21</span></b><p>에이전트와 MCP 서버 사이에 끼는 관측 전용 프록시입니다. 어떤 도구가 붙든 <code>tools/call</code>을 값 없이(키 이름·크기·지문만) 해시체인으로 남겨, DB 쓰기나 배포 같은 git 밖 행동까지 영수증에 들어옵니다. 게이트웨이도 차단기도 아니고, 죽어도 흐름을 막지 않습니다. 실서버 5종(filesystem·memory·everything·sqlite·git)에 실측했고, 감쌀 수 없는 HTTP 서버는 커버리지에 정직하게 자백합니다.</p></div>
   </div>
 </section>
 
