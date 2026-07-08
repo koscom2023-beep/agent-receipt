@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
-import { appendFile, appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { appendFile, appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, realpathSync } from "node:fs";
+import { join, resolve, basename } from "node:path";
+import { homedir } from "node:os";
 import { spawn, type ChildProcess } from "node:child_process";
 import { jcsCanonicalize, jcsDigest, JCS_DIGEST_ALG } from "./jcs.js";
 import { installedVersion } from "./version.js";
@@ -781,4 +782,356 @@ export function runMcpTap(argv: string[]): void {
       process.exit(code ?? sigExit(signal));
     })();
   });
+}
+
+// ────────────────────────────────────────── CLI 표면 (§13 · install/uninstall/status/show/verify/probe) ──
+// 복원 정본 = sidecar(.agent-guard/tap/wrapped.json) — 남의 설정 파일 안 커스텀 키는 정본이 아니다(결정 3).
+
+export type SidecarEntry = {
+  configPath: string;
+  serverName: string;
+  original: { command: string; args?: string[] };
+  configHash: string;
+  logDir: string;
+};
+export type Sidecar = { version: 1; entries: SidecarEntry[]; excluded: { configPath: string; serverName: string }[] };
+
+export function tapDirOf(cwd: string = process.cwd()): string {
+  return join(cwd, ".agent-guard", "tap");
+}
+function sidecarPath(cwd: string): string {
+  return join(tapDirOf(cwd), "wrapped.json");
+}
+export function loadSidecar(cwd: string = process.cwd()): Sidecar {
+  try {
+    const s = JSON.parse(readFileSync(sidecarPath(cwd), "utf8")) as Sidecar;
+    if (s && Array.isArray(s.entries)) return { version: 1, entries: s.entries, excluded: Array.isArray(s.excluded) ? s.excluded : [] };
+  } catch {
+    /* 없음/손상 → 빈 sidecar */
+  }
+  return { version: 1, entries: [], excluded: [] };
+}
+function saveSidecar(s: Sidecar, cwd: string): void {
+  mkdirSync(tapDirOf(cwd), { recursive: true });
+  writeFileSync(sidecarPath(cwd), JSON.stringify(s, null, 2) + "\n");
+}
+
+/** 서버 블록 해시: command+args+env "키 이름"만(값=시크릿 관례 — 해시에도 안 넣어 사전 대입 면적 최소화 · 결정 5 연장). */
+export function serverConfigHash(entry: { command?: unknown; args?: unknown; env?: unknown }): string {
+  const envKeys = entry.env && typeof entry.env === "object" ? Object.keys(entry.env as object).sort() : [];
+  return jcsDigest({ command: entry.command ?? null, args: entry.args ?? [], envKeys });
+}
+
+/** 감쌈 감지 = args 에 "mcp-tap" 존재(command 패턴 · 설정 내 커스텀 키 비의존). */
+export function isWrappedEntry(e: { command?: unknown; args?: unknown }): boolean {
+  return Array.isArray(e.args) && (e.args as unknown[]).includes("mcp-tap");
+}
+
+function cliAbsPath(): string {
+  try {
+    return realpathSync(process.argv[1] ?? "");
+  } catch {
+    return process.argv[1] ?? "agent-receipt";
+  }
+}
+
+type McpConfig = { path: string; json: Record<string, unknown>; servers: Record<string, Record<string, unknown>> };
+
+function loadMcpConfig(p: string): McpConfig | null {
+  try {
+    const json = JSON.parse(readFileSync(p, "utf8")) as Record<string, unknown>;
+    const servers = json.mcpServers;
+    if (!servers || typeof servers !== "object" || Array.isArray(servers)) return null;
+    return { path: resolve(p), json, servers: servers as Record<string, Record<string, unknown>> };
+  } catch {
+    return null;
+  }
+}
+
+function candidateConfigs(cwd: string, explicit?: string): string[] {
+  if (explicit) return [resolve(explicit)];
+  return [join(cwd, ".mcp.json"), join(cwd, ".cursor", "mcp.json")].filter((p) => existsSync(p));
+}
+
+function isUserScopeConfig(p: string): boolean {
+  return basename(p) === ".claude.json" && resolve(p).startsWith(homedir());
+}
+
+function localArg(argv: string[], flag: string): string | undefined {
+  const i = argv.indexOf(flag);
+  return i >= 0 ? argv[i + 1] : undefined;
+}
+function localMulti(argv: string[], flag: string): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < argv.length - 1; i++) if (argv[i] === flag) out.push(argv[i + 1]);
+  return out;
+}
+
+function runTapInstall(argv: string[], cwd: string): never {
+  const write = argv.includes("--write");
+  const excepts = localMulti(argv, "--except");
+  const configs = candidateConfigs(cwd, localArg(argv, "--config"));
+  const logDir = tapDirOf(cwd); // install 이 절대경로를 굽는다(결정 2) — 런타임 CWD 무관
+  const cli = cliAbsPath();
+  if (!configs.length) {
+    console.log("tap install: 대상 설정이 없습니다(./.mcp.json · ./.cursor/mcp.json · 또는 --config <path>).");
+    process.exit(0);
+  }
+  const sidecar = loadSidecar(cwd);
+  let wrapped = 0;
+  for (const p of configs) {
+    const cfg = loadMcpConfig(p);
+    if (!cfg) {
+      console.log(`  ${p}: mcpServers 없음/파싱 불가 — 건너뜀`);
+      continue;
+    }
+    console.log(`\n설정: ${cfg.path}`);
+    if (isUserScopeConfig(cfg.path)) {
+      console.log("  ⚠️ user 스코프(모든 프로젝트에 영향) + 앱이 살아서 다시 쓰는 파일 — 앱 종료 후에만 --write 하세요.");
+    }
+    for (const [name, entry] of Object.entries(cfg.servers)) {
+      if (!entry || typeof entry !== "object") continue;
+      if ((entry as { url?: unknown }).url || entry.type === "http" || entry.type === "sse") {
+        console.log(`  - ${name}: stdio 아님(v1 범위 밖) — 건너뜀`);
+        continue;
+      }
+      if (isWrappedEntry(entry)) {
+        console.log(`  - ${name}: 이미 감쌈(멱등) — 건너뜀`);
+        continue;
+      }
+      if (excepts.includes(name)) {
+        console.log(`  - ${name}: 제외(--except) — 선언·기록됨(침묵 없는 제외)`);
+        if (write && !sidecar.excluded.some((x) => x.configPath === cfg.path && x.serverName === name)) {
+          sidecar.excluded.push({ configPath: cfg.path, serverName: name });
+        }
+        continue;
+      }
+      const command = typeof entry.command === "string" ? entry.command : "";
+      if (!command) {
+        console.log(`  - ${name}: command 없음 — 건너뜀`);
+        continue;
+      }
+      const args = Array.isArray(entry.args) ? (entry.args as string[]) : [];
+      console.log(`  + ${name}: 감쌈 ${write ? "" : "(미리보기)"}→ node ${basename(cli)} mcp-tap -- ${command} ${args.join(" ")}`.trimEnd());
+      if (write) {
+        const original = { command, args };
+        const configHash = serverConfigHash(entry);
+        entry.command = process.execPath; // node 절대경로(install-cursor 선례 — 로그인셸/PATH 불필요)
+        entry.args = [cli, "mcp-tap", "--server-name", name, "--log-dir", logDir, "--config-hash", configHash, "--", command, ...args];
+        sidecar.entries = sidecar.entries.filter((e) => !(e.configPath === cfg.path && e.serverName === name));
+        sidecar.entries.push({ configPath: cfg.path, serverName: name, original, configHash, logDir });
+        wrapped += 1;
+      }
+    }
+    if (write) writeFileSync(cfg.path, JSON.stringify(cfg.json, null, 2) + "\n");
+  }
+  if (write) {
+    saveSidecar(sidecar, cwd);
+    console.log(`\n✅ 감쌈 ${wrapped}건 기록: ${sidecarPath(cwd)} (복원 정본=sidecar)`);
+    console.log("다음: 클라이언트 재시작 후 `agent-receipt tap probe` (핸드셰이크 스모크) — 실패 시 `tap uninstall --write` 로 즉시 원복.");
+  } else {
+    console.log("\n미리보기입니다 — 적용: agent-receipt tap install --write");
+  }
+  process.exit(0);
+}
+
+function runTapUninstall(argv: string[], cwd: string): never {
+  const write = argv.includes("--write");
+  const only = localArg(argv, "--config");
+  const sidecar = loadSidecar(cwd);
+  const targets = sidecar.entries.filter((e) => !only || e.configPath === resolve(only));
+  if (!targets.length) {
+    console.log("tap uninstall: sidecar 에 복원할 항목이 없습니다.");
+    process.exit(0);
+  }
+  const byConfig = new Map<string, SidecarEntry[]>();
+  for (const e of targets) {
+    const arr = byConfig.get(e.configPath) ?? [];
+    arr.push(e);
+    byConfig.set(e.configPath, arr);
+  }
+  for (const [p, entries] of byConfig) {
+    const cfg = loadMcpConfig(p);
+    console.log(`\n설정: ${p}`);
+    for (const e of entries) {
+      const cur = cfg?.servers[e.serverName];
+      if (!cfg || !cur) {
+        console.log(`  - ${e.serverName}: 설정에 항목 없음 — sidecar 기록만 정리 대상`);
+        continue;
+      }
+      if (!isWrappedEntry(cur)) {
+        console.log(`  - ${e.serverName}: 감싼 형태가 아님(사용자 변경?) — 건드리지 않음`);
+        continue;
+      }
+      console.log(`  ↩ ${e.serverName}: 원복 ${write ? "" : "(미리보기)"}→ ${e.original.command} ${(e.original.args ?? []).join(" ")}`.trimEnd());
+      if (write) {
+        cur.command = e.original.command;
+        if (e.original.args && e.original.args.length) cur.args = e.original.args;
+        else delete cur.args;
+      }
+    }
+    if (write && cfg) writeFileSync(cfg.path, JSON.stringify(cfg.json, null, 2) + "\n");
+  }
+  if (write) {
+    sidecar.entries = sidecar.entries.filter((e) => !targets.includes(e));
+    saveSidecar(sidecar, cwd);
+    console.log("\n✅ 원복 완료(sidecar 기록 정리).");
+  } else {
+    console.log("\n미리보기입니다 — 적용: agent-receipt tap uninstall --write");
+  }
+  process.exit(0);
+}
+
+function tapLogFiles(cwd: string): string[] {
+  const dir = tapDirOf(cwd);
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir)
+    .filter((f) => f.endsWith(".jsonl"))
+    .map((f) => join(dir, f));
+}
+
+function readTapRecords(file: string): TapRec[] {
+  const out: TapRec[] = [];
+  for (const l of readFileSync(file, "utf8").split("\n")) {
+    if (!l) continue;
+    try {
+      out.push(JSON.parse(l) as TapRec);
+    } catch {
+      /* 손상 줄은 verify 가 집계 */
+    }
+  }
+  return out;
+}
+
+function runTapStatus(cwd: string): never {
+  const sidecar = loadSidecar(cwd);
+  console.log("\ntap status");
+  console.log(`  감싼 서버: ${sidecar.entries.length}건${sidecar.entries.length ? " — " + sidecar.entries.map((e) => e.serverName).join(", ") : ""}`);
+  if (sidecar.excluded.length) console.log(`  선언된 제외: ${sidecar.excluded.map((e) => e.serverName).join(", ")} (침묵 없는 제외)`);
+  const files = tapLogFiles(cwd);
+  if (!files.length) console.log("  로그: 없음");
+  for (const f of files) {
+    const recs = readTapRecords(f);
+    const last = recs[recs.length - 1];
+    const clean = last?.kind === "shutdown";
+    const calls = recs.filter((r) => r.kind === "call").reduce((n, r) => n + ((r.repeat as number) ?? 1), 0);
+    console.log(`  ${basename(f)}: 레코드 ${recs.length}(호출 ${calls}) · ${clean ? "정상 종료" : "종료 마커 없음(진행 중이거나 비정상 종료)"}`);
+  }
+  process.exit(0);
+}
+
+function runTapShow(argv: string[], cwd: string): never {
+  const by = localArg(argv, "--by") ?? "server";
+  const agg = new Map<string, number>();
+  for (const f of tapLogFiles(cwd)) {
+    for (const r of readTapRecords(f)) {
+      if (r.kind !== "call") continue;
+      const n = (r.repeat as number) ?? 1;
+      const keys = by === "class" ? ((r.class as string[]) ?? ["unknown"]) : [String(r.server ?? "?")];
+      for (const k of keys) agg.set(k, (agg.get(k) ?? 0) + n);
+    }
+  }
+  console.log(`\ntap show --by ${by} (중립 카운트 · 판정 아님)`);
+  if (!agg.size) console.log("  기록 없음");
+  for (const [k, v] of [...agg.entries()].sort((a, b) => b[1] - a[1])) console.log(`  ${k}: ${v}`);
+  process.exit(0);
+}
+
+function runTapVerify(cwd: string): never {
+  const files = tapLogFiles(cwd);
+  if (!files.length) {
+    console.log("tap verify: 로그 없음");
+    process.exit(0);
+  }
+  let bad = 0;
+  for (const f of files) {
+    const v = verifyTapFile(f);
+    const ok = v.tampered === 0 && v.chainBreaks === 0 && v.coalesceErrors === 0;
+    if (!ok) bad += 1;
+    console.log(`  ${basename(f)}: ${ok ? "✅ 체인 무결" : "❌ 문제"} · 레코드 ${v.records} · 변조 ${v.tampered} · 불연속 ${v.chainBreaks} · seq갭 ${v.seqGaps}(드랍 자백과 대조) · 병합오류 ${v.coalesceErrors}`);
+    for (const p of v.problems.slice(0, 5)) console.log(`      - ${p}`);
+  }
+  process.exit(bad ? 1 : 0);
+}
+
+async function runTapProbe(argv: string[], cwd: string): Promise<never> {
+  const only = localArg(argv, "--server");
+  const sidecar = loadSidecar(cwd);
+  const targets = sidecar.entries.filter((e) => !only || e.serverName === only);
+  if (!targets.length) {
+    console.log("tap probe: 대상 없음(sidecar 비어 있음 — 먼저 tap install --write).");
+    process.exit(0);
+  }
+  let fail = 0;
+  for (const e of targets) {
+    const cfg = loadMcpConfig(e.configPath);
+    const cur = cfg?.servers[e.serverName];
+    if (!cfg || !cur || typeof cur.command !== "string") {
+      console.log(`  ${e.serverName}: 설정 읽기 실패`);
+      fail += 1;
+      continue;
+    }
+    const env = { ...process.env, ...((cur.env as Record<string, string>) ?? {}) };
+    const args = Array.isArray(cur.args) ? (cur.args as string[]) : [];
+    const ok = await probeOnce(cur.command, args, env);
+    console.log(`  ${e.serverName}: ${ok ? "✅ initialize 왕복 성공(tap 경유)" : "❌ 핸드셰이크 실패"}`);
+    if (!ok) fail += 1;
+  }
+  if (fail) console.log("실패 시: agent-receipt tap uninstall --write 로 즉시 원복 가능.");
+  process.exit(fail ? 1 : 0);
+}
+
+function probeOnce(command: string, args: string[], env: NodeJS.ProcessEnv, timeoutMs = 10000): Promise<boolean> {
+  return new Promise((res) => {
+    let done = false;
+    const finish = (ok: boolean): void => {
+      if (done) return;
+      done = true;
+      try {
+        child.kill("SIGTERM");
+      } catch {
+        /* 무시 */
+      }
+      res(ok);
+    };
+    const child = spawn(command, args, { stdio: ["pipe", "pipe", "ignore"], env });
+    child.on("error", () => finish(false));
+    let buf = "";
+    child.stdout!.on("data", (d: Buffer) => {
+      buf += d.toString("utf8");
+      let i;
+      while ((i = buf.indexOf("\n")) !== -1) {
+        const line = buf.slice(0, i);
+        buf = buf.slice(i + 1);
+        try {
+          const m = JSON.parse(line) as { id?: unknown };
+          if (String(m.id) === "ar-probe-1") return finish(true);
+        } catch {
+          /* 서버 로그 줄 등 — 계속 */
+        }
+      }
+    });
+    const req = { jsonrpc: "2.0", id: "ar-probe-1", method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "agent-receipt-tap-probe", version: installedVersion() } } };
+    try {
+      child.stdin!.write(JSON.stringify(req) + "\n");
+    } catch {
+      finish(false);
+    }
+    setTimeout(() => finish(false), timeoutMs).unref();
+  });
+}
+
+/** `agent-receipt tap <sub>` 라우팅. probe 만 비동기(자체 exit). */
+export function runTapCli(sub: string | undefined, argv: string[], cwd: string = process.cwd()): void {
+  if (sub === "install") runTapInstall(argv, cwd);
+  if (sub === "uninstall") runTapUninstall(argv, cwd);
+  if (sub === "status") runTapStatus(cwd);
+  if (sub === "show") runTapShow(argv, cwd);
+  if (sub === "verify") runTapVerify(cwd);
+  if (sub === "probe") {
+    void runTapProbe(argv, cwd);
+    return;
+  }
+  console.log("tap: install [--write] [--config <path>] [--except <name>...] | uninstall [--write] | status | show [--by server|class] | verify | probe [--server <n>]");
+  process.exit(sub ? 2 : 0);
 }
