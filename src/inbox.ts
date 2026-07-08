@@ -37,6 +37,7 @@ export interface InboxRow {
   // 배치B-7 — 프리셋 조건용 사실(additive): 계약 checks 실행 수/실패 수(0/0=검사 명령 없음)
   checksTotal: number;
   checksFailed: number;
+  tapDbWrite: number; // tapSummary.byClass["db-write"] 사실 카운트(프리셋용 · 판단 0 · tap 미사용=0)
 }
 export interface InboxData {
   schemaVersion: "inbox/1";
@@ -95,6 +96,7 @@ export function buildInbox(cwd: string, opts: { days?: number | null } = {}): In
         repoLabel: repoLabel,
         checksTotal: r.checks?.length ?? 0,
         checksFailed: (r.checks ?? []).filter((c) => !c.ok).length,
+        tapDbWrite: r.tapSummary?.byClass?.["db-write"] ?? 0,
       });
     } catch {
       broken++;
@@ -166,6 +168,7 @@ export function buildInboxHtml(d: InboxData): string {
  <label><input type="radio" name="preset" value="denied"> 금지경로 접촉</label>
  <label><input type="radio" name="preset" value="critical-nocheck"> 고위험경로·검사 없음</label>
  <label><input type="radio" name="preset" value="unreviewed"> 미검토</label>
+ <label><input type="radio" name="preset" value="tap-db-write"> tap db-write 있음</label>
  <span class="meta">(URL #preset=… 로 공유)</span>
 </div>
 <div>
@@ -183,7 +186,7 @@ const kinds=[...new Set(rows.map(r=>r.kind).filter(Boolean))].sort();
 const fk=document.getElementById("f-k");kinds.forEach(k=>{const o=document.createElement("option");o.textContent=k;fk.appendChild(o)});
 const tb=document.getElementById("tb");
 // 배치B-7 — 프리셋=사실 조건(판단 0). 수동 필터와 AND. URL 해시로 공유(#preset=fail).
-const PRESETS={"":()=>true,fail:r=>(r.verdict??"none")==="FAIL",denied:r=>r.denied>0,"critical-nocheck":r=>r.critical>0&&r.checksTotal===0,unreviewed:r=>(r.reviewStatus??null)===null};
+const PRESETS={"":()=>true,fail:r=>(r.verdict??"none")==="FAIL",denied:r=>r.denied>0,"critical-nocheck":r=>r.critical>0&&r.checksTotal===0,unreviewed:r=>(r.reviewStatus??null)===null,"tap-db-write":r=>(r.tapDbWrite??0)>0};
 function currentPreset(){const el=document.querySelector('input[name="preset"]:checked');return el?el.value:""}
 function applyHash(){const m=(location.hash||"").match(/preset=([a-z-]*)/);const v=m&&PRESETS[m[1]]!==undefined?m[1]:"";const el=document.querySelector(\`input[name="preset"][value="\${v}"]\`);if(el)el.checked=true}
 

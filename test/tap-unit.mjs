@@ -251,6 +251,23 @@ assert.deepEqual(classifyCall("x", "mystery", {}), ["unknown"]);
   assert.ok(ttl, "TTL 만료=자백형 퇴출");
 }
 
+// ── I5: 기록 큐 포화 = 드랍 + dropped:N 자백 마커 + seq 갭(은폐 없음) ──
+{
+  const dir = mkdtempSync(join(tmpdir(), "tapq-"));
+  const log = new TapLog(dir, "q-1.jsonl", 2); // 큐 상한 2
+  for (let i = 0; i < 5; i++) log.append({ schemaVersion: "tap/1", kind: "rpc", seq: log.nextSeq(), ts: "T", method: "m" + i });
+  await log.drain();
+  log.append({ schemaVersion: "tap/1", kind: "rpc", seq: log.nextSeq(), ts: "T", method: "after" });
+  await log.drain();
+  const recs = readFileSync(join(dir, "q-1.jsonl"), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
+  const marker = recs.find((r) => r.kind === "marker" && Array.isArray(r.markers) && r.markers.some((m) => m.startsWith("dropped:")));
+  assert.ok(marker, "회복 시 dropped:N 자백 마커");
+  assert.ok(recs.some((r) => r.method === "after"), "회복 후 기록 재개");
+  const v = verifyTapFile(join(dir, "q-1.jsonl"));
+  assert.equal(v.tampered + v.chainBreaks, 0, "드랍은 체인 앞에서 — prevHash 연속 보존");
+  assert.ok(v.seqGaps >= 1, "드랍분은 seq 갭으로도 드러남(dropped 마커와 대조)");
+}
+
 // ── entryHash 결정론(직렬화=JCS) ──
 {
   const r1 = { b: 1, a: 2, kind: "rpc" };

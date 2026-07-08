@@ -204,10 +204,10 @@ capture 와 동일 규약: entryHash = sha256(자신 제외 결정론 직렬화)
 }
 ```
 
-대사 규칙(기존 git-capture reconcile 의 확장):
-1. git 에는 있는데 tap 과 capture 어디에도 없는 변경 경로 → 기존 "훅 사각지대" 신호에 병합.
-2. tap 의 fs-write/db-write 는 있는데 git 흔적 없음 → created-then-deleted / gitignored / DB 직접쓰기 신호(risk 소비).
-3. capture 와 tap 의 중복 관측 → 보수적 병합(경로 일치 + ts 근접시 seenBy 병기 · 카운트 이중 계산 금지).
+대사 규칙(v0.3.1 정정 · 구현이 드러낸 모순의 정직 반영: tap 은 값 미저장(G4)이라 tools/call 의 경로를 모른다. 경로 수준 대사는 tap 으로 불가능하며, 가능한 척하지 않는다):
+1. git 변경 경로의 경로-수준 대사는 capture 전용 유지(tap 은 경로 무관측이라 참여 불가 · 정직 명기).
+2. 클래스-수준 신호: tap 창에 fs-write 관측이 있는데 git 변경(touched+untracked)이 0 이면 사실 신호 1줄(생성후삭제/ignored/저장소 밖 가능). db-write 관측은 done 의 forbid_actions warn-only 라인이 커버.
+3. capture 와 tap 의 카운트는 합산하지 않는다(actions=capture · tapSummary=tap 분리 표기) → 이중 계상이 구조적으로 불가능.
 4. coverage.missing (설치 기록엔 있는 서버인데 이번 창에 레코드 0) → `no-records-in-window` 사실 신호. 미사용과 살해를 구분할 수 없음을 정직 명기(중립 어휘 · 비난 아님).
 5. coverage.excluded → "침묵 없는 제외": 선언·기록되고 share-proof 에 렌더, 정책 키(opt-in)로 제외 0 요구 가능. 판단 주체는 채택자.
 

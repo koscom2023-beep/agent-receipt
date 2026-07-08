@@ -88,6 +88,9 @@ export function runDone(
     console.log(`tap 관측: 호출 ${ts.calls} (${cls || "없음"})${extra ? " · " + extra : ""}`);
     const forbidClasses = (policy?.forbid_actions ?? []).filter((c) => (ts.byClass[c] ?? 0) > 0);
     if (forbidClasses.length) console.log(`⚠️ 금지행위(advisory) 클래스가 tap 에 관측됨: ${forbidClasses.map((c) => `${c} ${ts.byClass[c]}건`).join(" · ")} — warn-only(게이트 아님)`);
+    // 대사 규칙 2(클래스-수준·스펙 v0.3.1): tap 은 경로를 모른다(값 미저장) — 가능한 사실만 말한다.
+    if ((ts.byClass["fs-write"] ?? 0) > 0 && r.touched.length === 0 && r.untracked.length === 0)
+      console.log("⚠️ tap fs-write 관측·git 변경 0 — 생성후삭제/ignored/저장소 밖 가능(사실 신호)");
   }
 
   // claim 대조(있으면).

@@ -278,6 +278,8 @@ export function toReceiptMd(r: Receipt): string {
     if (t.coverage.missing.length) L.push(`- 창 내 기록 없는 감싼 서버: ${t.coverage.missing.join(", ")} (미사용/중단 구분 불가 — 사실 신호)`);
     if (t.coverage.excluded.length) L.push(`- 선언된 관측 제외: ${t.coverage.excluded.join(", ")} (침묵 없는 제외)`);
     if (t.coverage.configDrift.length) L.push(`- ⚠️ 설정 드리프트: ${t.coverage.configDrift.join(", ")} (install 시점 sidecar 와 불일치)`);
+    if ((t.byClass["fs-write"] ?? 0) > 0 && r.touched.length === 0 && r.untracked.length === 0)
+      L.push("- ⚠️ tap fs-write 관측·git 변경 0 — 생성후삭제/ignored/저장소 밖 가능(사실 신호 · tap 은 경로 무관측)");
     L.push("> tap 은 값 미저장(형태·크기·digest) · 증거 등급=controls 위계 C(자가 관측) · 판정(verdict) 입력 아님.");
     L.push("");
   }
