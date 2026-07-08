@@ -1121,6 +1121,99 @@ function probeOnce(command: string, args: string[], env: NodeJS.ProcessEnv, time
   });
 }
 
+// ────────────────────────────────────────── 세션 경계 커서(§5.6) + 영수증 요약(§9) ──
+// tap 은 장수 프로세스라 begin 이 로그를 초기화할 수 없다(체인 파괴·이중 계상) —
+// 대신 begin 이 파일별 마지막 seq 를 스냅샷하고, done/receipt 는 커서 초과분만 집계한다(결정 1).
+
+export function tapCursorSnapshot(cwd: string = process.cwd()): void {
+  const dir = tapDirOf(cwd);
+  if (!existsSync(dir)) return; // tap 미사용자에게 디렉터리를 만들지 않는다(I1)
+  const cursor: Record<string, number> = {};
+  for (const f of readdirSync(dir)) if (f.endsWith(".jsonl")) cursor[f] = tapTailRecord(join(dir, f)).lastSeq;
+  writeFileSync(join(dir, "cursor.json"), JSON.stringify({ takenAt: new Date().toISOString(), cursor }, null, 2) + "\n");
+}
+
+export type TapSummary = {
+  records: number;
+  calls: number;
+  byServer: Record<string, number>;
+  byClass: Record<string, number>;
+  dropped: number;
+  degraded: boolean;
+  window: Record<string, { fromSeq: number; toSeq: number }>;
+  coverage: { expectedServers: string[]; observedServers: string[]; missing: string[]; excluded: string[]; configDrift: string[] };
+};
+
+/** 커서 이후 창의 tap 관측 요약. 레코드 없으면 null(영수증 키 부재=기존 바이트동일). */
+export function buildTapSummary(cwd: string = process.cwd()): TapSummary | null {
+  const dir = tapDirOf(cwd);
+  if (!existsSync(dir)) return null;
+  let cursor: Record<string, number> = {};
+  try {
+    const c = JSON.parse(readFileSync(join(dir, "cursor.json"), "utf8")) as { cursor?: Record<string, number> };
+    cursor = c.cursor ?? {};
+  } catch {
+    /* 커서 없음 = 전체가 창(첫 사용) */
+  }
+  const byServer: Record<string, number> = {};
+  const byClass: Record<string, number> = {};
+  const window: Record<string, { fromSeq: number; toSeq: number }> = {};
+  let records = 0;
+  let calls = 0;
+  let dropped = 0;
+  for (const f of tapLogFiles(cwd)) {
+    const name = basename(f);
+    const cut = cursor[name] ?? -1;
+    for (const r of readTapRecords(f)) {
+      const start = (r.firstSeq ?? r.seq) as number | undefined;
+      if (typeof start !== "number" || start <= cut) continue; // 경계에 걸친 병합 창은 이후 영수증에 귀속(§5.6 정직 명기)
+      const end = ((r.lastSeq ?? r.seq) as number | undefined) ?? start;
+      records += 1;
+      const w = window[name] ?? { fromSeq: start, toSeq: end };
+      w.fromSeq = Math.min(w.fromSeq, start);
+      w.toSeq = Math.max(w.toSeq, end);
+      window[name] = w;
+      if (r.kind === "call") {
+        const n = (r.repeat as number) ?? 1;
+        calls += n;
+        const server = String(r.server ?? "?");
+        byServer[server] = (byServer[server] ?? 0) + n;
+        for (const c of (r.class as string[]) ?? ["unknown"]) byClass[c] = (byClass[c] ?? 0) + n;
+      }
+      if (r.kind === "marker" && Array.isArray(r.markers)) {
+        for (const mk of r.markers as string[]) {
+          const m2 = /^dropped:(\d+)$/.exec(mk);
+          if (m2) dropped += Number(m2[1]);
+        }
+      }
+    }
+  }
+  if (!records) return null;
+  const sidecar = loadSidecar(cwd);
+  const expected = [...new Set(sidecar.entries.map((e) => e.serverName))];
+  const observed = Object.keys(byServer).sort();
+  const missing = expected.filter((s) => !observed.includes(s)); // 미사용과 중단을 구분할 수 없다 — 사실 신호(no-records-in-window)
+  const excluded = [...new Set(sidecar.excluded.map((e) => e.serverName))];
+  const configDrift: string[] = [];
+  for (const e of sidecar.entries) {
+    const cfg = loadMcpConfig(e.configPath);
+    const cur = cfg?.servers[e.serverName];
+    if (!cur) {
+      configDrift.push(e.serverName);
+      continue;
+    }
+    // 감싼 항목이면 원본(`--` 뒤)을 재구성해 install 시점 해시와 대조(결정 10: 기대치 정본=sidecar).
+    let cand: { command?: unknown; args?: unknown; env?: unknown } = cur;
+    if (isWrappedEntry(cur) && Array.isArray(cur.args)) {
+      const a = cur.args as string[];
+      const sep = a.indexOf("--");
+      if (sep >= 0) cand = { command: a[sep + 1], args: a.slice(sep + 2), env: cur.env };
+    }
+    if (serverConfigHash(cand) !== e.configHash) configDrift.push(e.serverName);
+  }
+  return { records, calls, byServer, byClass, dropped, degraded: dropped > 0, window, coverage: { expectedServers: expected, observedServers: observed, missing, excluded, configDrift } };
+}
+
 /** `agent-receipt tap <sub>` 라우팅. probe 만 비동기(자체 exit). */
 export function runTapCli(sub: string | undefined, argv: string[], cwd: string = process.cwd()): void {
   if (sub === "install") runTapInstall(argv, cwd);

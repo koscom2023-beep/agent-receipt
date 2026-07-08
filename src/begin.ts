@@ -4,6 +4,7 @@ import { buildPrompt, type PromptVariant } from "./output.js";
 import { evalTripwire, tripwireLines } from "./tripwire.js";
 import { LIMIT_NOTE } from "./disclosure.js";
 import { clearCaptureLog } from "./capture.js";
+import { tapCursorSnapshot } from "./tap.js";
 
 const line = "─".repeat(56);
 
@@ -42,6 +43,11 @@ export function runBegin(contract: Contract, variant: PromptVariant, kind?: Sess
   } else if (res.ok) {
     console.log(res.message);
     clearCaptureLog(); // 새 baseline = 새 감사 경계 → 직전 세션 capture 누적 비움(무출력). council A #1
+    try {
+      tapCursorSnapshot(cwd); // tap 은 장수 프로세스라 초기화 불가 — 커서 스냅샷이 경계(mcp-tap 결정 1 · 미사용=no-op)
+    } catch {
+      /* additive — 실패해도 begin 진행 */
+    }
   }
   console.log("");
 

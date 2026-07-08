@@ -13,6 +13,7 @@ import { redactText, redactJsonText } from "./redact.js";
 import { LIMIT_NOTE } from "./disclosure.js";
 import { loadCapturedActions, loadReconciliation, splitActionsForDisplay, type CaptureAction, type ActionsResult, type ReconResult } from "./capture.js";
 import { renderVerdictLine, renderContractLine, type VerdictResult, type ContractSnapshot } from "./verdict.js"; // 런타임 순환 없음(verdict→receipt 는 type-only)
+import { buildTapSummary, type TapSummary } from "./tap.js"; // mcp-tap 관측 요약(순환 없음 — tap 은 jcs/version 만 import)
 
 // receipt JSON 스키마 버전(downstream/CI 가 안전하게 의존). additive only. verify --json 14키와 무관.
 export const RECEIPT_SCHEMA_VERSION = "1.0";
@@ -46,6 +47,7 @@ export interface Receipt {
   reconciliation?: ReconResult; // D4: git 변경 ↔ capture 대사(matched/미설명 residuals). capture 있을 때만. receiptHash 입력 제외(metadata·additive) → 없으면 키 부재·기존 바이트동일.
   verdict?: VerdictResult; // P0 D1(v0.17): 세션 판정(게이트·점수 아님) — done 이 부착. receiptHash 입력 제외(metadata·additive).
   contractSnapshot?: ContractSnapshot; // P0 D2: 계약 최소필드+contractHash 포인터 — done 이 부착. receiptHash 입력 제외(metadata·additive).
+  tapSummary?: TapSummary; // mcp-tap 관측 요약(커서 이후 창) — tap 레코드 있을 때만. receiptHash 입력 제외(metadata·additive) → 미사용=키 부재·기존 바이트동일. 등급=controls 위계 C(자가 관측)·판정 비유입.
   contentHash: string; // sha256 무결성 해시(timestamp/environment/schemaVersion/actions 제외 — 아래 receiptHash 입력 참고)
 }
 
@@ -167,6 +169,11 @@ export function buildReceipt(contract: Contract, contractPath?: string, opts: Bu
       const recon = loadReconciliation(git);
       return { actions: ca.actions, actionsSummary: ca.actionsSummary, ...(recon ? { reconciliation: recon } : {}) };
     })(),
+    // mcp-tap 관측 요약(§9) — 커서 이후 창에 레코드 있을 때만. receiptHash 입력 제외 → tap 미사용=키 부재·기존 바이트동일.
+    ...(() => {
+      const t = buildTapSummary();
+      return t ? { tapSummary: t } : {};
+    })(),
     contentHash: "",
   };
   r.contentHash = receiptHash(r); // 나머지 필드 확정 후 봉인(actions 는 receiptHash 입력에서 제외 — :61 참고).
@@ -260,6 +267,18 @@ export function toReceiptMd(r: Receipt): string {
     for (const res of rc.residuals) L.push(`- ${res.reason === "unexplained" ? "⚠️ 미설명(capture 못 봄)" : "· 읽기/삭제만 관측"}: \`${res.path}\``);
     if (rc.capturedNotInGit) L.push(`- capture write 인데 git 효과 없음: ${rc.capturedNotInGit}건(생성후삭제/임시 등)`);
     L.push("> 대사는 자동 cleared 하지 않음 — 미설명 잔차는 갭으로 남깁니다(거짓 안심 차단).");
+    L.push("");
+  }
+  if (r.tapSummary) {
+    const t = r.tapSummary;
+    L.push(`## MCP tap (관측 전용 프록시 — 이번 창 호출 ${t.calls} · 레코드 ${t.records})`);
+    L.push(`- 서버별: ${Object.entries(t.byServer).map(([k, v]) => `${k}:${v}`).join(" · ") || "(없음)"}`);
+    L.push(`- 클래스별: ${Object.entries(t.byClass).map(([k, v]) => `${k}:${v}`).join(" · ") || "(없음)"}`);
+    if (t.dropped) L.push(`- ⚠️ dropped:${t.dropped} (기록 큐 포화 자백 — 중계는 무결)`);
+    if (t.coverage.missing.length) L.push(`- 창 내 기록 없는 감싼 서버: ${t.coverage.missing.join(", ")} (미사용/중단 구분 불가 — 사실 신호)`);
+    if (t.coverage.excluded.length) L.push(`- 선언된 관측 제외: ${t.coverage.excluded.join(", ")} (침묵 없는 제외)`);
+    if (t.coverage.configDrift.length) L.push(`- ⚠️ 설정 드리프트: ${t.coverage.configDrift.join(", ")} (install 시점 sidecar 와 불일치)`);
+    L.push("> tap 은 값 미저장(형태·크기·digest) · 증거 등급=controls 위계 C(자가 관측) · 판정(verdict) 입력 아님.");
     L.push("");
   }
   L.push("## Integrity");

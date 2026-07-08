@@ -76,6 +76,19 @@ export function runDone(
   const crit = r.criticalPaths.filter((c) => c.touched.length);
   if (crit.length) console.log(`⚠️ 고위험 경로: ${crit.map((c) => c.glob).join(", ")}`);
   if (r.policy?.forbidAlwaysHits.length) console.log(`⛔ 상시금지(policy): ${r.policy.forbidAlwaysHits.join(", ")}`);
+  // mcp-tap 관측 1줄(사실) + 금지행위 클래스 warn-only(결정 12 — 판정·게이트 비유입·deny 없음).
+  const ts = r.tapSummary;
+  if (ts) {
+    const cls = Object.entries(ts.byClass).map(([k, v]) => `${k} ${v}`).join(" · ");
+    const extra = [
+      ts.coverage.excluded.length ? `제외 ${ts.coverage.excluded.join(",")}` : "",
+      ts.coverage.configDrift.length ? `⚠️설정드리프트 ${ts.coverage.configDrift.join(",")}` : "",
+      ts.dropped ? `⚠️dropped:${ts.dropped}` : "",
+    ].filter(Boolean).join(" · ");
+    console.log(`tap 관측: 호출 ${ts.calls} (${cls || "없음"})${extra ? " · " + extra : ""}`);
+    const forbidClasses = (policy?.forbid_actions ?? []).filter((c) => (ts.byClass[c] ?? 0) > 0);
+    if (forbidClasses.length) console.log(`⚠️ 금지행위(advisory) 클래스가 tap 에 관측됨: ${forbidClasses.map((c) => `${c} ${ts.byClass[c]}건`).join(" · ")} — warn-only(게이트 아님)`);
+  }
 
   // claim 대조(있으면).
   let claimMatched: boolean | null = null;

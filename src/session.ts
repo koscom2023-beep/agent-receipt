@@ -22,6 +22,8 @@ export function isToolOutput(f: string): boolean {
     f === ".agent-guard/dashboard.html" ||
     f === ".agent-guard/capture.jsonl" ||
     f === ".agent-guard/capture.head.json" ||
+    f.startsWith(".agent-guard/tap/") || // mcp-tap 로그·커서·sidecar(자기 장부 오탐 방지 — 0.11.2 계열 선례)
+
     f.startsWith(".agent-guard/anchors/") ||
     (f.startsWith(".agent-guard/proof-") && f.endsWith(".html")) ||
     (f.startsWith(".agent-guard/") && (f.endsWith(".sig.json") || f.endsWith(".approval.json")))
