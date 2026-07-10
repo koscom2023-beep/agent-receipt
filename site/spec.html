@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Receipt Format Spec · agent-receipt</title>
+<meta name="description" content="The open format specification for AI-work audit receipts: seal algorithm, proof bundle, DSSE signature, and verification procedure. Reproducible without trusting any tool.">
+<style>
+  :root{ --paper:#faf9f6;--raised:#fff;--ink:#211d18;--mut:#6b6459;--rule:#e6e1d8;--rule-soft:#efece5;--accent:#b5502a;
+    --ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Pretendard,"Apple SD Gothic Neo","Noto Sans KR",Roboto,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+  @media (prefers-color-scheme: dark){ :root{ --paper:#17150f;--raised:#211d15;--ink:#efe9dc;--mut:#a89f8c;--rule:#332d20;--rule-soft:#26221a;--accent:#e08a5a; } }
+  *{box-sizing:border-box} body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--ui);line-height:1.65;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:860px;margin:0 auto;padding:40px 22px 72px}
+  h1{font-size:30px;letter-spacing:-.01em;margin:0 0 4px} h2{font-size:22px;margin:38px 0 10px;padding-top:10px;border-top:1px solid var(--rule)} h3{font-size:17px;margin:22px 0 6px} h4{font-size:15px;margin:16px 0 6px}
+  p{margin:10px 0} a{color:var(--accent)} strong{font-weight:600}
+  code{font-family:var(--mono);font-size:.9em;background:var(--rule-soft);padding:1px 5px;border-radius:5px}
+  pre{background:var(--raised);border:1px solid var(--rule);border-radius:10px;padding:14px 16px;overflow:auto} pre code{background:none;padding:0;font-size:12.5px;line-height:1.6}
+  .tw{overflow-x:auto} table{border-collapse:collapse;width:100%;font-size:13.5px;margin:12px 0} th,td{border:1px solid var(--rule);padding:6px 10px;text-align:left;vertical-align:top} th{background:var(--rule-soft)}
+  blockquote{margin:14px 0;padding:12px 16px;background:var(--rule-soft);border-left:3px solid var(--accent);border-radius:8px;color:var(--mut)}
+  blockquote code{background:var(--paper)} hr{border:0;border-top:1px solid var(--rule);margin:26px 0}
+  ul,ol{margin:10px 0;padding-left:24px} li{margin:4px 0}
+  .top{color:var(--mut);font-size:13px;margin-bottom:24px} .top a{margin-right:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="top"><a href="/">agent-receipt</a><a href="verify.html">봉인 검증</a><a href="https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/SPEC.md">GitHub 원문</a><a href="https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/test/vectors/vectors.json">test vectors</a></div>
+<h1>Agent Receipt Format Specification (Draft v1.1)</h1>
+<p><em>Promptia Labs · open format for AI-work audit receipts · 2026-07</em></p>
+<blockquote><strong>Purpose.</strong> This document defines the format of an "AI coding agent change-audit receipt" <strong>independently of any tool</strong>. The goal is that a third party (an auditor, a client, a regulator, or a different vendor) can <strong>verify and emit receipts without trusting the <code>agent-receipt</code> implementation</strong>. That is what makes this a candidate <em>standard</em> rather than one tool's output.<br><br><strong>Status.</strong> Draft. The normative source of truth is the reference implementation (<code>@promptia-labs/agent-receipt</code> v0.24, <code>schemaVersion</code> <code>"1.1"</code>). Byte-level conformance is pinned by the test vectors in <code>test/vectors/vectors.json</code> (see section 8).</blockquote>
+<hr>
+<h2>1. Terms</h2>
+<ul>
+<li><strong>Receipt</strong>: a JSON object holding a point-in-time snapshot of git work plus a verdict.</li>
+<li><strong>Seal (<code>contentHash</code>)</strong>: a SHA-256 integrity hash over the receipt body.</li>
+<li><strong>Proof Bundle</strong>: a folder bundling a receipt plus optional signature, anchor, and evidence files.</li>
+<li><strong>Issuer</strong>: the party that produces a receipt (a team's CI).</li>
+<li><strong>Verifier</strong>: the party that checks a receipt (an auditor, a client, a regulator, CI).</li>
+</ul>
+<h2>2. Receipt object</h2>
+<p>A JSON object. Principal fields (reference implementation):</p>
+<div class='tw'><table><thead><tr><th>Field</th><th>Type</th><th>Sealed</th><th>Notes</th></tr></thead><tbody><tr><td><code>schemaVersion</code></td><td>string</td><td>no</td><td>Format version. Currently <code>"1.1"</code>. Excluded from the seal (it is a version marker, so the hash is stable across it).</td></tr><tr><td><code>kind</code></td><td>string</td><td>n/a</td><td>Receipt kind (work / verification).</td></tr><tr><td><code>headHash</code></td><td>string</td><td>yes</td><td>git HEAD commit hash.</td></tr><tr><td><code>branch</code></td><td>object</td><td>yes</td><td><code>{ current, expected, ok }</code>.</td></tr><tr><td><code>contractId</code></td><td>string</td><td>yes</td><td>Work-contract identifier.</td></tr><tr><td><code>touched</code> / <code>staged</code> / <code>untracked</code> / <code>outOfScope</code></td><td>string[]</td><td>yes</td><td>Changed / staged / untracked / out-of-scope paths (sorted before sealing).</td></tr><tr><td><code>deniedHits</code></td><td>string[]</td><td>yes</td><td>Paths that hit a deny rule (sorted).</td></tr><tr><td><code>magnitude</code></td><td>object</td><td>yes</td><td>Change magnitude (file count, added, deleted, newFiles).</td></tr><tr><td><code>criticalPaths[]</code></td><td>object[]</td><td>yes (touched only)</td><td>Critical-path glob plus hits. The seal uses <code>criticalTouched</code> (flattened, sorted).</td></tr><tr><td><code>checks[]</code></td><td>object[]</td><td>yes</td><td>Check results. The seal uses <code>name:exitCode:requiredExit:ok</code> strings (sorted).</td></tr><tr><td><code>ok</code></td><td>boolean</td><td>yes</td><td><strong>Final pass/fail.</strong> (sealed since v1.1)</td></tr><tr><td><code>violations</code></td><td>string[]</td><td>yes</td><td>Violation list (sorted, <code>[]</code> when none).</td></tr><tr><td><code>verdict</code></td><td>object?</td><td>yes (when present)</td><td>Session verdict. Attached by <code>done</code>, then re-sealed.</td></tr><tr><td><code>contractSnapshot</code></td><td>object?</td><td>yes (when present)</td><td>Contract minimal fields plus <code>contractHash</code>.</td></tr><tr><td><code>actions[]</code></td><td>object?</td><td>yes (digest)</td><td>capture (beyond-git behavior). The seal uses <code>actionsDigest = "sha256:" + sha256(stableStringify(actions))</code>.</td></tr><tr><td><code>reconciliation</code></td><td>object?</td><td>yes (digest)</td><td>git-vs-capture reconciliation. The seal uses <code>reconciliationDigest</code>.</td></tr><tr><td><code>contentHashes[]</code></td><td>object?</td><td>yes (when present)</td><td>sha256 of touched files (content not stored). The seal uses <code>path:sha256</code> (sorted).</td></tr><tr><td><code>actionsSummary</code> / <code>tapSummary</code></td><td>object?</td><td>no</td><td>Summary / observation metadata (excluded from the seal).</td></tr><tr><td><code>environment</code> / <code>timestamp</code> / <code>measuredFrom</code> / <code>disclosure</code></td><td>n/a</td><td>no</td><td>Provenance, time, limits (machine- and time-variant, so excluded).</td></tr><tr><td><code>contentHash</code></td><td>string</td><td>n/a</td><td>The seal value itself (<code>"sha256:" + hex</code>).</td></tr></tbody></table></div>
+<h2>3. Seal (<code>contentHash</code>) computation (normative)</h2>
+<p>A third party must do exactly this to reproduce the seal.</p>
+<p><strong>3.1 Canonicalization (<code>stableStringify</code>).</strong> Use <code>JSON.stringify</code>, but <strong>recursively sort every object's keys</strong> in lexicographic order. Arrays keep their order (the caller sorts them beforehand). Number and string encoding follow standard ES <code>JSON.stringify</code>. <em>(Note: this is similar to but <strong>not identical</strong> to RFC 8785 JCS. For this format the seal is defined by <code>stableStringify</code>. The separate log / ledger layer uses RFC 8785 JCS.)</em></p>
+<p><strong>3.2 Seal preimage (payload).</strong> Build an object with the following keys (include optional keys <strong>only when present</strong>):</p>
+<pre><code>{
+  headHash,
+  touched: sort(touched), staged: sort(staged),
+  untracked: sort(untracked), outOfScope: sort(outOfScope),
+  deniedHits: sort(deniedHits),
+  magnitude,
+  criticalTouched: sort(flatten(criticalPaths[].touched)),
+  checks: sort(checks.map(c =&gt; `${c.name}:${c.exitCode}:${c.requiredExit}:${c.ok}`)),
+  ok,
+  violations: sort(violations ?? []),
+  branch, contractId,
+  verdict?            // present only when present
+  contractSnapshot?   // present only when present
+  actionsDigest?         = "sha256:" + sha256(stableStringify(actions))        // only when actions present and non-empty
+  reconciliationDigest?  = "sha256:" + sha256(stableStringify(reconciliation)) // only when present
+  contentHashes?      = sort(contentHashes.map(c =&gt; `${c.path}:${c.sha256 ?? "null"}`)) // only when present
+}</code></pre>
+<p><strong>3.3 Final.</strong> <code>contentHash = "sha256:" + hex(sha256(utf8(stableStringify(payload))))</code>.</p>
+<p><strong>Invariants.</strong> <code>schemaVersion</code>, <code>environment</code>, <code>timestamp</code>, <code>tapSummary</code>, and <code>actionsSummary</code> are excluded from the seal. A missing optional field must have <strong>no key at all</strong> (backward compatibility and byte stability).</p>
+<h2>4. Proof Bundle (folder layout)</h2>
+<div class='tw'><table><thead><tr><th>File</th><th>Required</th><th>Content</th></tr></thead><tbody><tr><td><code>receipt.json</code></td><td>yes</td><td>The Receipt object above.</td></tr><tr><td><code>anchor.dsse.json</code></td><td>opt</td><td>DSSE envelope: <code>{ payloadType, payload(base64), signatures:[{ sig(base64), keyid? }] }</code>. The payload is an in-toto Statement (section 5).</td></tr><tr><td><code>public.pem</code></td><td>opt</td><td>ed25519 public key for signature verification (SPKI PEM).</td></tr><tr><td><code>anchor.rekor.json</code></td><td>opt</td><td>Transparency-log sidecar: <code>{ uuid, verifyUrl, logIndex }</code>.</td></tr><tr><td><code>evidence/*.json</code></td><td>opt</td><td>Verification receipts (offline replay targets).</td></tr></tbody></table></div>
+<h2>5. Signature (DSSE), normative</h2>
+<p><strong>5.1 Statement.</strong> The DSSE payload is an in-toto Statement.</p>
+<p>For a <strong>proof bundle over a work receipt</strong> (what <code>share-proof --bundle</code> and <code>attest</code> produce), the reference implementation uses <code>predicateType</code> <code>https://promptia-labs.dev/agent-receipt/ai-work/v0.1</code>. Its subjects are:</p>
+<ul>
+<li><code>{ name: "ai-work-receipt", digest: { sha256: &lt;contentHash without the "sha256:" prefix&gt; } }</code></li>
+<li><code>{ name: "git-commit", digest: { gitCommit: &lt;headHash&gt; } }</code></li>
+</ul>
+<p>The predicate carries verdict-relevant fields (<code>ok</code>, <code>branch</code>, a compacted <code>checks</code> list of <code>{name, ok}</code>). Because <code>subject[0].digest.sha256</code> binds to the receipt <code>contentHash</code> (section 3) and the seal now covers the verdict fields, tampering with either the receipt body or the verdict breaks this binding.</p>
+<p>A <strong>separate</strong> path (<code>predicate --sign</code>) signs <em>verification</em> receipts (research / council / bench) with <code>predicateType</code> <code>https://promptia-labs.dev/agent-receipt/claim-verification/v1</code>, whose <code>subject[0].digest.sha256</code> is the verification receipt's <code>contentHash</code>. See <code>docs/PREDICATE.md</code>.</p>
+<p><strong>5.2 PAE (Pre-Authentication Encoding).</strong> The signed bytes are the DSSE-standard PAE:</p>
+<pre><code>"DSSEv1 " + len(payloadType) + " " + payloadType + " " + len(payload) + " " + payload</code></pre>
+<p><strong>5.3 Algorithm.</strong> ed25519. The signature is verified over the PAE bytes. The key is <code>public.pem</code> (SPKI).</p>
+<h2>6. Verification procedure (normative)</h2>
+<p>A Verifier, in order:</p>
+<ol>
+<li><strong>receipt-parse</strong>: <code>receipt.json</code> parses.</li>
+<li><strong>receipt-hash</strong>: recompute <code>contentHash</code> (section 3) and compare. <strong>A mismatch must fail.</strong> If <code>schemaVersion &lt; 1.1</code>, soften the <em>wording only</em> to "tampered, or a pre-0.24 format that must be re-issued" (the status stays fail: pre-0.24 receipts used a weaker seal and must not be honored). If <code>schemaVersion &gt;= 1.1</code>, it is a tamper signal.</li>
+<li><strong>dsse-signature / dsse-subject</strong>: if <code>anchor.dsse.json</code> and <code>public.pem</code> are present: verify the ed25519 signature over the PAE, and check that the Statement subject digest equals the receipt <code>contentHash</code>.</li>
+<li><strong>rekor-sidecar</strong>: if <code>anchor.rekor.json</code> is present, check its shape (<code>uuid</code> length &gt;= 40, <code>verifyUrl</code> present). <em>Offline, zero network.</em></li>
+<li><strong>evidence-replay</strong>: if <code>evidence/*.json</code> are present, recompute each seal.</li>
+</ol>
+<p><strong>Overall verdict.</strong> The bundle passes if no check is <code>fail</code>. <strong>However, a passing offline check does not by itself mean "unchanged since creation."</strong> The seal is an unkeyed SHA-256 that anyone can recompute, and a self-managed DSSE key is held by the issuer, so both can be present on a forged bundle. A Verifier should therefore only claim the stronger "unchanged since creation" language when there is an <strong>independent third-party anchor (a Rekor entry)</strong>, and even then the real confirmation is a human opening the transparency-log link (this command is offline). Otherwise state the result as <strong>self-attested integrity</strong>.</p>
+<p><strong>Exit codes.</strong> <code>0</code> = pass, <code>1</code> = verification failure, <code>2</code> = input error.</p>
+<h2>7. Trust model (honest disclosure)</h2>
+<ul>
+<li>A self-managed key signature shows <strong>integrity and key-possession</strong>, but <strong>not identity</strong>. Identity comes from outside (an online-confirmed transparency-log entry, or a pinned key).</li>
+<li>The mere presence of a Rekor sidecar does not prove the entry exists or is bound (online confirmation is separate).</li>
+<li>This format is <strong>evidence for compliance review</strong>, not a compliance guarantee.</li>
+</ul>
+<h2>8. Standardization to-do (before a formal release)</h2>
+<ol>
+<li><strong>Conformance test vectors</strong>: <code>test/vectors/vectors.json</code> holds <code>(receipt, expectedContentHash)</code> pairs generated by the reference implementation (<code>node test/vectors/generate.mjs</code>). Another implementation can recompute the seal (section 3) over each <code>receipt</code> and check it equals <code>expectedContentHash</code>. These are re-verified in CI by <code>test/receipt-vectors.test.mjs</code>, which also guards the seal against accidental change.</li>
+<li><strong>Spec URL namespace</strong>: this spec is published at <code>receipt.promptia.kr/spec</code>. The <code>predicateType</code> URIs live on a Promptia Labs domain (<code>promptia-labs.dev</code>): <code>.../agent-receipt/ai-work/v0.1</code> and <code>.../agent-receipt/claim-verification/v1</code>.</li>
+<li><strong>Formal JSON Schema</strong>: publish an authoritative schema (extending the implementation's <code>claimSchema</code>).</li>
+<li><strong>Version policy</strong>: <code>1.1</code> to <code>1.x</code> is additive; any change to the seal preimage (section 3.2) is a major version.</li>
+<li><strong>Open governance</strong>: a standard is adopted only when control is shared, so state the governance model.</li>
+</ol>
+<blockquote>This draft reflects the actual implementation as read from the code. The test vectors in section 8.1 pin it byte-for-byte; run them before treating this as final.</blockquote>
+</div>
+</body>
+</html>
