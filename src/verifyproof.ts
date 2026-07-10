@@ -175,15 +175,16 @@ export function runVerifyProof(dirArg: string | undefined, cwd: string = process
   console.log("─".repeat(56));
   for (const c of res.checks) console.log(`${MARK[c.status]} ${c.id}: ${c.detail}`);
   console.log("─".repeat(56));
-  // v0.24 정직수정(리뷰 #7): receiptHash 는 비밀 없는 SHA-256 이라 누구나 재계산 가능 → 서명·앵커가
-  //   하나도 통과 안 한 "해시온리" 번들의 통과는 *자가 주장 무결성*일 뿐(위조 receipt+재계산 hash 도 통과).
-  //   독립 신뢰뿌리(DSSE 서명 or Rekor 앵커)가 있을 때만 "생성 시점 그대로"라고 말한다.
-  const hasTrustRoot = res.checks.some((c) => (c.id === "dsse-signature" || c.id === "rekor-sidecar") && c.status === "ok");
+  // v0.24 정직수정(리뷰 #7·#후속): receiptHash 는 비밀 없는 SHA-256 이라 누구나 재계산 가능하고, DSSE 서명은
+  //   자가관리 키(발신자가 쥠)라 위조본에도 붙일 수 있다. 둘 다 오프라인에선 발신자 통제라 "생성 시점 그대로"의
+  //   근거가 못 된다. 진짜 신뢰뿌리 후보는 제3자 로그(Rekor)뿐인데, 이 명령은 형식만 보므로(네트워크 0) 실확인은
+  //   사람이 링크를 열어야 완성된다. 그래서 어떤 오프라인 통과도 "변조 신호 없음"으로 단정하지 않는다.
+  const hasThirdPartyAnchor = res.checks.some((c) => c.id === "rekor-sidecar" && c.status === "ok");
   if (res.ok) {
     console.log(
-      hasTrustRoot
-        ? "결과: 통과. 이 번들은 생성 시점 그대로입니다(변조 신호 없음)."
-        : "결과: 통과. 이 번들은 자체 정합적입니다(자가 주장 무결성). 다만 독립 서명·앵커가 없어 '이 도구가 만들었다·이 시점에 존재했다'는 제3자 보장은 아닙니다.",
+      hasThirdPartyAnchor
+        ? "결과: 통과. 이 번들은 자체 정합적이고 제3자 로그(Rekor) 앵커가 있습니다. 시간·존재의 실확인은 위 링크를 직접 여세요(이 명령은 네트워크 0)."
+        : "결과: 통과. 이 번들은 자체 정합적입니다(자가 주장 무결성). 독립 제3자 앵커가 없어 '이 도구가 만들었다·이 시점에 존재했다'는 보장은 아닙니다(자가관리 서명은 발신자가 키를 쥠).",
     );
   } else {
     console.log("결과: 실패. 위 ❌ 항목이 변조/불일치 신호입니다.");

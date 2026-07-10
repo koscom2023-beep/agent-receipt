@@ -195,7 +195,7 @@ export function buildReceipt(contract: Contract, contractPath?: string, opts: Bu
     })(),
     contentHash: "",
   };
-  r.contentHash = receiptHash(r); // 나머지 필드 확정 후 봉인(actions 는 receiptHash 입력에서 제외 — :61 참고).
+  r.contentHash = receiptHash(r); // 나머지 필드 확정 후 봉인. v0.24: actions/reconciliation 은 있으면 다이제스트로 봉인에 포함(receiptHash 참고).
   return r;
 }
 
