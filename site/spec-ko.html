@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>영수증 형식 명세 · agent-receipt</title>
+<meta name="description" content="The open format specification for AI-work audit receipts: seal algorithm, proof bundle, DSSE signature, and verification procedure. Reproducible without trusting any tool.">
+<style>
+  :root{ --paper:#faf9f6;--raised:#fff;--ink:#211d18;--mut:#6b6459;--rule:#e6e1d8;--rule-soft:#efece5;--accent:#b5502a;
+    --ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Pretendard,"Apple SD Gothic Neo","Noto Sans KR",Roboto,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+  @media (prefers-color-scheme: dark){ :root{ --paper:#17150f;--raised:#211d15;--ink:#efe9dc;--mut:#a89f8c;--rule:#332d20;--rule-soft:#26221a;--accent:#e08a5a; } }
+  *{box-sizing:border-box} body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--ui);line-height:1.65;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:860px;margin:0 auto;padding:40px 22px 72px}
+  h1{font-size:30px;letter-spacing:-.01em;margin:0 0 4px} h2{font-size:22px;margin:38px 0 10px;padding-top:10px;border-top:1px solid var(--rule)} h3{font-size:17px;margin:22px 0 6px} h4{font-size:15px;margin:16px 0 6px}
+  p{margin:10px 0} a{color:var(--accent)} strong{font-weight:600}
+  code{font-family:var(--mono);font-size:.9em;background:var(--rule-soft);padding:1px 5px;border-radius:5px}
+  pre{background:var(--raised);border:1px solid var(--rule);border-radius:10px;padding:14px 16px;overflow:auto} pre code{background:none;padding:0;font-size:12.5px;line-height:1.6}
+  .tw{overflow-x:auto} table{border-collapse:collapse;width:100%;font-size:13.5px;margin:12px 0} th,td{border:1px solid var(--rule);padding:6px 10px;text-align:left;vertical-align:top} th{background:var(--rule-soft)}
+  blockquote{margin:14px 0;padding:12px 16px;background:var(--rule-soft);border-left:3px solid var(--accent);border-radius:8px;color:var(--mut)}
+  blockquote code{background:var(--paper)} hr{border:0;border-top:1px solid var(--rule);margin:26px 0}
+  ul,ol{margin:10px 0;padding-left:24px} li{margin:4px 0}
+  .top{color:var(--mut);font-size:13px;margin-bottom:24px} .top a{margin-right:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="top"><a href="/">agent-receipt</a><a href="/verify">봉인 검증</a><a href="/spec">English</a><a href="https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/SPEC.ko.md">GitHub 원문</a><a href="https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/test/vectors/vectors.json">test vectors</a></div>
+<h1>Agent Receipt Format 명세 (초안 v1.1)</h1>
+<p><em>Promptia Labs · AI 작업 감사 영수증 공개 형식 · 2026-07</em></p>
+<blockquote><strong>목적.</strong> 이 문서는 "AI 코딩 에이전트 변경 감사 영수증"의 형식을 <strong>도구와 독립적으로</strong> 정의합니다. 목표는 제3자(감사인, 고객, 규제기관, 또는 다른 벤더)가 <strong>agent-receipt 구현을 신뢰하지 않고도</strong> 영수증을 검증하고 발행할 수 있게 하는 것입니다. 이것이 이 형식을 한 도구의 출력이 아니라 <em>표준</em> 후보로 만듭니다.<br><br><strong>규범 우선순위.</strong> 규범(normative) 원천은 영어판 <code>SPEC.md</code>와 참조 구현(<code>@promptia-labs/agent-receipt</code> v0.24, <code>schemaVersion</code> <code>"1.1"</code>)입니다. 이 한국어 문서는 이해를 돕는 번역이며, 해석이 갈리면 <strong>영어판이 우선</strong>합니다. 바이트 단위 적합성은 <code>test/vectors/vectors.json</code>의 테스트 벡터로 고정됩니다(8장).</blockquote>
+<hr>
+<h2>1. 용어</h2>
+<ul>
+<li><strong>Receipt (영수증)</strong>: 한 시점의 git 작업 스냅샷과 판정을 담은 JSON 객체.</li>
+<li><strong>Seal (봉인, <code>contentHash</code>)</strong>: 영수증 본문을 덮는 SHA-256 무결성 해시.</li>
+<li><strong>Proof Bundle (증명 번들)</strong>: 영수증에 선택적 서명, 앵커, 증거 파일을 묶은 폴더.</li>
+<li><strong>Issuer (발행자)</strong>: 영수증을 만드는 주체(팀의 CI).</li>
+<li><strong>Verifier (검증자)</strong>: 영수증을 확인하는 주체(감사인, 고객, 규제기관, CI).</li>
+</ul>
+<h2>2. Receipt 객체</h2>
+<p>JSON 객체. 주요 필드(참조 구현 기준):</p>
+<div class='tw'><table><thead><tr><th>필드</th><th>형</th><th>봉인</th><th>설명</th></tr></thead><tbody><tr><td><code>schemaVersion</code></td><td>string</td><td>아니오</td><td>형식 버전. 현재 <code>"1.1"</code>. 봉인에서 제외(버전 표식이라 해시가 이 값에 무관).</td></tr><tr><td><code>kind</code></td><td>string</td><td>해당없음</td><td>영수증 종류(작업 / 검증).</td></tr><tr><td><code>headHash</code></td><td>string</td><td>예</td><td>git HEAD 커밋 해시.</td></tr><tr><td><code>branch</code></td><td>object</td><td>예</td><td><code>{ current, expected, ok }</code>.</td></tr><tr><td><code>contractId</code></td><td>string</td><td>예</td><td>작업 계약 식별자.</td></tr><tr><td><code>touched</code> / <code>staged</code> / <code>untracked</code> / <code>outOfScope</code></td><td>string[]</td><td>예</td><td>변경 / 스테이징 / 미추적 / 범위밖 경로(봉인 전 정렬).</td></tr><tr><td><code>deniedHits</code></td><td>string[]</td><td>예</td><td>deny 규칙에 걸린 경로(정렬).</td></tr><tr><td><code>magnitude</code></td><td>object</td><td>예</td><td>변경 규모(파일 수, added, deleted, newFiles).</td></tr><tr><td><code>criticalPaths[]</code></td><td>object[]</td><td>예 (touched만)</td><td>고위험 경로 glob과 히트. 봉인은 <code>criticalTouched</code>(평탄화, 정렬)를 사용.</td></tr><tr><td><code>checks[]</code></td><td>object[]</td><td>예</td><td>검사 결과. 봉인은 <code>name:exitCode:requiredExit:ok</code> 문자열(정렬)을 사용.</td></tr><tr><td><code>ok</code></td><td>boolean</td><td>예</td><td><strong>최종 합격/불합격.</strong> (v1.1부터 봉인)</td></tr><tr><td><code>violations</code></td><td>string[]</td><td>예</td><td>위반 목록(정렬, 없으면 <code>[]</code>).</td></tr><tr><td><code>verdict</code></td><td>object?</td><td>예 (있을 때)</td><td>세션 판정. <code>done</code>이 부착한 뒤 재봉인.</td></tr><tr><td><code>contractSnapshot</code></td><td>object?</td><td>예 (있을 때)</td><td>계약 최소 필드와 <code>contractHash</code>.</td></tr><tr><td><code>actions[]</code></td><td>object?</td><td>예 (다이제스트)</td><td>capture(git 너머 행위). 봉인은 <code>actionsDigest = "sha256:" + sha256(stableStringify(actions))</code>를 사용.</td></tr><tr><td><code>reconciliation</code></td><td>object?</td><td>예 (다이제스트)</td><td>git 대 capture 대사. 봉인은 <code>reconciliationDigest</code>를 사용.</td></tr><tr><td><code>contentHashes[]</code></td><td>object?</td><td>예 (있을 때)</td><td>touched 파일의 sha256(내용은 미저장). 봉인은 <code>path:sha256</code>(정렬)을 사용.</td></tr><tr><td><code>actionsSummary</code> / <code>tapSummary</code></td><td>object?</td><td>아니오</td><td>요약 / 관측 메타데이터(봉인 제외).</td></tr><tr><td><code>environment</code> / <code>timestamp</code> / <code>measuredFrom</code> / <code>disclosure</code></td><td>해당없음</td><td>아니오</td><td>출처, 시간, 한계(머신과 시간에 따라 변해서 제외).</td></tr><tr><td><code>contentHash</code></td><td>string</td><td>해당없음</td><td>봉인값 자체(<code>"sha256:" + hex</code>).</td></tr></tbody></table></div>
+<h2>3. Seal (<code>contentHash</code>) 계산 (규범)</h2>
+<p>제3자는 봉인을 재현하려면 정확히 다음대로 해야 합니다.</p>
+<p><strong>3.1 정규화 (<code>stableStringify</code>).</strong> <code>JSON.stringify</code>를 쓰되, <strong>모든 객체의 키를 재귀적으로 사전순 정렬</strong>합니다. 배열은 순서를 유지합니다(호출부가 미리 정렬해 넣음). 숫자와 문자열 인코딩은 표준 ES <code>JSON.stringify</code>를 따릅니다. <em>(참고: 이는 RFC 8785 JCS와 유사하나 <strong>동일하지 않습니다</strong>. 이 형식의 봉인은 <code>stableStringify</code>가 규범입니다. 별도의 로그 / 원장 계층은 RFC 8785 JCS를 씁니다.)</em></p>
+<p><strong>3.2 봉인 preimage (payload).</strong> 다음 키를 가진 객체를 만듭니다(선택 키는 존재할 때만 포함):</p>
+<pre><code>{
+  headHash,
+  touched: sort(touched), staged: sort(staged),
+  untracked: sort(untracked), outOfScope: sort(outOfScope),
+  deniedHits: sort(deniedHits),
+  magnitude,
+  criticalTouched: sort(flatten(criticalPaths[].touched)),
+  checks: sort(checks.map(c =&gt; `${c.name}:${c.exitCode}:${c.requiredExit}:${c.ok}`)),
+  ok,
+  violations: sort(violations ?? []),
+  branch, contractId,
+  verdict?            // present only when present
+  contractSnapshot?   // present only when present
+  actionsDigest?         = "sha256:" + sha256(stableStringify(actions))        // only when actions present and non-empty
+  reconciliationDigest?  = "sha256:" + sha256(stableStringify(reconciliation)) // only when present
+  contentHashes?      = sort(contentHashes.map(c =&gt; `${c.path}:${c.sha256 ?? "null"}`)) // only when present
+}</code></pre>
+<p><strong>3.3 최종.</strong> <code>contentHash = "sha256:" + hex(sha256(utf8(stableStringify(payload))))</code>.</p>
+<p><strong>불변식.</strong> <code>schemaVersion</code>, <code>environment</code>, <code>timestamp</code>, <code>tapSummary</code>, <code>actionsSummary</code>는 봉인에서 제외됩니다. 존재하지 않는 선택 필드는 <strong>키 자체가 없어야</strong> 합니다(하위호환과 바이트 안정성).</p>
+<h2>4. Proof Bundle (폴더 구조)</h2>
+<div class='tw'><table><thead><tr><th>파일</th><th>필수</th><th>내용</th></tr></thead><tbody><tr><td><code>receipt.json</code></td><td>예</td><td>위 Receipt 객체.</td></tr><tr><td><code>anchor.dsse.json</code></td><td>선택</td><td>DSSE 봉투: <code>{ payloadType, payload(base64), signatures:[{ sig(base64), keyid? }] }</code>. payload는 in-toto Statement(5장).</td></tr><tr><td><code>public.pem</code></td><td>선택</td><td>서명 검증용 ed25519 공개키(SPKI PEM).</td></tr><tr><td><code>anchor.rekor.json</code></td><td>선택</td><td>투명성 로그 사이드카: <code>{ uuid, verifyUrl, logIndex }</code>.</td></tr><tr><td><code>evidence/*.json</code></td><td>선택</td><td>검증 영수증(오프라인 replay 대상).</td></tr></tbody></table></div>
+<h2>5. Signature (DSSE), 규범</h2>
+<p><strong>5.1 Statement.</strong> DSSE payload는 in-toto Statement입니다.</p>
+<p><strong>작업 영수증에 대한 증명 번들</strong>(<code>share-proof --bundle</code>과 <code>attest</code>가 생성)에서 참조 구현은 predicateType <code>https://promptia-labs.dev/agent-receipt/ai-work/v0.1</code>을 씁니다. subject는 다음과 같습니다:</p>
+<ul>
+<li><code>{ name: "ai-work-receipt", digest: { sha256: &lt;"sha256:" 접두를 뺀 contentHash&gt; } }</code></li>
+<li><code>{ name: "git-commit", digest: { gitCommit: &lt;headHash&gt; } }</code></li>
+</ul>
+<p>predicate는 판정 관련 필드(<code>ok</code>, <code>branch</code>, <code>{name, ok}</code>로 압축한 <code>checks</code> 목록)를 담습니다. <code>subject[0].digest.sha256</code>이 영수증 <code>contentHash</code>(3장)에 묶이고 봉인이 이제 판정 필드를 덮으므로, 영수증 본문이나 판정 중 하나라도 변조하면 이 결합이 깨집니다.</p>
+<p><strong>별도</strong> 경로(<code>predicate --sign</code>)는 검증 영수증(research / council / bench)을 predicateType <code>https://promptia-labs.dev/agent-receipt/claim-verification/v1</code>로 서명하며, 그 <code>subject[0].digest.sha256</code>은 검증 영수증의 <code>contentHash</code>입니다. <code>docs/PREDICATE.md</code> 참고.</p>
+<p><strong>5.2 PAE (Pre-Authentication Encoding).</strong> 서명 대상 바이트는 DSSE 표준 PAE입니다:</p>
+<pre><code>"DSSEv1 " + len(payloadType) + " " + payloadType + " " + len(payload) + " " + payload</code></pre>
+<p><strong>5.3 알고리즘.</strong> ed25519. 서명은 PAE 바이트에 대해 검증합니다. 키는 <code>public.pem</code>(SPKI)입니다.</p>
+<h2>6. Verification 절차 (규범)</h2>
+<p>Verifier는 순서대로:</p>
+<ol>
+<li><strong>receipt-parse</strong>: <code>receipt.json</code>이 파싱됨.</li>
+<li><strong>receipt-hash</strong>: <code>contentHash</code>(3장)를 재계산해 대조. <strong>불일치는 반드시 실패</strong>로 처리합니다. <code>schemaVersion &lt; 1.1</code>이면 <strong>문구만</strong> "변조, 또는 재발행이 필요한 0.24 이전 형식"으로 완화합니다(상태는 fail 유지: 0.24 이전 영수증은 약한 봉인을 썼으므로 유효로 인정하면 안 됨). <code>schemaVersion &gt;= 1.1</code>이면 변조 신호입니다.</li>
+<li><strong>dsse-signature / dsse-subject</strong>: <code>anchor.dsse.json</code>과 <code>public.pem</code>이 있으면, PAE에 대한 ed25519 서명을 검증하고, Statement subject digest가 영수증 <code>contentHash</code>와 같은지 확인합니다.</li>
+<li><strong>rekor-sidecar</strong>: <code>anchor.rekor.json</code>이 있으면 형식을 확인합니다(<code>uuid</code> 길이 &gt;= 40, <code>verifyUrl</code> 존재). <em>오프라인, 네트워크 0.</em></li>
+<li><strong>evidence-replay</strong>: <code>evidence/*.json</code>이 있으면 각각의 봉인을 재계산합니다.</li>
+</ol>
+<p><strong>종합 판정.</strong> 어떤 검사도 <code>fail</code>이 아니면 번들은 통과입니다. <strong>다만, 오프라인 검사가 통과했다고 그 자체로 "생성 시점 그대로"를 뜻하지는 않습니다.</strong> 봉인은 비밀 없는 SHA-256이라 누구나 재계산할 수 있고, 자가관리 DSSE 키는 발행자가 쥐고 있으므로, 둘 다 위조된 번들에도 붙어 있을 수 있습니다. 따라서 Verifier는 <strong>독립적인 제3자 앵커(Rekor 항목)</strong>가 있을 때만 더 강한 "생성 시점 그대로" 표현을 써야 하고, 그마저도 실제 확인은 사람이 투명성 로그 링크를 여는 것입니다(이 명령은 오프라인). 그 외에는 결과를 <strong>자가 주장 무결성</strong>으로 표현합니다.</p>
+<p><strong>Exit 코드.</strong> <code>0</code> = 통과, <code>1</code> = 검증 실패, <code>2</code> = 입력 오류.</p>
+<h2>7. 신뢰 모델 (정직 고지)</h2>
+<ul>
+<li>자가관리 키 서명은 <strong>무결성과 키 소유</strong>를 보이지만 <strong>신원</strong>은 아닙니다. 신원은 외부에서 옵니다(온라인 확인된 투명성 로그 항목, 또는 핀된 키).</li>
+<li>Rekor 사이드카의 존재만으로는 항목의 실재나 바인딩을 증명하지 않습니다(온라인 확인은 별개).</li>
+<li>이 형식은 <strong>컴플라이언스 검토용 증거</strong>이지 컴플라이언스 보장이 아닙니다.</li>
+</ul>
+<h2>8. 표준화 To-Do (정식 공개 전)</h2>
+<ol>
+<li><strong>적합성 테스트 벡터</strong>: <code>test/vectors/vectors.json</code>은 참조 구현이 생성한 <code>(receipt, expectedContentHash)</code> 쌍을 담습니다(<code>node test/vectors/generate.mjs</code>). 다른 구현은 각 <code>receipt</code>에 대해 봉인(3장)을 재계산해 <code>expectedContentHash</code>와 같은지 확인할 수 있습니다. CI의 <code>test/receipt-vectors.test.mjs</code>가 이를 재검증하며, 봉인의 우발적 변경도 함께 막습니다.</li>
+<li><strong>스펙 URL 네임스페이스</strong>: 이 스펙은 <code>receipt.promptia.kr/spec</code>에 게시됩니다. predicateType URI는 Promptia Labs 도메인(<code>promptia-labs.dev</code>)에 있습니다: <code>.../agent-receipt/ai-work/v0.1</code>와 <code>.../agent-receipt/claim-verification/v1</code>.</li>
+<li><strong>정식 JSON Schema</strong>: 권위 있는 스키마를 배포(구현의 <code>claimSchema</code> 확장).</li>
+<li><strong>버전 정책</strong>: <code>1.1</code>에서 <code>1.x</code>는 additive이며, 봉인 preimage(3.2)의 변경은 major 버전입니다.</li>
+<li><strong>개방 거버넌스</strong>: 표준은 통제를 나눌 때만 채택되므로, 거버넌스 모델을 명시합니다.</li>
+</ol>
+<blockquote>이 초안은 코드를 읽어 파악한 실제 구현을 반영합니다. 8.1의 테스트 벡터가 바이트 단위로 고정하니, 정식으로 확정하기 전에 그것으로 검증하세요.</blockquote>
+</div>
+</body>
+</html>

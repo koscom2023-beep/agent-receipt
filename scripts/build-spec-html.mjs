@@ -1,11 +1,12 @@
-// SPEC.md → site/spec.html 생성 (단일 원천=SPEC.md·손 옮김 오류 0·no deps).
-// receipt.promptia.kr/spec.html 로 서빙. 코드블록/표는 규범적이라 그대로 옮긴다.
+// SPEC.md / SPEC.ko.md → site/spec.html / site/spec-ko.html 생성 (단일 원천·손 옮김 오류 0·no deps).
+// receipt.promptia.kr/spec (영어) · /spec-ko (한국어) 로 서빙. 코드블록/표는 규범적이라 그대로 옮긴다.
 // 재생성: `node scripts/build-spec-html.mjs`. 동기화 검증: test/spec-html.test.mjs.
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+const GH = "https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split";
 
 const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 function inline(s) {
@@ -22,7 +23,7 @@ function inline(s) {
 }
 const isTableSep = (row) => /^\s*\|?[\s:|-]+\|?\s*$/.test(row) && row.includes("-");
 
-export function renderSpecHtml(md) {
+function mdBody(md) {
   const lines = md.split("\n");
   const out = [];
   let i = 0;
@@ -74,13 +75,27 @@ export function renderSpecHtml(md) {
     out.push("<p>" + inline(line) + "</p>");
     i++;
   }
-  const body = out.join("\n");
+  return out.join("\n");
+}
+
+const NAV = {
+  en: `<a href="/en">agent-receipt</a><a href="/verify">Verify</a><a href="/spec-ko">한국어</a><a href="${GH}/SPEC.md">GitHub source</a><a href="${GH}/test/vectors/vectors.json">test vectors</a>`,
+  ko: `<a href="/">agent-receipt</a><a href="/verify">봉인 검증</a><a href="/spec">English</a><a href="${GH}/SPEC.ko.md">GitHub 원문</a><a href="${GH}/test/vectors/vectors.json">test vectors</a>`,
+};
+const TITLE = {
+  en: "Agent Receipt Format Spec · agent-receipt",
+  ko: "영수증 형식 명세 · agent-receipt",
+};
+
+export function renderSpecHtml(md, opts = {}) {
+  const lang = opts.lang === "ko" ? "ko" : "en";
+  const body = mdBody(md);
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="${lang}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Agent Receipt Format Spec · agent-receipt</title>
+<title>${TITLE[lang]}</title>
 <meta name="description" content="The open format specification for AI-work audit receipts: seal algorithm, proof bundle, DSSE signature, and verification procedure. Reproducible without trusting any tool.">
 <style>
   :root{ --paper:#faf9f6;--raised:#fff;--ink:#211d18;--mut:#6b6459;--rule:#e6e1d8;--rule-soft:#efece5;--accent:#b5502a;
@@ -102,7 +117,7 @@ export function renderSpecHtml(md) {
 </head>
 <body>
 <div class="wrap">
-<div class="top"><a href="/">agent-receipt</a><a href="verify.html">봉인 검증</a><a href="https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/SPEC.md">GitHub 원문</a><a href="https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/test/vectors/vectors.json">test vectors</a></div>
+<div class="top">${NAV[lang]}</div>
 ${body}
 </div>
 </body>
@@ -111,7 +126,7 @@ ${body}
 }
 
 if (process.argv[1] && process.argv[1] === fileURLToPath(import.meta.url)) {
-  const page = renderSpecHtml(readFileSync(join(root, "SPEC.md"), "utf8"));
-  writeFileSync(join(root, "site", "spec.html"), page);
-  console.log("site/spec.html 생성 (SPEC.md 기계변환·규범 블록 그대로)");
+  writeFileSync(join(root, "site", "spec.html"), renderSpecHtml(readFileSync(join(root, "SPEC.md"), "utf8"), { lang: "en" }));
+  writeFileSync(join(root, "site", "spec-ko.html"), renderSpecHtml(readFileSync(join(root, "SPEC.ko.md"), "utf8"), { lang: "ko" }));
+  console.log("site/spec.html + site/spec-ko.html 생성 (SPEC.md / SPEC.ko.md 기계변환·규범 블록 그대로)");
 }
