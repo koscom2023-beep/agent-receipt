@@ -1,0 +1,351 @@
+[
+  {
+    "name": "minimal-pass",
+    "expectedContentHash": "sha256:31dee8daf544c0354d8ffd8e98a02f450f99c281f95ab3b1c1521bcf72e415ac",
+    "receipt": {
+      "schemaVersion": "1.1",
+      "ok": true,
+      "contractId": "vec-contract",
+      "title": null,
+      "branch": {
+        "current": "main",
+        "expected": "main",
+        "ok": true
+      },
+      "headHash": "0123456789abcdef0123456789abcdef01234567",
+      "timestamp": "2026-01-01T00:00:00.000Z",
+      "touched": [],
+      "staged": [],
+      "untracked": [],
+      "outOfScope": [],
+      "deniedHits": [],
+      "violations": [],
+      "session": null,
+      "checks": [],
+      "magnitude": {
+        "filesChanged": 0,
+        "added": 0,
+        "deleted": 0,
+        "newFiles": 0
+      },
+      "criticalPaths": [],
+      "policy": null,
+      "environment": {
+        "agentReceiptVersion": "vec",
+        "nodeVersion": "vec",
+        "os": "vec"
+      },
+      "disclosure": "test vector",
+      "contentHash": "sha256:31dee8daf544c0354d8ffd8e98a02f450f99c281f95ab3b1c1521bcf72e415ac"
+    }
+  },
+  {
+    "name": "fail-with-violations",
+    "expectedContentHash": "sha256:c3b65a8ebd3ef5dd8ff91755c0f8e0dcce340670261480549130143da72bccb6",
+    "receipt": {
+      "schemaVersion": "1.1",
+      "ok": false,
+      "contractId": "vec-contract",
+      "title": null,
+      "branch": {
+        "current": "main",
+        "expected": "main",
+        "ok": true
+      },
+      "headHash": "0123456789abcdef0123456789abcdef01234567",
+      "timestamp": "2026-01-01T00:00:00.000Z",
+      "touched": [],
+      "staged": [],
+      "untracked": [],
+      "outOfScope": [],
+      "deniedHits": [],
+      "violations": [
+        "out-of-scope: secret.txt",
+        "denied: .env"
+      ],
+      "session": null,
+      "checks": [],
+      "magnitude": {
+        "filesChanged": 0,
+        "added": 0,
+        "deleted": 0,
+        "newFiles": 0
+      },
+      "criticalPaths": [],
+      "policy": null,
+      "environment": {
+        "agentReceiptVersion": "vec",
+        "nodeVersion": "vec",
+        "os": "vec"
+      },
+      "disclosure": "test vector",
+      "contentHash": "sha256:c3b65a8ebd3ef5dd8ff91755c0f8e0dcce340670261480549130143da72bccb6"
+    }
+  },
+  {
+    "name": "with-changes-and-checks",
+    "expectedContentHash": "sha256:3b3a823ad1dc5bad527c900c1ce93c41c03b264bae4bd67619f8be39a04783e7",
+    "receipt": {
+      "schemaVersion": "1.1",
+      "ok": true,
+      "contractId": "vec-contract",
+      "title": null,
+      "branch": {
+        "current": "main",
+        "expected": "main",
+        "ok": true
+      },
+      "headHash": "0123456789abcdef0123456789abcdef01234567",
+      "timestamp": "2026-01-01T00:00:00.000Z",
+      "touched": [
+        "src/b.ts",
+        "src/a.ts"
+      ],
+      "staged": [
+        "src/a.ts"
+      ],
+      "untracked": [],
+      "outOfScope": [],
+      "deniedHits": [],
+      "violations": [],
+      "session": null,
+      "checks": [
+        {
+          "name": "tsc",
+          "exitCode": 0,
+          "requiredExit": 0,
+          "ok": true
+        },
+        {
+          "name": "test",
+          "exitCode": 1,
+          "requiredExit": 0,
+          "ok": false
+        }
+      ],
+      "magnitude": {
+        "filesChanged": 2,
+        "added": 40,
+        "deleted": 3,
+        "newFiles": 0
+      },
+      "criticalPaths": [],
+      "policy": null,
+      "environment": {
+        "agentReceiptVersion": "vec",
+        "nodeVersion": "vec",
+        "os": "vec"
+      },
+      "disclosure": "test vector",
+      "contentHash": "sha256:3b3a823ad1dc5bad527c900c1ce93c41c03b264bae4bd67619f8be39a04783e7"
+    }
+  },
+  {
+    "name": "with-verdict-and-snapshot",
+    "expectedContentHash": "sha256:f9e5b5ab8eed9f49fdae7e0a941d046fbf61388f7f5aa8ed76c96e254d033d4d",
+    "receipt": {
+      "schemaVersion": "1.1",
+      "ok": true,
+      "contractId": "vec-contract",
+      "title": null,
+      "branch": {
+        "current": "main",
+        "expected": "main",
+        "ok": true
+      },
+      "headHash": "0123456789abcdef0123456789abcdef01234567",
+      "timestamp": "2026-01-01T00:00:00.000Z",
+      "touched": [],
+      "staged": [],
+      "untracked": [],
+      "outOfScope": [],
+      "deniedHits": [],
+      "violations": [],
+      "session": null,
+      "checks": [],
+      "magnitude": {
+        "filesChanged": 0,
+        "added": 0,
+        "deleted": 0,
+        "newFiles": 0
+      },
+      "criticalPaths": [],
+      "policy": null,
+      "environment": {
+        "agentReceiptVersion": "vec",
+        "nodeVersion": "vec",
+        "os": "vec"
+      },
+      "disclosure": "test vector",
+      "verdict": {
+        "verdict": "PASS",
+        "reasons": [
+          "all checks passed"
+        ],
+        "mark": "PASS"
+      },
+      "contractSnapshot": {
+        "kind": "implementation",
+        "contractHash": "sha256:deadbeef",
+        "allowedGlobs": 2,
+        "deniedGlobs": [
+          ".env"
+        ]
+      },
+      "contentHash": "sha256:f9e5b5ab8eed9f49fdae7e0a941d046fbf61388f7f5aa8ed76c96e254d033d4d"
+    }
+  },
+  {
+    "name": "with-actions-and-reconciliation",
+    "expectedContentHash": "sha256:190374a2eff8c8665c0317423221f34e95aedcbdd6e50b3fb490325aa98f3225",
+    "receipt": {
+      "schemaVersion": "1.1",
+      "ok": true,
+      "contractId": "vec-contract",
+      "title": null,
+      "branch": {
+        "current": "main",
+        "expected": "main",
+        "ok": true
+      },
+      "headHash": "0123456789abcdef0123456789abcdef01234567",
+      "timestamp": "2026-01-01T00:00:00.000Z",
+      "touched": [],
+      "staged": [],
+      "untracked": [],
+      "outOfScope": [],
+      "deniedHits": [],
+      "violations": [],
+      "session": null,
+      "checks": [],
+      "magnitude": {
+        "filesChanged": 0,
+        "added": 0,
+        "deleted": 0,
+        "newFiles": 0
+      },
+      "criticalPaths": [],
+      "policy": null,
+      "environment": {
+        "agentReceiptVersion": "vec",
+        "nodeVersion": "vec",
+        "os": "vec"
+      },
+      "disclosure": "test vector",
+      "actions": [
+        {
+          "flag": "WRITE",
+          "path": "src/x.ts"
+        },
+        {
+          "flag": "READ",
+          "path": "src/y.ts"
+        }
+      ],
+      "reconciliation": {
+        "matched": 1,
+        "residuals": [],
+        "gitVisible": 1
+      },
+      "contentHash": "sha256:190374a2eff8c8665c0317423221f34e95aedcbdd6e50b3fb490325aa98f3225"
+    }
+  },
+  {
+    "name": "with-content-hashes",
+    "expectedContentHash": "sha256:e2091408a8dcb9e7d68190ae83f0e2873845188dfe2446203587f0d6ec895c04",
+    "receipt": {
+      "schemaVersion": "1.1",
+      "ok": true,
+      "contractId": "vec-contract",
+      "title": null,
+      "branch": {
+        "current": "main",
+        "expected": "main",
+        "ok": true
+      },
+      "headHash": "0123456789abcdef0123456789abcdef01234567",
+      "timestamp": "2026-01-01T00:00:00.000Z",
+      "touched": [
+        "src/a.ts"
+      ],
+      "staged": [],
+      "untracked": [],
+      "outOfScope": [],
+      "deniedHits": [],
+      "violations": [],
+      "session": null,
+      "checks": [],
+      "magnitude": {
+        "filesChanged": 0,
+        "added": 0,
+        "deleted": 0,
+        "newFiles": 0
+      },
+      "criticalPaths": [],
+      "policy": null,
+      "environment": {
+        "agentReceiptVersion": "vec",
+        "nodeVersion": "vec",
+        "os": "vec"
+      },
+      "disclosure": "test vector",
+      "contentHashes": [
+        {
+          "path": "src/a.ts",
+          "sha256": "sha256:cafebabe",
+          "bytes": 128
+        }
+      ],
+      "contentHash": "sha256:e2091408a8dcb9e7d68190ae83f0e2873845188dfe2446203587f0d6ec895c04"
+    }
+  },
+  {
+    "name": "critical-path-touched",
+    "expectedContentHash": "sha256:86936a74eb622673016170a5224f97436ae588f6d55eb0ba1db9b5b4317d3e5b",
+    "receipt": {
+      "schemaVersion": "1.1",
+      "ok": true,
+      "contractId": "vec-contract",
+      "title": null,
+      "branch": {
+        "current": "main",
+        "expected": "main",
+        "ok": true
+      },
+      "headHash": "0123456789abcdef0123456789abcdef01234567",
+      "timestamp": "2026-01-01T00:00:00.000Z",
+      "touched": [
+        "billing/charge.ts"
+      ],
+      "staged": [],
+      "untracked": [],
+      "outOfScope": [],
+      "deniedHits": [],
+      "violations": [],
+      "session": null,
+      "checks": [],
+      "magnitude": {
+        "filesChanged": 0,
+        "added": 0,
+        "deleted": 0,
+        "newFiles": 0
+      },
+      "criticalPaths": [
+        {
+          "glob": "billing/**",
+          "touched": [
+            "billing/charge.ts"
+          ]
+        }
+      ],
+      "policy": null,
+      "environment": {
+        "agentReceiptVersion": "vec",
+        "nodeVersion": "vec",
+        "os": "vec"
+      },
+      "disclosure": "test vector",
+      "contentHash": "sha256:86936a74eb622673016170a5224f97436ae588f6d55eb0ba1db9b5b4317d3e5b"
+    }
+  }
+]

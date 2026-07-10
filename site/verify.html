@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>봉인 검증 · agent-receipt</title>
+<meta name="description" content="작업 영수증(receipt.json)의 봉인(contentHash)을 브라우저 안에서 다시 계산해 변조 여부를 확인합니다. 서버로 아무것도 보내지 않습니다.">
+<style>
+  :root{
+    --paper:#faf9f6; --raised:#ffffff; --ink:#211d18; --mut:#6b6459; --rule:#e6e1d8; --rule-soft:#efece5;
+    --pass:#1a7f37; --fail:#c0392b; --warn:#8a6d00; --accent:#b5502a;
+    --pass-bg:#1a7f3714; --fail-bg:#c0392b12; --warn-bg:#8a6d0014;
+    --ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Pretendard,"Apple SD Gothic Neo","Noto Sans KR",Roboto,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --paper:#17150f; --raised:#211d15; --ink:#efe9dc; --mut:#a89f8c; --rule:#332d20; --rule-soft:#26221a;
+      --pass:#57c98a; --fail:#f0796a; --warn:#e0b24c; --accent:#e08a5a; --pass-bg:#57c98a1a; --fail-bg:#f0796a1a; --warn-bg:#e0b24c1a; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--ui);line-height:1.6;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:760px;margin:0 auto;padding:40px 20px 64px}
+  h1{font-size:26px;margin:0 0 6px;letter-spacing:-.01em}
+  .sub{color:var(--mut);margin:0 0 28px;font-size:15px}
+  code,.mono{font-family:var(--mono)}
+  textarea{width:100%;min-height:180px;background:var(--raised);color:var(--ink);border:1px solid var(--rule);
+    border-radius:12px;padding:14px;font-family:var(--mono);font-size:13px;line-height:1.5;resize:vertical}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:14px 0}
+  button{background:var(--accent);color:#fff;border:0;border-radius:9px;padding:11px 20px;font-weight:600;font-size:14px;cursor:pointer;font-family:var(--ui)}
+  button.ghost{background:transparent;color:var(--ink);border:1px solid var(--rule)}
+  .drop{border:1.5px dashed var(--rule);border-radius:12px;padding:16px;text-align:center;color:var(--mut);font-size:13.5px;cursor:pointer;margin-bottom:12px}
+  .drop.over{border-color:var(--accent);color:var(--ink)}
+  .result{border-radius:12px;padding:18px 20px;margin-top:20px;border:1px solid var(--rule);background:var(--raised);display:none}
+  .result.show{display:block}
+  .verdict{font-size:20px;font-weight:700;margin:0 0 8px;display:flex;align-items:center;gap:10px}
+  .result.intact{border-color:var(--pass);background:var(--pass-bg)} .result.intact .verdict{color:var(--pass)}
+  .result.tampered{border-color:var(--fail);background:var(--fail-bg)} .result.tampered .verdict{color:var(--fail)}
+  .result.reissue{border-color:var(--warn);background:var(--warn-bg)} .result.reissue .verdict{color:var(--warn)}
+  .result.error{border-color:var(--fail)} .result.error .verdict{color:var(--fail)}
+  .kv{font-size:12.5px;color:var(--mut);margin-top:10px;word-break:break-all}
+  .kv b{color:var(--ink);font-weight:600}
+  .note{background:var(--rule-soft);border:1px solid var(--rule);border-left:3px solid var(--warn);
+    border-radius:10px;padding:14px 16px;color:var(--mut);font-size:13px;margin-top:26px}
+  .note b{color:var(--ink)}
+  a{color:var(--accent)}
+  .foot{margin-top:28px;color:var(--mut);font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>작업 영수증 봉인 검증</h1>
+  <p class="sub">받은 <code>receipt.json</code>을 붙여넣거나 끌어다 놓으면, 봉인(<code>contentHash</code>)을 <b>브라우저 안에서 다시 계산</b>해 생성 후 변조 여부를 확인합니다. 서버로 아무것도 보내지 않습니다.</p>
+
+  <div class="drop" id="drop">.json 파일을 여기 끌어다 놓거나, 아래에 붙여넣으세요</div>
+  <textarea id="ta" placeholder='{ "schemaVersion": "1.1", "contentHash": "sha256:...", "ok": true, ... }'></textarea>
+  <div class="row">
+    <button id="go">봉인 검증</button>
+    <button class="ghost" id="sample">샘플 넣기</button>
+    <button class="ghost" id="clear">지우기</button>
+  </div>
+
+  <div class="result" id="res">
+    <div class="verdict" id="verdict"></div>
+    <div id="detail"></div>
+    <div class="kv" id="kv"></div>
+  </div>
+
+  <div class="note">⚠️ <b>이 페이지는 봉인(contentHash) 한 가지만 확인합니다.</b> 서명(DSSE)·제3자 앵커(Rekor)·증거 재생성까지 포함한 전체 검증은 CLI <code>agent-receipt verify-proof &lt;bundle&gt;</code>로 하세요(오프라인·네트워크 0). 봉인이 맞아도 자가관리 키만으로는 "이 도구가 만들었다"는 보장이 아닙니다. 형식은 <a href="https://github.com/koscom2023-beep/agent-receipt/blob/v0.1-verify-check-split/SPEC.md">공개 스펙</a>으로 정의돼 있어, 이 페이지 없이 누구나 같은 계산을 재현할 수 있습니다.</div>
+
+  <div class="foot">봉인 계산 = <code>site/receipthash.js</code> (참조 구현 <code>src/receipt.ts</code>의 검증된 미러). Promptia Labs · MIT</div>
+</div>
+
+<script src="receipthash.js"></script>
+<script>
+  var ta = document.getElementById('ta'), res = document.getElementById('res');
+  function show(cls, mark, title, detailHtml, kvHtml){
+    res.className = 'result show ' + cls;
+    document.getElementById('verdict').textContent = mark + '  ' + title;
+    document.getElementById('detail').innerHTML = detailHtml || '';
+    document.getElementById('kv').innerHTML = kvHtml || '';
+  }
+  async function verify(){
+    var txt = ta.value.trim();
+    if(!txt){ show('error','⚠','입력이 비었습니다','receipt.json 을 붙여넣거나 파일을 놓으세요.',''); return; }
+    var r; try{ r = JSON.parse(txt); }catch(e){ show('error','❌','JSON 파싱 실패','유효한 receipt.json 이 아닙니다: '+e.message,''); return; }
+    var out;
+    try{ out = await globalThis.AgentReceiptSeal.checkSeal(r); }
+    catch(e){ show('error','❌','검증 오류', String(e),''); return; }
+    var kv = '<b>stated</b> <code>'+(r.contentHash||'(없음)')+'</code><br><b>recomputed</b> <code>'+(out.recomputed||'-')+'</code>'
+           + '<br><b>schemaVersion</b> '+(r.schemaVersion||'(없음)');
+    if(out.status==='intact'){
+      show('intact','✅','봉인 일치. 생성 후 이 본문은 그대로입니다.',
+        '재계산한 봉인이 receipt 의 contentHash 와 같습니다. (단, 위 안내대로 전체 신뢰는 서명·앵커까지 확인해야 합니다.)', kv);
+    } else if(out.status==='reissue'){
+      show('reissue','⚠','재발행 필요 (0.24 이전 형식).',
+        '봉인이 안 맞습니다. schemaVersion 이 1.1 미만이라, 판정을 봉인하지 않던 옛 방식일 수 있습니다. 발신자에게 최신 도구로 재발행을 요청해 다시 검증하세요. (변조일 가능성도 배제되지 않습니다.)', kv);
+    } else if(out.status==='error'){
+      show('error','❌','계산 오류', out.detail||'', kv);
+    } else {
+      show('tampered','❌','봉인 불일치 (변조 신호).',
+        '재계산한 봉인이 contentHash 와 다릅니다. 생성 후 receipt.json 이 바뀌었다는 신호입니다.', kv);
+    }
+  }
+  document.getElementById('go').onclick = verify;
+  document.getElementById('clear').onclick = function(){ ta.value=''; res.className='result'; };
+  document.getElementById('sample').onclick = async function(){
+    var s = { schemaVersion:"1.1", ok:true, contractId:"demo", branch:{current:"main",expected:"main",ok:true},
+      headHash:"0123456789abcdef0123456789abcdef01234567", touched:["src/a.ts"], staged:[], untracked:[], outOfScope:[],
+      deniedHits:[], violations:[], checks:[{name:"tsc",exitCode:0,requiredExit:0,ok:true}],
+      magnitude:{filesChanged:1,added:10,deleted:0,newFiles:0}, criticalPaths:[] };
+    s.contentHash = await globalThis.AgentReceiptSeal.receiptHash(s);
+    ta.value = JSON.stringify(s, null, 2);
+    res.className='result';
+  };
+  var drop = document.getElementById('drop');
+  drop.onclick = function(){ var i=document.createElement('input'); i.type='file'; i.accept='.json,application/json';
+    i.onchange=function(){ var f=i.files[0]; if(!f) return; var rd=new FileReader(); rd.onload=function(){ ta.value=rd.result; verify(); }; rd.readAsText(f); }; i.click(); };
+  ['dragover','dragenter'].forEach(function(ev){ drop.addEventListener(ev,function(e){ e.preventDefault(); drop.classList.add('over'); }); });
+  ['dragleave','drop'].forEach(function(ev){ drop.addEventListener(ev,function(e){ e.preventDefault(); drop.classList.remove('over'); }); });
+  drop.addEventListener('drop', function(e){ var f=e.dataTransfer.files[0]; if(!f) return; var rd=new FileReader(); rd.onload=function(){ ta.value=rd.result; verify(); }; rd.readAsText(f); });
+</script>
+</body>
+</html>
