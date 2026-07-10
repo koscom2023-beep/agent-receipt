@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { receiptHash } from "../dist/receipt.js";
 
 const CLI = join(dirname(fileURLToPath(import.meta.url)), "..", "dist", "cli.js");
 let pass = 0;
@@ -134,9 +135,59 @@ check("배치B-7: 프리셋 — 사실 조건명·해시 공유·checks 키·판
   assert.ok(d.rows.every((x) => typeof x.checksTotal === "number" && typeof x.checksFailed === "number"), "checks 키 additive");
 });
 
+// ── v0.24 봉인 후속: 판정 미봉인 영수증 일관성 + 옛 형식(1.0) vs 변조(1.1) 구분 ──
+const mkBundle = (name, receiptObj) => {
+  const dir = join(repo, name);
+  rmSync(dir, { recursive: true, force: true });
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "receipt.json"), JSON.stringify(receiptObj, null, 2));
+  return name;
+};
+
+// (1) 리뷰 point 1: 판정(verdict)이 없는 영수증도 새 도장이 일관되게 나온다(옛 영수증 호환의 핵심 경로).
+{
+  const nv = JSON.parse(orig);
+  delete nv.verdict;
+  delete nv.contractSnapshot;
+  nv.contentHash = receiptHash(nv); // 판정 없이도 결정론적 봉인
+  const d = mkBundle("pb-noverdict", nv);
+  const rr = run(["verify-proof", d]);
+  check("판정 없는 영수증 = 봉인 일관(receipt-hash 통과)", () => {
+    assert.equal(rr.status, 0, rr.stdout + rr.stderr);
+    assert.ok(rr.stdout.includes("✅ receipt-hash"), rr.stdout);
+  });
+}
+
+// (2) 옛 형식(schemaVersion 1.0·해시 불일치) = 변조 단정 대신 재발행 안내. 단 status 는 여전히 fail(약한 도장 유효화 방지).
+{
+  const old = JSON.parse(orig);
+  old.schemaVersion = "1.0";
+  old.contentHash = "sha256:" + "0".repeat(64); // 옛 도장 시뮬레이션(현재 계산과 어긋남)
+  const d = mkBundle("pb-old", old);
+  const rr = run(["verify-proof", d]);
+  check("옛 형식(1.0) 불일치 = 재발행 안내 + fail(옛 약한 도장 통과 안 함)", () => {
+    assert.equal(rr.status, 1, rr.stdout);
+    assert.ok(rr.stdout.includes("❌ receipt-hash"), rr.stdout);
+    assert.ok(rr.stdout.includes("재발행") && rr.stdout.includes("0.24 이전"), rr.stdout);
+  });
+}
+
+// (3) 새 형식(schemaVersion 1.1·해시 불일치) = 변조 신호(재발행 안내 아님).
+{
+  const nw = JSON.parse(orig);
+  nw.schemaVersion = "1.1";
+  nw.contentHash = "sha256:" + "0".repeat(64);
+  const d = mkBundle("pb-new-tamper", nw);
+  const rr = run(["verify-proof", d]);
+  check("새 형식(1.1) 불일치 = 변조 신호(재발행 아님)", () => {
+    assert.equal(rr.status, 1, rr.stdout);
+    assert.ok(rr.stdout.includes("변조 신호") && !rr.stdout.includes("재발행"), rr.stdout);
+  });
+}
+
 rmSync(repo, { recursive: true, force: true });
 if (fail.length) {
   console.error(`verifyproof-inbox.test: FAIL ${fail.length}\n - ` + fail.join("\n - "));
   process.exit(1);
 }
-console.log(`verifyproof-inbox.test: OK (${pass}) — 통과/변조 격추(receipt·evidence)/exit2 + inbox 버킷·창·자백·HTML`);
+console.log(`verifyproof-inbox.test: OK (${pass}) — 통과/변조 격추(receipt·evidence)/exit2 + 판정없음 봉인일관 + 옛형식vs변조 구분 + inbox 버킷·창·자백·HTML`);

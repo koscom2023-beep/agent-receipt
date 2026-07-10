@@ -15,8 +15,10 @@ import { loadCapturedActions, loadReconciliation, splitActionsForDisplay, type C
 import { renderVerdictLine, renderContractLine, type VerdictResult, type ContractSnapshot } from "./verdict.js"; // 런타임 순환 없음(verdict→receipt 는 type-only)
 import { buildTapSummary, type TapSummary } from "./tap.js"; // mcp-tap 관측 요약(순환 없음 — tap 은 jcs/version 만 import)
 
-// receipt JSON 스키마 버전(downstream/CI 가 안전하게 의존). additive only. verify --json 14키와 무관.
-export const RECEIPT_SCHEMA_VERSION = "1.0";
+// receipt JSON 스키마 버전(downstream/CI 가 안전하게 의존). 필드 구조는 additive only. verify --json 14키와 무관.
+// v0.24: 1.0 → 1.1. 봉인(receiptHash)이 판정까지 덮도록 바뀐 형식 표식. verify-proof 가 이 값으로 옛 영수증
+//   (1.0·판정 미봉인)을 "변조"가 아니라 "재발행 필요"로 구분한다(0.23 이전 영수증의 거짓 변조경보 방지).
+export const RECEIPT_SCHEMA_VERSION = "1.1";
 
 // AI Work Receipt — verify(상태) + check(명령) 결과 스냅샷. verify --json(14키)와 별개 스키마.
 export interface Receipt {

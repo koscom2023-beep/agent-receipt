@@ -59,7 +59,22 @@ export function verifyProofBundle(dir: string): { checks: ProofCheck[]; ok: bool
     } catch {
       ok = false;
     }
-    push("receipt-hash", ok, "봉인 재계산 일치 — 영수증 본문은 생성 시점 그대로");
+    if (ok) {
+      push("receipt-hash", true, "봉인 재계산 일치. 영수증 본문은 생성 시점 그대로입니다.");
+    } else {
+      // v0.24 후속: 불일치가 "변조"인지 "옛 형식"인지 구분한다. 0.24 이전(schemaVersion < 1.1)은 판정을 봉인하지
+      //   않던 방식이라, 새 도구로 재계산하면 자연히 어긋난다. 그 경우 변조라 단정하지 말고 재발행 가능성을 병기한다.
+      //   단 status 는 여전히 fail(exit 1) 유지. 옛 약한 도장을 유효로 통과시키지 않는다(이번 보안수정 무력화 방지).
+      const sv = parseFloat(String(receipt.schemaVersion ?? "1.0"));
+      const preSeal = !Number.isFinite(sv) || sv < 1.1;
+      checks.push({
+        id: "receipt-hash",
+        status: "fail",
+        detail: preSeal
+          ? `봉인 재계산 불일치(schemaVersion=${receipt.schemaVersion ?? "미상"}). 원인은 둘 중 하나입니다: (1) 생성 후 변조, 또는 (2) 0.24 이전 형식(판정을 봉인하지 않던 옛 방식). 옛 형식이면 발신자에게 재발행(re-issue)을 요청해 다시 검증하세요.`
+          : FAIL_WORDS["receipt-hash"],
+      });
+    }
   } else {
     push("receipt-hash", null, "", "receipt 파싱 실패로 생략");
   }
