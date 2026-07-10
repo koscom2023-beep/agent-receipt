@@ -42,13 +42,13 @@ export interface Receipt {
   disclosure: string; // 한계 고지(이 도구가 못 보는 것)
   measuredFrom?: string; // 커밋-모드일 때만: `committed:<base>` (측정 대상=base..HEAD 커밋). 미지정=작업트리. receiptHash 입력엔 미포함(메타·additive → 기존 영수증 바이트동일).
   contentHashes?: Array<{ path: string; sha256: string | null; bytes: number }>; // --content 일 때만: touched 파일 sha256(내용 저장 안 함). 있을 때만 contentHash 입력에 포함.
-  actions?: CaptureAction[]; // capture(git 너머 행위) — capture.jsonl 있을 때만. contentHash 입력엔 미포함(metadata·additive). 없으면 키 부재 → 기존 출력 바이트동일.
-  actionsSummary?: ActionsResult["actionsSummary"]; // 행위 요약(gitVisible 대비). 〃(해시 제외)
-  reconciliation?: ReconResult; // D4: git 변경 ↔ capture 대사(matched/미설명 residuals). capture 있을 때만. receiptHash 입력 제외(metadata·additive) → 없으면 키 부재·기존 바이트동일.
-  verdict?: VerdictResult; // P0 D1(v0.17): 세션 판정(게이트·점수 아님) — done 이 부착. receiptHash 입력 제외(metadata·additive).
-  contractSnapshot?: ContractSnapshot; // P0 D2: 계약 최소필드+contractHash 포인터 — done 이 부착. receiptHash 입력 제외(metadata·additive).
-  tapSummary?: TapSummary; // mcp-tap 관측 요약(커서 이후 창) — tap 레코드 있을 때만. receiptHash 입력 제외(metadata·additive) → 미사용=키 부재·기존 바이트동일. 등급=controls 위계 C(자가 관측)·판정 비유입.
-  contentHash: string; // sha256 무결성 해시(timestamp/environment/schemaVersion/actions 제외 — 아래 receiptHash 입력 참고)
+  actions?: CaptureAction[]; // capture(git 너머 행위). capture.jsonl 있을 때만. v0.24: 있으면 다이제스트로 receiptHash 봉인(proof HTML 이 그림). 없으면 키 부재.
+  actionsSummary?: ActionsResult["actionsSummary"]; // 행위 요약(gitVisible 대비). receiptHash 입력 제외(actions 다이제스트가 대표).
+  reconciliation?: ReconResult; // D4: git 변경 대 capture 대사(matched/미설명 residuals). capture 있을 때만. v0.24: 있으면 다이제스트로 receiptHash 봉인.
+  verdict?: VerdictResult; // P0 D1(v0.17): 세션 판정(게이트·점수 아님). done 이 부착. v0.24: 있으면 receiptHash 에 봉인(판정 위변조 차단).
+  contractSnapshot?: ContractSnapshot; // P0 D2: 계약 최소필드+contractHash 포인터. done 이 부착. v0.24: 있으면 receiptHash 에 봉인.
+  tapSummary?: TapSummary; // mcp-tap 관측 요약(커서 이후 창). tap 레코드 있을 때만. receiptHash 입력 제외(자가 관측·판정 비유입·등급 C). 미사용=키 부재.
+  contentHash: string; // sha256 무결성 해시. git 실측 + 판정(ok/violations/branch/contractId/verdict 등) 봉인. timestamp/environment/schemaVersion 제외. 아래 receiptHash 참고.
 }
 
 // 키를 정렬해 직렬화(객체 순서 비의존). 배열은 호출부에서 미리 정렬해 넣는다.
@@ -67,8 +67,14 @@ function stableStringify(v: unknown): string {
 
 // Receipt Integrity — Node 내장 crypto(sha256)만 사용(새 의존성 없음). 입력은 결정론적 git 실측:
 // headHash + touched/staged/untracked/outOfScope/deniedHits(정렬) + magnitude + criticalTouched + checks.
-// timestamp/environment/policy 는 의도적으로 제외(시간·머신마다 바뀜) → 같은 git 상태면 같은 hash.
+// v0.24 보안수정(council 리뷰 #1 Critical): **사람이 읽는 판정**(ok·violations·branch·contractId·verdict·
+//   contractSnapshot + actions/reconciliation 다이제스트)도 봉인에 포함한다. 이전엔 이 필드들이 제외돼서
+//   서명·앵커된 영수증도 PASS/FAIL 을 봉인 파괴 없이 뒤집을 수 있었다(shareproof 는 r.ok 만 읽음). 이제
+//   ok/verdict/violations 를 고치면 receiptHash 가 바뀌어 verify-proof 의 receipt-hash·dsse-subject 가 실패한다.
+//   대가는 하위호환 깨짐(0.23 이전 영수증은 재계산 불일치로 verify 실패). 0.24 major-ish bump 로 처리.
+// timestamp/environment/policy 는 여전히 제외(시간·머신마다 바뀜). 같은 git 상태에 같은 판정이면 같은 hash.
 export function receiptHash(r: Receipt): string {
+  const sha256hex = (s: string): string => "sha256:" + createHash("sha256").update(s).digest("hex");
   const payload = {
     headHash: r.headHash,
     touched: [...r.touched].sort(),
@@ -79,7 +85,18 @@ export function receiptHash(r: Receipt): string {
     magnitude: r.magnitude,
     criticalTouched: r.criticalPaths.flatMap((c) => c.touched).sort(),
     checks: r.checks.map((c) => `${c.name}:${c.exitCode}:${c.requiredExit}:${c.ok}`).sort(),
-    // contentHashes 는 있을 때만 포함 → 없으면 기존 contentHash 와 동일(backward-compatible · replay 호환).
+    // 사람이 읽는 판정(항상 존재)은 봉인 필수. 리뷰 #1 의 위조 시나리오(ok/violations/branch/contractId 위변조) 차단.
+    ok: r.ok,
+    violations: [...(r.violations ?? [])].sort(), // ?? [] 는 봉인 프리미티브가 부분 영수증에도 안 던지게(verify 중 크래시 방지)
+    branch: r.branch,
+    contractId: r.contractId,
+    // done 이 부착하는 판정 필드(있을 때만 포함). 있으면 봉인, 없으면 키 부재.
+    ...(r.verdict ? { verdict: r.verdict } : {}),
+    ...(r.contractSnapshot ? { contractSnapshot: r.contractSnapshot } : {}),
+    // actions/reconciliation 는 클 수 있어 다이제스트로 봉인(내용 자체는 미저장·compact). proof HTML 이 이 값으로 그림.
+    ...(r.actions && r.actions.length ? { actionsDigest: sha256hex(stableStringify(r.actions)) } : {}),
+    ...(r.reconciliation ? { reconciliationDigest: sha256hex(stableStringify(r.reconciliation)) } : {}),
+    // contentHashes 는 있을 때만 포함(backward-compatible · replay 호환).
     ...(r.contentHashes && r.contentHashes.length
       ? { contentHashes: r.contentHashes.map((c) => `${c.path}:${c.sha256 ?? "null"}`).sort() }
       : {}),

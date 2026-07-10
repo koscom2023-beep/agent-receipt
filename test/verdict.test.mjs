@@ -1,6 +1,6 @@
 // P0 v0.17 — 세션 판정(D1)·계약 스냅샷(D2)·사람말 라벨(D3) 테스트.
 // 핵심 수용기준(council): 4값 결정론·FAIL>INCOMPLETE>WARN>PASS 우선순위·reasons 로 뒷받침·
-//   숫자 점수/등급평균 0·receiptHash 바이트불변(verdict/contractSnapshot=metadata)·라벨=병기.
+//   숫자 점수/등급평균 0·receiptHash 가 판정(ok/verdict/contractSnapshot)을 봉인(리뷰 #1)·라벨=병기.
 import assert from "node:assert";
 import { sessionVerdict, buildContractSnapshot, renderVerdictLine, renderContractLine, VERDICT_MARK } from "../dist/verdict.js";
 import { receiptHash } from "../dist/receipt.js";
@@ -90,9 +90,13 @@ const snap2 = buildContractSnapshot({ scope: { allowed_paths: [], denied_paths: 
 assert.equal(snap2.kind, null);
 assert.equal(snap2.budget, null);
 
-// ── 바이트불변: verdict/contractSnapshot 은 receiptHash 입력 제외(metadata) ──
+// ── v0.24 리뷰 #1: 판정(ok/verdict/contractSnapshot)은 이제 receiptHash 에 봉인된다(위변조 차단) ──
 const rec = {
   headHash: "h1",
+  ok: false,
+  violations: ["x"],
+  branch: { current: "main", expected: "main", ok: true },
+  contractId: "c1",
   touched: ["a.ts"],
   staged: [],
   untracked: [],
@@ -104,7 +108,10 @@ const rec = {
 };
 const h1 = receiptHash(rec);
 const h2 = receiptHash({ ...rec, verdict: sessionVerdict(base), contractSnapshot: snap });
-assert.equal(h1, h2, "verdict/contractSnapshot 부착해도 contentHash 불변");
+assert.notEqual(h1, h2, "verdict/contractSnapshot 부착이 봉인을 바꾼다. 판정 위변조 차단(과거엔 metadata 라 불변=버그)");
+// 핵심 공격 차단: ok 를 FAIL→PASS 로 뒤집으면 봉인이 바뀐다(shareproof 히어로가 읽는 값).
+assert.notEqual(receiptHash(rec), receiptHash({ ...rec, ok: true }), "ok 위변조가 contentHash 를 바꾼다");
+assert.notEqual(receiptHash(rec), receiptHash({ ...rec, violations: [] }), "violations 위변조가 contentHash 를 바꾼다");
 
 // ── D3: 사람말 라벨 = 병기(대체 아님) ──
 assert.equal(gradeHumanLabel("A", false), GRADE_LABELS.A);
@@ -180,4 +187,4 @@ const prose2 = renderContractProse(snap2);
 assert.ok(prose2.ko.includes("금지 경로는 지정되지 않았습니다") && prose2.en.includes("No denied paths"), "빈 계약 정직 문장");
 assert.ok(!/권장|추천/.test(prose.ko + prose2.ko), "권장 어휘 금지");
 
-console.log("verdict.test: OK — 4값 게이트·reasons 뒷받침·점수0·hash 바이트불변·계약 스냅샷·라벨 병기 + P1(규칙 레지스트리·[id] reason·INCOMPLETE 세분+fix·fail_on_done 임계·docs 일치) + v0.20(계약 자연어 결정론·denied 전수·한영)");
+console.log("verdict.test: OK — 4값 게이트·reasons 뒷받침·점수0·판정 봉인(리뷰#1)·계약 스냅샷·라벨 병기 + P1(규칙 레지스트리·[id] reason·INCOMPLETE 세분+fix·fail_on_done 임계·docs 일치) + v0.20(계약 자연어 결정론·denied 전수·한영)");

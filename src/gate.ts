@@ -22,15 +22,22 @@ export interface GateDecision {
   reason: string;
 }
 
-// 순수 판정: verdict === "fail" 이면 행위 차단. (그 외=허용 — abstain/pass 는 진행)
+// 통과로 인정하는 verdict(허용목록). 그 외는 전부 차단. verification-receipt 의 verdict 는 pass|fail 이고,
+// abstain 은 "충분 근거 없음(진행 허용)"으로 명시 취급.
+const PASS_VERDICTS = new Set(["pass", "abstain"]);
+
+// 순수 판정(리뷰 #13 High-adjacent): 통과값(pass/abstain) *만* 허용하고 나머지는 전부 차단한다.
+// 이전엔 `verdict === "fail"` 만 막아 "failed"·"FAIL"·오타·누락이 조용히 통과하는 fail-open 우회였다.
+//   집행 게이트에선 "통과를 확인 못 하면 막는다"가 옳다(도구 오류 fail-open 은 runGate 의 exit 2 로 별개 유지).
 export function gateDecision(r: VReceiptShape): GateDecision {
-  const verdict = typeof r.verdict === "string" ? r.verdict : "unknown";
+  const raw = typeof r.verdict === "string" ? r.verdict : "";
+  const verdict = raw.trim().toLowerCase();
   const surface = typeof r.surface === "string" ? r.surface : "verification";
   const subject = typeof r.subject === "string" ? r.subject : "(subject 없음)";
-  if (verdict === "fail") {
+  if (!PASS_VERDICTS.has(verdict)) {
     return {
       block: true,
-      reason: `agent-receipt gate: ${surface} 검증 실패(verdict=fail) — "${subject}". 근거가 출처/재계산과 불일치합니다. 이 행위를 중단하고 검증 실패를 보고하세요(같은 행위 재시도 금지). 해제: 검증을 통과시키거나 gate 배선을 제거.`,
+      reason: `agent-receipt gate: ${surface} 검증 실패(verdict=${raw || "없음"}, pass/abstain 아님): "${subject}". 근거가 출처/재계산과 불일치하거나 통과를 확인할 수 없습니다. 이 행위를 중단하고 검증 실패를 보고하세요(같은 행위 재시도 금지). 해제는 검증을 통과시키거나 gate 배선을 제거.`,
     };
   }
   return { block: false, reason: `agent-receipt gate: ${surface} 검증 ${verdict} — 진행 허용.` };

@@ -10,7 +10,7 @@ agent-receipt commit-check: s6  (커밋 직전 — 자동 commit/revert 안 함)
 ────────────────────────────────────────────────────────
 결과: OK ✅ — 사람이 직접 stage/commit 하세요. 아래 트레일러를 커밋 메시지에 붙일 수 있습니다(선택):
 
-  Agent-Receipt: sha256:b0ba66e52fd03eafab69b6525020072026d1d4560ef0a179d798277ba0655886
+  Agent-Receipt: sha256:61aee95a369f84bf38092c991c83ba26c6758e086564ba1ee58acda026c7fe05
   Agent-Receipt-Path: .agent-guard/receipts/receipt-A.json
   Agent-Contract: sha256:490ef991bb6db9d3d7bc0fc35fd0c821ff25cc0c038d749e0ed1685222da9c58
   Agent-Policy: sha256:dbe014292e1dbe2413b976ef0cab10db82b310aa191d9c568fdbe6fca83f78a4

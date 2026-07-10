@@ -695,7 +695,7 @@ const el=id=>document.getElementById(id);
 const esc=x=>String(x==null?'':x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function ok(b){return b===true?'<span class="pass">✅</span>':b===false?'<span class="fail">❌</span>':'<span class="warn">⚠ n/a</span>'}
 function st(s){return s==='verified'||s==='valid'?'<span class="pass">✅ '+esc(s)+'</span>':s==='not-found'||s==='mismatch'||s==='invalid'?'<span class="fail">❌ '+esc(s)+'</span>':'<span class="mut">· '+esc(s||'-')+'</span>'}
-function cd(l,n,c){return '<div class="cd '+(c==='mut'?'':(c||''))+'"><div class="n">'+n+'</div><div class="l">'+l+'</div></div>'}
+function cd(l,n,c){return '<div class="cd '+(c==='mut'?'':(c||''))+'"><div class="n">'+esc(n)+'</div><div class="l">'+esc(l)+'</div></div>'}
 const EXC=S.exceptions||{};const excTotal=Object.values(EXC).reduce((a,b)=>a+(b||0),0);
 const EXC_INFO={seal_failed:['봉인확인실패','영수증 봉인 재계산이 안 맞음 — 저장 후 내용이 바뀌었을 수 있음(변조 의심). 화면의 ⚠ 표시와 같은 건을 분류한 것.'],ungrounded_decision:['날조근거 결정','회의 검증에서 근거가 출처에 없다고 판정된 결정(council 영수증 실패). 결정이 지어낸 근거 위에 서 있었다는 뜻.'],source_unreachable:['출처 도달실패','라이브 재대조(--fetch)에서 인용한 출처에 접속하지 못함(링크 소멸/차단). 영수증 자체 기록에서 집계.']};
 const EXC_ROWS={seal_failed:r=>!(r.integrity&&r.integrity.contentHashOk&&r.integrity.receiptIdOk),ungrounded_decision:r=>r.surface==='council'&&r.verdict==='fail',source_unreachable:r=>(r.unreachable||0)>0};

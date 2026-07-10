@@ -2,6 +2,7 @@ import { readFileSync, appendFileSync, existsSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { createHash } from "node:crypto";
 import { evaluateClaim, claimFingerprintV1 } from "./evidencekernel.js";
+import { jcsCanonicalize } from "./jcs.js";
 import { writeVerificationReceipt, tierProvenance } from "./vreceipt.js";
 import { resolveCommitExists, resolveChangedFiles, resolveDiffText, resolveDependencyMap, resolveFileExists, resolveReceiptFacts, resolveArtifactFacts } from "./gitfacts.js";
 import type { ReceiptFacts, ArtifactFacts } from "./evidencekernel.js";
@@ -208,7 +209,11 @@ export function appendDecisionLog(logPath: string, entryCore: Record<string, unk
       }
     }
   }
-  const payload = prevHash + JSON.stringify(entryCore, Object.keys(entryCore).sort());
+  // v0.24 보안수정(리뷰 #2 High): 이전 코드 `JSON.stringify(entryCore, keys.sort())` 는 2번째 인자가
+  //   **배열=replacer 허용목록**(정렬 아님)이라 최상위 키만 통과시켜 중첩 decisions(statement/grounding)를 {}로
+  //   직렬화했다. 그래서 entryHash 가 결정의 *근거 자체*를 안 덮었다("grounded"↔"ungrounded" 위변조가 재계산 통과).
+  //   전체 내용을 RFC 8785 JCS 로 정식 정규화(모든 depth·배열 보존)해서 봉인한다(ledger/tap 과 동일 SSOT).
+  const payload = prevHash + jcsCanonicalize(entryCore);
   const entryHash = createHash("sha256").update(payload).digest("hex");
   appendFileSync(logPath, JSON.stringify({ ...entryCore, prevHash, entryHash }) + "\n");
   return { prevHash, entryHash };

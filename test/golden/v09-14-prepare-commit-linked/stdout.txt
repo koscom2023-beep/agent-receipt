@@ -19,7 +19,7 @@ git add src/a.ts \
 git commit -F - <<'EOF'
 chore(s6-linked): <요약 작성>
 
-Agent-Receipt: sha256:9b0184c6c3f1922326f07e6e857a79e330740a81165733c67d695dfb0be8d505
+Agent-Receipt: sha256:6c444af90de91366b13d5469eb42aea9396a334b9a69f8d7a37de12dbba0b646
 Agent-Contract: sha256:fc3fa11eb50ff436d09e58896f7a574316ea4d57f9ddbac7dfd4ad45f7fe39e3
 Agent-Policy: none
 EOF

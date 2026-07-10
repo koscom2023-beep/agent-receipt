@@ -63,6 +63,9 @@ export function costOf(u: UsageTokens, model: string, oneHourCreation = 0): numb
 
 export function fmtUsd(n: number | null): string {
   if (n == null) return "?";
+  // v0.24 수정(리뷰 #15): 음수(비용 델타·업그레이드 방향) 부호 보존. 이전엔 -$4.80 도 n<0.01 이 참이라
+  //   "<$0.01" 로 뭉개 *비용 급증을 은폐*했다. 비음수 출력은 이전과 바이트동일(재귀로 부호만 앞에 붙임).
+  if (n < 0) return "-" + fmtUsd(-n);
   if (n < 0.01) return "<$0.01";
   return "$" + n.toFixed(2);
 }

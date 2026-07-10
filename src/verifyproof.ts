@@ -160,7 +160,19 @@ export function runVerifyProof(dirArg: string | undefined, cwd: string = process
   console.log("─".repeat(56));
   for (const c of res.checks) console.log(`${MARK[c.status]} ${c.id}: ${c.detail}`);
   console.log("─".repeat(56));
-  console.log(res.ok ? "결과: 통과 — 이 번들은 생성 시점 그대로입니다(변조 신호 없음)." : "결과: 실패 — 위 ❌ 항목이 변조/불일치 신호입니다.");
+  // v0.24 정직수정(리뷰 #7): receiptHash 는 비밀 없는 SHA-256 이라 누구나 재계산 가능 → 서명·앵커가
+  //   하나도 통과 안 한 "해시온리" 번들의 통과는 *자가 주장 무결성*일 뿐(위조 receipt+재계산 hash 도 통과).
+  //   독립 신뢰뿌리(DSSE 서명 or Rekor 앵커)가 있을 때만 "생성 시점 그대로"라고 말한다.
+  const hasTrustRoot = res.checks.some((c) => (c.id === "dsse-signature" || c.id === "rekor-sidecar") && c.status === "ok");
+  if (res.ok) {
+    console.log(
+      hasTrustRoot
+        ? "결과: 통과. 이 번들은 생성 시점 그대로입니다(변조 신호 없음)."
+        : "결과: 통과. 이 번들은 자체 정합적입니다(자가 주장 무결성). 다만 독립 서명·앵커가 없어 '이 도구가 만들었다·이 시점에 존재했다'는 제3자 보장은 아닙니다.",
+    );
+  } else {
+    console.log("결과: 실패. 위 ❌ 항목이 변조/불일치 신호입니다.");
+  }
   console.log("  " + LIMIT_NOTE);
   console.log("");
   process.exit(res.ok ? 0 : 1);

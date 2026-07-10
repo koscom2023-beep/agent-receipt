@@ -31,6 +31,18 @@ function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+// v0.24 보안수정(리뷰 #L1): href 는 스킴을 검증한다. esc() 는 `javascript:`·`data:` 를 못 막아 앵커 링크
+//   클릭 시 스크립트가 돌 수 있다(verifyUrl 은 받은 번들 유래라 재공유 시 신뢰 못 함). http(s) 만 허용.
+function safeHref(url: string): string {
+  try {
+    const proto = new URL(url).protocol;
+    if (proto === "http:" || proto === "https:") return esc(url);
+  } catch {
+    /* 파싱 불가 URL → 비활성 */
+  }
+  return "#";
+}
+
 // ── P2 D5: Evidence 탭 데이터 — vreceipts 디렉터리의 중립 롤업(graph 와 같은 함수 재사용·판단 없음) ──
 export interface ProofEvidence {
   receipts: number;
@@ -127,7 +139,7 @@ export function toProofHtml(r: Receipt, anchor?: RekorAnchor | null, extras?: Pr
     ? `
   <section>
   <h2>Third-party anchor (Rekor)</h2>
-  <p class="contrast">🔗 <a href="${esc(anchor.verifyUrl)}">Verify in the public transparency log</a> — anyone can confirm this receipt existed at this time <strong>without trusting the issuer</strong>.</p>
+  <p class="contrast">🔗 <a href="${safeHref(anchor.verifyUrl)}">Verify in the public transparency log</a> — anyone can confirm this receipt existed at this time <strong>without trusting the issuer</strong>.</p>
   <table>
     <tr><td class="k">Rekor logIndex</td><td><code>${esc(String(anchor.logIndex ?? "?"))}</code></td></tr>
     <tr><td class="k">Entry UUID</td><td><code>${esc(anchor.uuid)}</code></td></tr>

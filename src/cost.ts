@@ -172,6 +172,11 @@ export function auditModelSwap(records: SwapRecord[]): SwapAudit {
   }
   return { rows, totalRecords: records.length, swaps, downgrades, totalDelta, unpriced, pricingAsOf: PRICING_AS_OF };
 }
+// v0.24 수정(리뷰 #L5): 마크다운 표 셀 이스케이프. declared/actual 모델 라벨은 외부 usage.json 유래라,
+//   `|` 나 제어문자가 들어오면 표 컬럼을 위조하거나 레이아웃을 깰 수 있다(과대청구 폭로용 표라 무결성 중요).
+function mdCell(s: string): string {
+  return String(s).replace(/[\r\n]+/g, " ").replace(/\|/g, "\\|").replace(/`/g, "'");
+}
 export function renderSwapAuditMd(a: SwapAudit): string {
   const L: string[] = [];
   L.push("# 모델치환 감사 (agent-receipt)");
@@ -181,7 +186,7 @@ export function renderSwapAuditMd(a: SwapAudit): string {
   L.push("| declared | actual | swap | declared $ | actual $ | Δ(decl-act) | 판정 |");
   L.push("|----------|--------|------|-----------|----------|-------------|------|");
   for (const r of a.rows) {
-    L.push(`| ${r.declaredModel} | ${r.actualModel} | ${r.swapped ? "⚠" : "·"} | ${fmtUsd(r.declaredCost)} | ${fmtUsd(r.actualCost)} | ${r.delta === null ? "?" : fmtUsd(r.delta)} | ${r.direction} |`);
+    L.push(`| ${mdCell(r.declaredModel)} | ${mdCell(r.actualModel)} | ${r.swapped ? "⚠" : "·"} | ${fmtUsd(r.declaredCost)} | ${fmtUsd(r.actualCost)} | ${r.delta === null ? "?" : fmtUsd(r.delta)} | ${r.direction} |`);
   }
   L.push("");
   L.push(`합계: 레코드 ${a.totalRecords} · 치환 ${a.swaps} · 다운그레이드(과대청구 의심) ${a.downgrades} · Δ합 ${fmtUsd(a.totalDelta)} · unpriced ${a.unpriced}`);

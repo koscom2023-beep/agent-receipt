@@ -22,6 +22,11 @@ const BEARER = /\b(Bearer\s+)[A-Za-z0-9._\-]+/gi;
 // 4) 흔한 고신뢰 토큰 접두(값 자체로 식별 가능) — sk-, ghp_/gho_/ghs_, AKIA, xoxb/xoxp
 const TOKEN_SHAPES =
   /\b(sk-[A-Za-z0-9]{8,}|gh[posu]_[A-Za-z0-9]{8,}|AKIA[0-9A-Z]{12,}|xox[bpars]-[A-Za-z0-9-]{8,})\b/g;
+// 5) PEM 개인키 블록(멀티라인). 값 자체가 비밀(BEGIN PRIVATE KEY 부터 END PRIVATE KEY 까지).
+const PEM_BLOCK = /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----/g;
+// 6) 문자열 값 "안"의 인라인 대입(리뷰 #4): 복사된 diff/로그의 SENSITIVE_KEY=값 을 줄 어디서든 잡는다.
+//    ENV_ASSIGN(^앵커)은 diff `+`/`-` 접두·문장 중간을 못 잡음 → 앵커 없는 변형으로 값 끝(줄바꿈 전)까지 마스킹.
+const ASSIGN_INLINE = new RegExp(`(\\b${SENSITIVE_KEY}\\s*=\\s*)([^\\n]+)`, "gi");
 
 export interface RedactResult {
   text: string;
@@ -47,6 +52,11 @@ export function redactText(input: string): RedactResult {
     strong++;
     return REDACTED;
   });
+  out = out.replace(PEM_BLOCK, () => {
+    count++;
+    strong++;
+    return "-----BEGIN PRIVATE KEY-----\n" + REDACTED + "\n-----END PRIVATE KEY-----";
+  });
   out = out.replace(ENV_ASSIGN, (_m, pre) => {
     count++;
     return `${pre}${REDACTED}`;
@@ -69,7 +79,10 @@ export function redactText(input: string): RedactResult {
 // 파싱 실패(비-JSON/이미 깨진 입력) → text redactText 로 폴백(never throw).
 const FULL_SENSITIVE_KEY = new RegExp(`^${SENSITIVE_KEY}$`, "i");
 
-// 문자열 값 내부의 강한 토큰만 부분 마스킹(shape 식별). key 신호와 무관하게 항상 적용.
+// 문자열 값 내부의 비밀을 부분 마스킹(key 신호와 무관하게 항상 적용).
+// v0.24 리뷰 #4: 강한 shape(Bearer/sk-/AKIA/xox·PEM)뿐 아니라, 문자열(예: 복사된 diff)에 박힌
+//   SENSITIVE_KEY=값 / SENSITIVE_KEY: 값 도 마스킹한다. 이전엔 JSON 경로가 shape 만 봐서 AWS 시크릿이나
+//   password: hunter2 같은 값이 그대로 샜다. over-mask 방향(더 가림·절대 안 샘)이 안전 기본.
 function redactShapesInString(s: string, ctr: { count: number; strong: number }): string {
   let out = s.replace(BEARER, (_m, pre) => {
     ctr.count++;
@@ -80,6 +93,19 @@ function redactShapesInString(s: string, ctr: { count: number; strong: number })
     ctr.count++;
     ctr.strong++;
     return REDACTED;
+  });
+  out = out.replace(PEM_BLOCK, () => {
+    ctr.count++;
+    ctr.strong++;
+    return "-----BEGIN PRIVATE KEY-----\n" + REDACTED + "\n-----END PRIVATE KEY-----";
+  });
+  out = out.replace(ASSIGN_INLINE, (_m, pre) => {
+    ctr.count++;
+    return `${pre}${REDACTED}`;
+  });
+  out = out.replace(KV_COLON, (_m, pre, q1, _v, q2) => {
+    ctr.count++;
+    return `${pre}${q1}${REDACTED}${q2}`;
   });
   return out;
 }
@@ -92,6 +118,10 @@ function redactWalk(v: unknown, keySensitive: boolean, ctr: { count: number; str
     }
     return redactShapesInString(v, ctr);
   }
+  // 배열 원소는 keySensitive 를 전파하지 않는다(shape/값-패턴 스캔만). 리뷰 #9 는 "민감 키 배열의 평문 원소
+  //   전량 마스킹"을 제안했으나, 이 도구는 secretFilesRead:[".env"] 처럼 *민감 단어를 포함하는 키가 담은
+  //   파일경로 배열*을 의도적으로 보존한다(경로=비밀값 아님·감사정보). 전량 마스킹은 그 감사데이터를 파괴하고
+  //   redact-json 테스트가 못박은 결정을 뒤집는다. 배열 안 강한 토큰/대입은 redactShapesInString 이 잡는다.
   if (Array.isArray(v)) return v.map((x) => redactWalk(x, false, ctr));
   if (v && typeof v === "object") {
     const o: Record<string, unknown> = {};

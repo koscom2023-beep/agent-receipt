@@ -3,7 +3,7 @@ requireReceipt: true
 requireClaims: false
 requireCheck: false
 forbidAlways:
-  - ".env*"
+  - "**/.env*"
 requireApprovalFor:
   - "package-lock.json"
   - "pnpm-lock.yaml"

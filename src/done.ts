@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import type { Contract } from "./schema.js";
-import { buildReceipt, writeReceiptFile } from "./receipt.js";
+import { buildReceipt, receiptHash, writeReceiptFile } from "./receipt.js";
 import { claimVerify } from "./auditpack.js";
 import { appendLedger, ledgerEntryFromReceipt } from "./ledger.js";
 import { listReceipts, approvalsCountFor } from "./receiptStore.js";
@@ -40,8 +40,12 @@ export function runDone(
   ];
   const vr = sessionVerdict(r, { wasteSignal: !!gw, redFlags: redFlagFacts });
   const snapshot = buildContractSnapshot(contract, r);
-  r.verdict = vr; // metadata — contentHash 는 이미 봉인(receiptHash 입력 제외 → 바이트불변)
+  r.verdict = vr;
   r.contractSnapshot = snapshot;
+  // v0.24 보안수정(리뷰 #1 Critical): receiptHash 가 이제 판정(verdict/contractSnapshot 포함)을 봉인하므로,
+  //   *부착 후에* 재봉인해야 저장된 contentHash 가 verify-proof 의 재계산과 일치한다. 부착 전에 봉인하면
+  //   verify-proof 가 항상 불일치(변조 오탐)로 뜬다. 이 재봉인이 판정 위변조를 실제로 차단하는 지점이다.
+  r.contentHash = receiptHash(r);
 
   // P1 D3: policy fail_on_done(opt-in) — 판정이 임계 이상이면 exit 만 1 로(판정/reasons 불변·원인 자백 1줄).
   const { policy, error: policyError } = loadPolicySafe(cwd);

@@ -1,6 +1,6 @@
 import { execSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { minimatch } from "minimatch";
+import { matchGlob } from "./pathmatch.js";
 import type { Contract } from "./schema.js";
 import * as g from "./git.js";
 import { resolveSession, isToolOutput } from "./session.js";
@@ -34,7 +34,7 @@ export type VerifyResult = {
 };
 
 function matchesAny(file: string, patterns: string[]): boolean {
-  return patterns.some((p) => minimatch(file, p, { dot: true }));
+  return patterns.some((p) => matchGlob(file, p));
 }
 
 function unique(arr: string[]): string[] {

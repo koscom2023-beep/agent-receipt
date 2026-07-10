@@ -1,10 +1,17 @@
 import { execFileSync } from "node:child_process";
 
+// v0.24 수정(리뷰 #8): maxBuffer 명시. Node 기본 1 MiB 를 넘으면 execFileSync 가 throw 하고,
+//   호출부의 try/catch 가 그걸 "변경 0/빈 배열"로 삼켜 *측정 실패가 깨끗한 영수증으로 둔갑*했다.
+//   트리거 = 수천~만 파일 변경(numstat 파일당 1줄) 또는 단일 대형 파일 diff 본문이 1 MiB 초과.
+//   256 MiB 로 넉넉히 잡아 정상 저장소에서 절단-throw 를 없앤다(그래도 초과하면 여전히 throw → 호출부 처리).
+const GIT_MAX_BUFFER = 256 * 1024 * 1024;
+
 function git(args: string[]): string {
   // stderr는 무시 — 실패는 호출부에서 try/catch로 직접 처리한다
   return execFileSync("git", args, {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "ignore"],
+    maxBuffer: GIT_MAX_BUFFER,
   }).trim();
 }
 
@@ -14,6 +21,7 @@ function gitPaths(args: string[]): string[] {
   const out = execFileSync("git", [...args, "-z"], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "ignore"],
+    maxBuffer: GIT_MAX_BUFFER,
   });
   return out.split("\0").filter((s) => s.length > 0);
 }

@@ -7,6 +7,7 @@ import { readFileSync, rmSync, existsSync, writeFileSync, mkdtempSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { gradeDecision, appendDecisionLog } from "../dist/council.js";
+import { jcsCanonicalize } from "../dist/jcs.js";
 
 let pass = 0;
 const fail = [];
@@ -48,7 +49,10 @@ check("unsupported: 근거 있으나 출처 없음(전부 no-source)", () => {
 // ── appendDecisionLog: 해시체인(prevHash/entryHash) ──
 const logPath = join(tmpdir(), `arcouncil-${process.pid}.jsonl`);
 if (existsSync(logPath)) rmSync(logPath);
-const expectHash = (prev, core) => createHash("sha256").update(prev + JSON.stringify(core, Object.keys(core).sort())).digest("hex");
+// v0.24 리뷰 #2: entryHash = sha256(prev + JCS(core)). 이전 공식은 JSON.stringify(core, keys.sort())
+//   였는데 2번째 인자 배열은 replacer 허용목록이라 중첩 decisions(statement/grounding)를 {}로 떨궈
+//   근거를 봉인하지 못했다. 이제 전체를 RFC 8785 JCS 로 정규화해 중첩까지 덮는다.
+const expectHash = (prev, core) => createHash("sha256").update(prev + jcsCanonicalize(core)).digest("hex");
 
 check("첫 entry: prevHash 빈값·entryHash 공식 일치", () => {
   const core = { question: "Q1", decisions: [{ statement: "A", grounding: "grounded" }], dissentCount: 0 };
@@ -63,6 +67,11 @@ check("둘째 entry: prevHash==첫 entryHash(체인 연결)", () => {
   const r2 = appendDecisionLog(logPath, core2);
   assert.equal(r2.prevHash, first.entryHash);
   assert.equal(r2.entryHash, expectHash(first.entryHash, core2));
+});
+check("리뷰 #2: 중첩 근거(grounding) 변경이 entryHash 를 바꾼다(봉인 커버·과거엔 안 바뀜)", () => {
+  const a = { question: "Qx", decisions: [{ statement: "S", grounding: "grounded" }], dissentCount: 0 };
+  const b = { question: "Qx", decisions: [{ statement: "S", grounding: "ungrounded" }], dissentCount: 0 };
+  assert.notEqual(expectHash("", a), expectHash("", b)); // 옛 replacer-array 공식이면 둘이 같았다(버그)
 });
 check("파일에 2줄 append됨", () => {
   const lines = readFileSync(logPath, "utf8").trim().split("\n").filter(Boolean);

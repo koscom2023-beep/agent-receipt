@@ -26,7 +26,7 @@ git add package.json \
 git commit -F - <<'EOF'
 chore(s6-focus): <요약 작성>
 
-Agent-Receipt: sha256:ebcfe08fd301e6f22e432af604fe03c0e6d1092637ca1bd408f3981a6240f84c
+Agent-Receipt: sha256:30ede1edd16a097e4a35500751ef94cc3faab2dfe04228c1b8cbfe6493ff9f34
 Agent-Contract: sha256:74e38aad442126dc8bfdfe23c78b214af2a59a7efc7e5533b819e7581c0af436
 Agent-Policy: none
 EOF

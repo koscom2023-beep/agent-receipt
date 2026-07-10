@@ -36,6 +36,6 @@
 - provenance: agent=(미지정) model=(미지정) (source: none)
 
 ## Integrity
-- contentHash: `sha256:b0ba66e52fd03eafab69b6525020072026d1d4560ef0a179d798277ba0655886`
+- contentHash: `sha256:61aee95a369f84bf38092c991c83ba26c6758e086564ba1ee58acda026c7fe05`
 
 > 이 도구는 git 작업트리 기준입니다 — .gitignore된 파일·레포 밖·OS 명령·DB write·외부 서비스 변경은 직접 볼 수 없습니다.

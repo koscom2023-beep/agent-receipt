@@ -5,7 +5,7 @@
   "headHash": "06f4e1cfbd6a5a4019d7d182ee6f61f757a6354e",
   "branch": "main",
   "ok": true,
-  "contentHash": "sha256:b0ba66e52fd03eafab69b6525020072026d1d4560ef0a179d798277ba0655886",
+  "contentHash": "sha256:61aee95a369f84bf38092c991c83ba26c6758e086564ba1ee58acda026c7fe05",
   "redacted": false,
   "files": [
     "contract.yaml",

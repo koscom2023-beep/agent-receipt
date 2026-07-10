@@ -758,6 +758,19 @@ export function runCaptureReset(): never {
 const HOOK_MATCHER = `^(${COVERED_TOOLS.map((t) => (t === "mcp__*" ? "mcp__.*" : t)).join("|")})$`;
 const captureCommand = (phase: "pre" | "post" | "fail" | "denied"): string => `agent-receipt capture --event ${phase}`;
 
+// 설치가 심는 훅 이벤트 4종의 SSOT. install(mergeCaptureHooks)과 uninstall(removeCaptureHooks)이 같은 목록을 쓴다.
+// v0.24 수정(리뷰 #L3): 이전 uninstall 은 PreToolUse/PostToolUse 2종만 지워 PostToolUseFailure·PermissionDenied 가
+//   잔존했다(제거 불완전). 아래 한 곳에서 4종을 정의해 install/uninstall 이 항상 짝을 맞춘다.
+const HOOK_PHASES: Array<["PreToolUse" | "PostToolUse" | "PostToolUseFailure" | "PermissionDenied", "pre" | "post" | "fail" | "denied"]> = [
+  ["PreToolUse", "pre"],
+  ["PostToolUse", "post"],
+  // 도구 실패도 사실(시도). 문서 실측: 비차단 이벤트·tool_name/tool_input 공통형만 읽음(에러 텍스트=값·미저장).
+  ["PostToolUseFailure", "fail"],
+  // 권한 거부된 시도도 사실(Phase9). 문서의 tool-events 목록에 PermissionDenied 실재(같은 tool_name 매칭).
+  ["PermissionDenied", "denied"],
+];
+const HOOK_EVENT_KEYS: string[] = HOOK_PHASES.map(([k]) => k);
+
 interface HookCmd {
   type?: string;
   command?: string;
@@ -776,15 +789,7 @@ export function mergeCaptureHooks(input: SettingsShape): { merged: SettingsShape
   const merged: SettingsShape = JSON.parse(JSON.stringify(input ?? {}));
   if (!merged.hooks || typeof merged.hooks !== "object") merged.hooks = {};
   let changed = false;
-  const phases: Array<["PreToolUse" | "PostToolUse" | "PostToolUseFailure" | "PermissionDenied", "pre" | "post" | "fail" | "denied"]> = [
-    ["PreToolUse", "pre"],
-    ["PostToolUse", "post"],
-    // 도구 실패도 사실(시도) — 문서 실측: 비차단 이벤트·tool_name/tool_input 공통형만 읽음(에러 텍스트=값·미저장).
-    ["PostToolUseFailure", "fail"],
-    // 권한 거부된 시도도 사실(Phase9) — 문서의 tool-events 목록에 PermissionDenied 실재(같은 tool_name 매칭).
-    ["PermissionDenied", "denied"],
-  ];
-  for (const [key, phase] of phases) {
+  for (const [key, phase] of HOOK_PHASES) {
     const cmd = captureCommand(phase);
     const arr: HookEntry[] = Array.isArray(merged.hooks[key]) ? merged.hooks[key] : [];
     const ours = arr.find((e) => Array.isArray(e?.hooks) && e.hooks.some((h) => h?.command === cmd));
@@ -806,7 +811,7 @@ export function removeCaptureHooks(input: SettingsShape): { merged: SettingsShap
   const merged: SettingsShape = JSON.parse(JSON.stringify(input ?? {}));
   let changed = false;
   if (merged.hooks && typeof merged.hooks === "object") {
-    for (const key of ["PreToolUse", "PostToolUse"]) {
+    for (const key of HOOK_EVENT_KEYS) {
       const arr = merged.hooks[key];
       if (!Array.isArray(arr)) continue;
       const kept = arr.filter((e) => {

@@ -1,12 +1,12 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { minimatch } from "minimatch";
+import { matchGlob } from "./pathmatch.js";
 import type { Contract } from "./schema.js";
 import * as g from "./git.js";
 
 // start 전용 glob 매칭(checks.ts 와 동일 규칙 — 결합 회피용 로컬 복제).
 function matchesAny(file: string, patterns: string[]): boolean {
-  return patterns.some((p) => minimatch(file, p, { dot: true }));
+  return patterns.some((p) => matchGlob(file, p));
 }
 
 function unique(arr: string[]): string[] {

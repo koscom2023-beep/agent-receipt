@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { isAbsolute, join, relative, sep } from "node:path";
-import { minimatch } from "minimatch";
+import { matchGlob } from "./pathmatch.js";
 import { loadPolicySafe } from "./policy.js";
 import { discoverContract } from "./discover.js";
 import { loadContract } from "./schema.js";
@@ -76,7 +76,7 @@ export function evalGuard(t: GuardTarget, cwd: string = process.cwd()): GuardVer
     const mode: "warn" | "block" = policy?.guard ?? "warn";
     for (const [origin, globs] of sources) {
       for (const gl of globs) {
-        if (!minimatch(target, gl, { dot: true })) continue;
+        if (!matchGlob(target, gl)) continue;
         if (mode === "block") {
           return {
             action: "deny",

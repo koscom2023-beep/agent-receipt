@@ -198,11 +198,14 @@ export function linkStatus(url: string): LinkStatus {
 // ── 해시(무결성) 검증 커널 (Phase3) ──
 // content 의 해시가 주장 해시와 일치하나 = 무결성. deterministic 계산(IO 아님·커널 순수 유지).
 export type HashStatus = "verified" | "mismatch" | "no-basis";
-const HASH_ALGOS = ["sha256", "sha1", "sha512", "md5"];
+// v0.24 보안수정(리뷰 #10): 충돌 저항 알고리즘만 허용한다. md5/sha1 은 충돌 공격이 가능해서
+//   공격자가 stated 해시에 충돌하는 content 를 만들어 등급 A "verified"를 얻을 수 있으므로 배제한다.
+//   약한/미지 알고리즘 요청은 no-basis(신뢰 알고리즘으로 확인 불가). 기본은 sha256.
+const STRONG_HASH_ALGOS = new Set(["sha256", "sha384", "sha512"]);
 export function hashStatus(statedHash: string | null, content: string | null, algo: string = "sha256"): HashStatus {
   if (!statedHash || content === null) return "no-basis";
-  const a = HASH_ALGOS.includes(algo) ? algo : "sha256";
-  const h = createHash(a).update(content).digest("hex");
+  if (!STRONG_HASH_ALGOS.has(algo)) return "no-basis"; // md5·sha1 등 충돌 취약/미지 → 강한 verified 부여 거부
+  const h = createHash(algo).update(content).digest("hex");
   return h.toLowerCase() === statedHash.trim().toLowerCase() ? "verified" : "mismatch";
 }
 
@@ -239,10 +242,15 @@ export function commitStatus(claimedCommit: string | null, resolvedExists: boole
 }
 
 export type FileChangedStatus = "verified" | "not-found" | "no-basis";
-// changedFiles: surface 가 조회한 변경파일 목록(줄바꿈 구분 텍스트). 인용 커널과 같은 부분문자열 판정 재사용.
+// changedFiles: surface 가 조회한 변경파일 목록(줄바꿈 구분 경로). v0.24 보안수정(리뷰 #11):
+//   경로는 *줄 단위 정확 일치*로 판정한다. 이전엔 부분문자열(verifyCitationInText)이라
+//   "a.ts" 가 변경파일 "src/data.ts" 에 걸려 오탐 verified 였다. 파일은 부분일치가 곧 오판.
 export function fileChangedStatus(claimedFile: string | null, changedFiles: string | null): FileChangedStatus {
   if (!claimedFile || changedFiles === null) return "no-basis";
-  return verifyCitationInText(claimedFile, changedFiles) ? "verified" : "not-found";
+  const claim = claimedFile.trim();
+  if (!claim) return "no-basis";
+  const found = changedFiles.split("\n").some((line) => line.trim() === claim);
+  return found ? "verified" : "not-found";
 }
 
 export type DiffContainsStatus = "verified" | "not-found" | "no-basis";
@@ -709,7 +717,7 @@ export function claimSchema(): Record<string, unknown> {
       link: { type: "string", description: "link: URL well-formedness(valid=advisory)" },
       statedHash: { type: "string", description: "hash: content 의 해시와 상등(무결성)" },
       content: { type: "string" },
-      algo: { type: "string", enum: [...HASH_ALGOS] },
+      algo: { type: "string", enum: [...STRONG_HASH_ALGOS] },
       signature: { type: "string", description: "signature: content 에 대한 base64 ed25519 서명" },
       publicKey: { type: "string", description: "signature 검증용 PEM(SPKI) 공개키" },
       statedCommit: { type: "string", description: "commit: 이 해시가 레포에 실재하나(surface 가 git 으로 사전조회)" },

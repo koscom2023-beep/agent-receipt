@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
-import { minimatch } from "minimatch";
+import { matchGlob } from "./pathmatch.js";
 import * as g from "./git.js";
 import { touchedFull } from "./evidence.js";
 
@@ -84,7 +84,7 @@ export interface PolicyObs {
 
 // 상시 규칙 glob 을 full working tree 변경에 매칭(차단 아님 — 관찰/표시용). checks.ts 와 동일 규칙(dot:true).
 export function policyObservations(policy: Policy, files: string[]): PolicyObs {
-  const m = (globs: string[]): string[] => files.filter((f) => globs.some((gl) => minimatch(f, gl, { dot: true })));
+  const m = (globs: string[]): string[] => files.filter((f) => globs.some((gl) => matchGlob(f, gl)));
   return {
     forbidAlwaysHits: m(policy.forbidAlways),
     protectAlwaysHits: m(policy.protectAlways),
@@ -102,25 +102,25 @@ export const POLICY_PROFILES: Record<string, string> = {
     `# agent-receipt policy — solo-founder\n` +
     `# contract=이번 작업 범위, policy=상시 규칙. 자동 차단/커밋 없음 — 검사·표시만.\n` +
     `requireReceipt: true\nrequireClaims: false\nrequireCheck: false\n` +
-    `forbidAlways:\n  - ".env*"\n` +
+    `forbidAlways:\n  - "**/.env*"\n` +
     `requireApprovalFor:\n  - "package-lock.json"\n  - "supabase/migrations/**"\n` +
     `protectAlways: []\n`,
   "vibe-coder":
     `# agent-receipt policy — vibe-coder (가볍게: 경고 중심)\n` +
     `requireReceipt: false\nrequireClaims: false\nrequireCheck: false\n` +
-    `forbidAlways:\n  - ".env*"\n` +
+    `forbidAlways:\n  - "**/.env*"\n` +
     `requireApprovalFor: []\n` +
     `protectAlways:\n  - "package-lock.json"\n  - "pnpm-lock.yaml"\n`,
   "agency-client":
     `# agent-receipt policy — agency-client (고객 검수 대비)\n` +
     `requireReceipt: true\nrequireClaims: true\nrequireCheck: false\n` +
-    `forbidAlways:\n  - ".env*"\n` +
+    `forbidAlways:\n  - "**/.env*"\n` +
     `requireApprovalFor:\n  - "package-lock.json"\n  - "supabase/migrations/**"\n  - "vercel.json"\n` +
     `protectAlways: []\n`,
   "team-strict":
     `# agent-receipt policy — team-strict (엄격)\n` +
     `requireReceipt: true\nrequireClaims: true\nrequireCheck: true\n` +
-    `forbidAlways:\n  - ".env*"\n` +
+    `forbidAlways:\n  - "**/.env*"\n` +
     `requireApprovalFor:\n  - "package-lock.json"\n  - "pnpm-lock.yaml"\n  - "supabase/migrations/**"\n  - "vercel.json"\n  - ".vercel/**"\n` +
     `protectAlways:\n  - "exports/**"\n  - "docs/arch/json/**"\n` +
     `maxUntrackedAllowed: 0\n`,
@@ -129,7 +129,7 @@ export const POLICY_PROFILES: Record<string, string> = {
     `# 기본 프로필들은 guard: warn(기록만). 이 프로필만 block — 오탐 시 guard: warn 으로 즉시 해제.\n` +
     `guard: block\n` +
     `requireReceipt: true\nrequireClaims: false\nrequireCheck: false\n` +
-    `forbidAlways:\n  - ".env*"\n  - "secrets/**"\n  - "**/*.pem"\n  - "**/id_rsa*"\n` +
+    `forbidAlways:\n  - "**/.env*"\n  - "secrets/**"\n  - "**/*.pem"\n  - "**/id_rsa*"\n` +
     `requireApprovalFor:\n  - "package-lock.json"\n  - "supabase/migrations/**"\n` +
     `protectAlways: []\n`,
   // 배치B-9 (council 2026-07-07) — 정책 프리셋 팩: 렉시콘은 **제안**이고 판단 주체는 채택/수정하는 사용자(도구는 매칭만).
@@ -137,7 +137,7 @@ export const POLICY_PROFILES: Record<string, string> = {
     `# agent-receipt policy — client-delivery (외주 납품용 · 제안 — 채택/수정은 사용자, 도구는 매칭만)\n` +
     `# forbid_actions 는 행위 클래스 신호등(첫 토큰 파스·우회 가능) — 납품 창구 밖 publish/push 를 기록/차단(guard 모드).\n` +
     `requireReceipt: true\nrequireClaims: true\nrequireCheck: false\n` +
-    `forbidAlways:\n  - ".env*"\n  - "secrets/**"\n  - "**/*.pem"\n` +
+    `forbidAlways:\n  - "**/.env*"\n  - "secrets/**"\n  - "**/*.pem"\n` +
     `requireApprovalFor:\n  - "package-lock.json"\n  - "pnpm-lock.yaml"\n  - "supabase/migrations/**"\n  - "vercel.json"\n` +
     `protectAlways: []\n` +
     `forbid_actions:\n  - publish\n  - push\n`,
@@ -145,14 +145,14 @@ export const POLICY_PROFILES: Record<string, string> = {
     `# agent-receipt policy — sensitive-backend (민감 백엔드 · 제안 — 채택/수정은 사용자, 도구는 매칭만)\n` +
     `# 아래 경로 렉시콘(auth/billing/infra)은 제안입니다 — 이 파일을 채택하는 순간 판단 주체는 사용자입니다.\n` +
     `requireReceipt: true\nrequireClaims: false\nrequireCheck: true\n` +
-    `forbidAlways:\n  - ".env*"\n  - "secrets/**"\n  - "**/*.pem"\n  - "**/id_rsa*"\n` +
+    `forbidAlways:\n  - "**/.env*"\n  - "secrets/**"\n  - "**/*.pem"\n  - "**/id_rsa*"\n` +
     `requireApprovalFor:\n  - "supabase/migrations/**"\n  - "auth/**"\n  - "billing/**"\n  - "infra/**"\n` +
     `protectAlways:\n  - "package-lock.json"\n` +
     `forbid_actions:\n  - network\n  - publish\n`,
   promptia:
     `# agent-receipt policy — promptia (본진 상시 규칙)\n` +
     `requireReceipt: true\nrequireClaims: false\nrequireCheck: false\n` +
-    `forbidAlways:\n  - ".env*"\n` +
+    `forbidAlways:\n  - "**/.env*"\n` +
     `requireApprovalFor:\n  - "package-lock.json"\n  - "pnpm-lock.yaml"\n  - "supabase/migrations/**"\n  - "vercel.json"\n  - ".vercel/**"\n` +
     `protectAlways:\n  - "exports/**"\n  - "docs/arch/json/**"\n`,
 };

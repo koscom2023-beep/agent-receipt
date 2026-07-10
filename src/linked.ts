@@ -1,4 +1,4 @@
-import { minimatch } from "minimatch";
+import { matchGlob } from "./pathmatch.js";
 import type { Contract } from "./schema.js";
 
 // 0.9: touched 파일을 계약 기준 3분류(표시 전용).
@@ -11,7 +11,7 @@ export interface TouchedClassification {
 }
 
 function matchesAny(file: string, patterns: string[]): boolean {
-  return patterns.some((p) => minimatch(file, p, { dot: true }));
+  return patterns.some((p) => matchGlob(file, p));
 }
 
 export function classifyTouched(files: string[], contract: Contract): TouchedClassification {

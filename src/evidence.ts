@@ -1,4 +1,4 @@
-import { minimatch } from "minimatch";
+import { matchGlob } from "./pathmatch.js";
 import * as g from "./git.js";
 import { isToolOutput } from "./session.js";
 
@@ -57,6 +57,6 @@ export function touchedFull(opts: { committedBase?: string } = {}): string[] {
 export function criticalPathHits(files: string[]): CriticalPath[] {
   return DEFAULT_CRITICAL_PATHS.map((glob) => ({
     glob,
-    touched: files.filter((f) => minimatch(f, glob, { dot: true })),
+    touched: files.filter((f) => matchGlob(f, glob)),
   }));
 }
