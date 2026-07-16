@@ -87,7 +87,7 @@ export function runDone(
   const pend = writePendingCompletion(r, json.rel, cwd);
   console.log("작업 영수증: 생성됨");
   console.log("완료 보고 검증: 최종 응답 대기 중(Stop 훅이 수집)");
-  console.log("최종 전달 판정: PENDING (Stop 이후 확정 — 위 판정은 작업 계약 판정이지 최종 handoff 아님)");
+  console.log("최종 전달 판정: PENDING (Stop 훅이 최종 응답을 수집한 뒤 확정됩니다. 위 판정은 작업 계약 판정이며 최종 handoff가 아닙니다)");
   if (pend.superseded) console.log(`  ⓘ 이전 대기 완료보고(${pend.superseded.workReceiptId.slice(0, 16)}…)를 이 영수증으로 교체함(조용한 덮어쓰기 아님).`);
 
   // 변경/검사 요약.

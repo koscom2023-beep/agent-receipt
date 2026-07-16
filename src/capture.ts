@@ -925,7 +925,7 @@ export function runCaptureInstall(write: boolean, global: boolean): never {
   if (global) console.log("⚠️ 전역 설정(~/.claude)을 수정합니다.");
   mkdirSync(dirname(p), { recursive: true });
   writeFileSync(p, JSON.stringify(merged, null, 2) + "\n");
-  console.log(`✅ capture 훅 설치: ${p} (기존 설정 보존·우리 항목만 추가 — 행위 capture + Stop 완료 보고)`);
+  console.log(`✅ capture 훅 설치: ${p} (기존 설정을 보존하고 우리 항목만 추가합니다. 행위 capture와 Stop 완료 보고)`);
   process.exit(0);
 }
 

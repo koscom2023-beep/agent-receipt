@@ -277,7 +277,7 @@ export function toProofHtml(r: Receipt, anchor?: RekorAnchor | null, extras?: Pr
   <section>
   <h2>완료 보고 검증 · AI completion report</h2>
   <p class="contrast">AI 완료 보고: <strong>수집됨</strong> · 주장 <strong>${comp.claims.length}</strong> · 확인됨 <strong>${comp.verified}</strong>${comp.mismatch ? ` · <strong>불일치 ${comp.mismatch}</strong>` : ""}${comp.abstain ? ` · 판단 불가 ${comp.abstain}` : ""}${comp.extractionStatus === "NO_EXPLICIT_CLAIMS" ? " · (명시 주장 없음)" : ""}</p>
-  ${compClaimRows ? `<ul class="actions">${compClaimRows}</ul>` : `<p class="meta">추출된 명시 주장이 없습니다 — 최종 답변에 검증 가능한 커밋·검사·배포 주장이 없었습니다(억지 구조화 안 함).</p>`}
+  ${compClaimRows ? `<ul class="actions">${compClaimRows}</ul>` : `<p class="meta">추출된 명시 주장이 없습니다. 최종 답변에 검증 가능한 커밋·검사·배포 주장이 없었습니다(억지로 구조화하지 않습니다).</p>`}
   <p class="meta">"최종 답변을 잡았다"는 <strong>reported</strong>입니다. git·해시·검사 재계산 결과만 <strong>verified</strong>. 완료 원문은 로컬에만 저장되고 이 페이지에 포함되지 않습니다.</p>
 </section>`
     : "";

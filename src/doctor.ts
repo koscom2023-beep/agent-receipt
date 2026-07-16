@@ -150,7 +150,7 @@ export function runDoctor(cwd: string = process.cwd()): never {
     console.log(`  공급자 세션     : ${prov ? `${prov.name}${prov.sessionId ? ` / ${prov.sessionId.slice(0, 12)}` : ""}` : "미결합 (Stop 이벤트에서 결합)"}`);
     if (!pend) console.log("  대기 중 완료 보고: 없음 ('agent-receipt done' 이 대기 표식을 만듭니다)");
     else if (pend.status === "finalized") console.log(`  대기 중 완료 보고: 확정됨 (completion ${(pend.completionId ?? "").slice(0, 12)})`);
-    else if (pend.lastStopError) console.log(`  대기 중 완료 보고: DEGRADED — ${pend.lastStopError}`);
+    else if (pend.lastStopError) console.log(`  대기 중 완료 보고: DEGRADED. ${pend.lastStopError}`);
     else console.log("  대기 중 완료 보고: 최종 응답 대기 중 (Stop 훅이 수집)");
     console.log(line);
   }

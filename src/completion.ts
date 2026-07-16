@@ -282,13 +282,13 @@ export function verifyCompletionClaims(claims: CompletionClaim[], work: Receipt,
       return { ...c, status: ok ? "VERIFIED" : "MISMATCH", evidence: ok ? `Work Receipt: ${f} 변경됨` : `Work Receipt: ${f} 변경 없음(주장만)` };
     }
     if (c.kind === "test") {
-      if (checks.length === 0) return { ...c, status: "ABSTAIN", evidence: "Work Receipt 에 검사 명령 없음 — 테스트 수를 독립 확인할 근거 없음" };
+      if (checks.length === 0) return { ...c, status: "ABSTAIN", evidence: "Work Receipt에 검사 명령이 없어 테스트 수를 독립적으로 확인할 근거가 없음" };
       const aiPass = (c.passed ?? 0) === (c.total ?? -1) && (c.total ?? 0) > 0;
       const ok = aiPass === gitPass;
       return { ...c, status: ok ? "VERIFIED" : "MISMATCH", evidence: `Work Receipt 검사: ${gitPass ? "전부 통과" : `실패 ${checks.filter((x) => !x.ok).length}건`}` };
     }
     // deploy / push — git 은 배포·네트워크를 직접 못 본다. 독립 증거 없음 → ABSTAIN(FAIL 아님).
-    return { ...c, status: "ABSTAIN", evidence: "독립 증거 없음(git 은 배포·push 최종상태를 직접 관측 못 함) — 판단 불가" };
+    return { ...c, status: "ABSTAIN", evidence: "독립 증거가 없어 판단할 수 없음. git은 배포나 push의 최종 상태를 직접 관측하지 못함" };
   });
 }
 
@@ -380,17 +380,17 @@ export async function runCompletionStop(vendorHint: "claude" | "cursor" | "auto"
   // 공급자 세션 결합(P0-4B): 창에 아직 세션이 없으면 결합. 다른 세션이 들어오면 AMBIGUOUS(자동 교체 금지).
   const bind = bindProviderSession(pend, vendor, sp.sessionId, cwd);
   if (bind === "ambiguous") {
-    recordStopError(pend, "AMBIGUOUS_PROVIDER_SESSION — 같은 창에 두 공급자 세션 충돌. 자동 최종화 중단", cwd);
+    recordStopError(pend, "AMBIGUOUS_PROVIDER_SESSION: 같은 창에 두 공급자 세션이 충돌해 자동 최종화를 중단함", cwd);
     process.exit(0);
   }
 
   // 최종 답변을 못 받으면(형식 미지원/빈 답변) 최종화하지 않는다 — pending 유지·원인 기록(성공처럼 삼키지 않음).
   if (!sp.hasField) {
-    recordStopError(pend, `UNSUPPORTED_FORMAT — last_assistant_message 필드 없음(vendor=${vendor})`, cwd);
+    recordStopError(pend, `UNSUPPORTED_FORMAT: last_assistant_message 필드가 없음(vendor=${vendor})`, cwd);
     process.exit(0);
   }
   if (!sp.finalText.trim()) {
-    recordStopError(pend, "NOT_CAPTURED — 최종 답변이 비어 있음", cwd);
+    recordStopError(pend, "NOT_CAPTURED: 최종 답변이 비어 있음", cwd);
     process.exit(0);
   }
 
@@ -425,7 +425,7 @@ export async function runCompletionStop(vendorHint: "claude" | "cursor" | "auto"
     writeFileSync(join(cdir, "source.json"), JSON.stringify(source, null, 2) + "\n");
     writeFileSync(join(cdir, "claim.json"), JSON.stringify({ extractionStatus: extraction.status, claims: extraction.claims }, null, 2) + "\n");
   } catch (e) {
-    recordStopError(pend, `DEGRADED — 완료 원문 저장 실패: ${e instanceof Error ? e.message : String(e)}`, cwd);
+    recordStopError(pend, `DEGRADED: 완료 원문을 저장하지 못함(${e instanceof Error ? e.message : String(e)})`, cwd);
     process.exit(0);
   }
 
@@ -460,7 +460,7 @@ export async function runCompletionStop(vendorHint: "claude" | "cursor" | "auto"
     receipt.completionMeta = { completionId, vendor, providerSessionId: sp.sessionId, turnId: sp.turnId, workReceiptPath: pend.workReceiptPath };
     writeFileSync(sidecar, JSON.stringify(receipt, null, 2) + "\n");
   } catch (e) {
-    recordStopError(pend, `DEGRADED — 완료 검증 영수증 생성 실패: ${e instanceof Error ? e.message : String(e)}`, cwd);
+    recordStopError(pend, `DEGRADED: 완료 검증 영수증을 생성하지 못함(${e instanceof Error ? e.message : String(e)})`, cwd);
     process.exit(0);
   }
 

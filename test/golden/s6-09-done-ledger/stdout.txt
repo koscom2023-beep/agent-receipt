@@ -8,7 +8,7 @@ agent-receipt done: s6
 receipt 저장: .agent-guard/receipts/receipt-<TS>.json
 작업 영수증: 생성됨
 완료 보고 검증: 최종 응답 대기 중(Stop 훅이 수집)
-최종 전달 판정: PENDING (Stop 이후 확정 — 위 판정은 작업 계약 판정이지 최종 handoff 아님)
+최종 전달 판정: PENDING (Stop 훅이 최종 응답을 수집한 뒤 확정됩니다. 위 판정은 작업 계약 판정이며 최종 handoff가 아닙니다)
 변경: touched 1, untracked 1, denied 0, outOfScope 0
 검사: 명령 없음(통과 처리)
 원장 적립: .agent-guard/ledger.jsonl
