@@ -439,8 +439,12 @@ function saveCreated(name: string, base: string): void {
 function saveSession(name: string, repo: string): void {
   const sp = join(repo, ".agent-guard", "session.json");
   if (!existsSync(sp)) return;
-  // createdAt 타임스탬프만 정규화(baselineHead 등 나머지는 고정 git date 로 결정론).
-  const normed = readFileSync(sp, "utf8").replace(/"createdAt": "[^"]*"/, '"createdAt": "<TS>"');
+  // 비결정 필드 정규화: createdAt(시간)·observationWindowId(createdAt 해시라 시간 종속)·toolVersion(버전 bump churn).
+  // baselineHead 등 나머지는 고정 git date 로 결정론.
+  const normed = readFileSync(sp, "utf8")
+    .replace(/"createdAt": "[^"]*"/, '"createdAt": "<TS>"')
+    .replace(/"observationWindowId": "[^"]*"/, '"observationWindowId": "<WID>"')
+    .replace(/"toolVersion": ("[^"]*"|null)/, '"toolVersion": "<VER>"');
   writeFileSync(join(goldenDir, name, "created-session.json"), normed);
 }
 

@@ -104,10 +104,21 @@ export interface AssessInput {
    * 창 밖 잔재를 이번 세션의 관찰로 세면 계기가 거짓말을 한다. 임의 임계값 대신 창 경계를 쓴다.
    */
   windowStart: string | null;
+  /**
+   * seq 경계(P0-3.5 4-2). 있으면 시간보다 우선한다 — 단조 증가라 시계·타임존과 무관하다.
+   * 이 seq 이하 기록은 이번 세션 시작 전에 이미 로그에 있던 것(stale). 초과만 이번 세션 관찰.
+   * 없으면(legacy 세션·경계 미기록) windowStart(시간)로 되돌아간다.
+   */
+  boundarySeq?: number | null;
 }
 
-/** 레코드가 측정 창 안인가. ts 파싱 실패는 창 안으로 본다(못 읽는다고 증거를 버리지 않는다). */
-function inWindow(r: CaptureRecord, windowStart: string | null): boolean {
+/**
+ * 레코드가 측정 창 안인가.
+ * 1순위 seq 경계(있으면): seq > boundarySeq 인 것만 이번 세션. seq 없는 레코드는 시간으로 되돌아간다.
+ * 2순위 시간 경계: ts >= windowStart. ts 파싱 실패는 창 안으로 본다(못 읽는다고 증거를 버리지 않는다).
+ */
+function inWindow(r: CaptureRecord, windowStart: string | null, boundarySeq?: number | null): boolean {
+  if (boundarySeq != null && typeof r.seq === "number") return r.seq > boundarySeq;
   if (!windowStart) return true;
   const t = Date.parse(r.ts);
   const w = Date.parse(windowStart);
@@ -120,7 +131,7 @@ export function assessObservation(i: AssessInput): ObservationHealth {
   const wired = i.sites.length > 0;
   const degraded = i.records.filter((r) => r.op === "capture-degraded").length;
   const realRecords = i.records.filter((r) => r.op !== "capture-degraded");
-  const windowed = realRecords.filter((r) => inWindow(r, i.windowStart));
+  const windowed = realRecords.filter((r) => inWindow(r, i.windowStart, i.boundarySeq));
   const actions = windowed.length;
   const stale = realRecords.length - windowed.length;
   const last = i.records.length ? i.records[i.records.length - 1] : null;
@@ -234,10 +245,12 @@ export function loadObservationHealth(cwd: string = process.cwd()): ObservationH
   const root = g.repoRoot() ?? cwd;
   const logPath = join(root, ".agent-guard", "capture.jsonl");
   const records = readCaptureRecords();
-  // 측정 창은 session.createdAt 이다. begin 은 새 baseline 마다 capture 를 비우므로(begin.ts clearCaptureLog)
-  // 정상 흐름이면 창 밖 잔재가 없다. 잔재가 있으면 그 자체가 신호다(begin 미실행 또는 비우기 실패).
-  const windowStart = loadSession(cwd)?.createdAt ?? null;
-  return assessObservation({ sites, logExists: existsSync(logPath), records, chainProblems: 0, truncated: false, windowStart });
+  // 측정 창 경계(P0-3.5): 1순위 captureBoundary.seq(있으면·단조·비파괴), 2순위 createdAt(시간·legacy).
+  // begin 은 더 이상 capture 를 비우지 않는다(비파괴 창). 옛 기록은 seq 경계로 stale 처리된다.
+  const sess = loadSession(cwd);
+  const windowStart = sess?.createdAt ?? null;
+  const boundarySeq = sess?.captureBoundary?.seq ?? null;
+  return assessObservation({ sites, logExists: existsSync(logPath), records, chainProblems: 0, truncated: false, windowStart, boundarySeq });
 }
 
 export const OBSERVATION_MARK: Record<ObservationVerdict, string> = {

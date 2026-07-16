@@ -387,6 +387,19 @@ function headFile(): string {
   const root = g.repoRoot() ?? process.cwd();
   return join(root, ".agent-guard", "capture.head.json");
 }
+/**
+ * 세션 시작 시점의 capture 경계 스냅샷(P0-3.5 4-2). 시간 대신 쓰는 안정 경계다.
+ * seq 는 파일 수명 동안 단조 증가하므로(appendCapture: seq += 1), "이 seq 이하는 이번 세션 이전 기록"이 된다.
+ * 기록이 없으면 seq 0(모든 이후 기록이 이번 세션). 새 체계가 아니라 이미 있는 head 를 재사용한다.
+ */
+export function currentCaptureBoundary(): { seq: number; entryHash: string | null } {
+  const h = readHead();
+  if (h) return { seq: h.lastSeq, entryHash: h.lastEntryHash ?? null };
+  // head 가 없어도 로그 자체가 있을 수 있다(head 유실). 로그 꼬리에서 seq 를 읽는다.
+  const tail = tailRecord();
+  return { seq: tail.lastSeq, entryHash: tail.lastEntryHash ?? null };
+}
+
 function readHead(): CaptureHead | null {
   const f = headFile();
   if (!existsSync(f)) return null;

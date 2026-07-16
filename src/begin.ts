@@ -3,7 +3,6 @@ import { startCore, type SessionKind } from "./start.js";
 import { buildPrompt, type PromptVariant } from "./output.js";
 import { evalTripwire, tripwireLines } from "./tripwire.js";
 import { LIMIT_NOTE } from "./disclosure.js";
-import { clearCaptureLog } from "./capture.js";
 import { tapCursorSnapshot } from "./tap.js";
 
 const line = "─".repeat(56);
@@ -28,7 +27,7 @@ export function runBegin(contract: Contract, variant: PromptVariant, kind?: Sess
   }
 
   // 2) baseline 기록.
-  const res = startCore(contract, cwd, kind, objective);
+  const res = startCore(contract, "begin", cwd, kind, objective);
   if (objective) console.log(`세션 목적(자가보고·미검증): ${objective}`); // 배치A-6 — 기록 사실 고지
   if (!res.ok && res.reason === "denied-dirty") {
     console.error(res.message);
@@ -42,7 +41,10 @@ export function runBegin(contract: Contract, variant: PromptVariant, kind?: Sess
     console.log("   baseline 을 이어 쓰면 감사 경계가 섞입니다.");
   } else if (res.ok) {
     console.log(res.message);
-    clearCaptureLog(); // 새 baseline = 새 감사 경계 → 직전 세션 capture 누적 비움(무출력). council A #1
+    // 🔴 과거 capture 를 삭제하지 않는다(P0-3.5 owner 결정: 비파괴 관찰 창).
+    //    감사 도구가 새 창을 연다고 과거 관찰을 지우면 안 된다. 새 창 = 경계 저장이지 기록 삭제가 아니다.
+    //    옛 기록은 session.captureBoundary(seq)로 stale 처리돼 이번 세션 관찰에서 자동 제외된다.
+    //    (capture 파일 무한 성장은 별도 보존 정책 사안 — 명시적 `capture reset` 은 유지된다.)
     try {
       tapCursorSnapshot(cwd); // tap 은 장수 프로세스라 초기화 불가 — 커서 스냅샷이 경계(mcp-tap 결정 1 · 미사용=no-op)
     } catch {

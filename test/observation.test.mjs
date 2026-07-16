@@ -7,9 +7,11 @@
 import assert from "node:assert";
 import { assessObservation, detectWiring, zeroMeaning, ZERO_MEANING_TEXT, OBSERVATION_STATE_CODE, OBSERVATION_CAUSE_TEXT } from "../dist/observation.js";
 import { sessionVerdict, observationIncomplete } from "../dist/verdict.js";
+import { sessionCreator } from "../dist/session.js";
 
 const SITE = [{ path: ".claude/settings.json", events: ["PreToolUse", "PostToolUse"] }];
 const rec = (ts, op = "write", path = "a.ts") => ({ ts, phase: "post", tool: "Write", op, path, sessionId: "s1" });
+const recSeq = (seq, ts = "2026-07-16T01:00:00.000Z") => ({ ts, phase: "post", tool: "Write", op: "write", path: "a.ts", sessionId: "s1", seq });
 const assess = (o) => assessObservation({ sites: [], logExists: true, records: [], chainProblems: 0, truncated: false, windowStart: null, ...o });
 
 // ── 배선 감지: install 이 심는 command 접두를 그대로 본다(단일 원천) ──
@@ -55,6 +57,25 @@ assert.equal(h.verdict, "observed");
 assert.equal(h.actions, 1);
 assert.equal(h.stale, 0);
 assert.equal(observationIncomplete(h), null);
+
+// ── P0-3.5 4-2: seq 경계는 시간보다 우선한다(단조·시계 무관) ──
+// 경계 seq=2 → seq<=2 는 stale, seq>2 만 이번 세션. 시간(windowStart)은 무시된다.
+let hb = assess({ sites: SITE, records: [recSeq(1), recSeq(2), recSeq(3)], boundarySeq: 2, windowStart: null });
+assert.equal(hb.actions, 1, "seq>2 인 것만 이번 세션 관찰(seq=3 하나)");
+assert.equal(hb.stale, 2, "seq<=2 는 이전 세션 잔재");
+assert.equal(hb.verdict, "observed");
+// 경계 seq=2 에 새 기록이 없으면(seq 1,2 뿐) SILENT + stale 2 (owner 성공조건 1·2 의 관찰 축).
+hb = assess({ sites: SITE, records: [recSeq(1), recSeq(2)], boundarySeq: 2, windowStart: null });
+assert.equal(hb.actions, 0, "경계 이하만 있으면 이번 세션 관찰 0");
+assert.equal(hb.stale, 2);
+assert.equal(hb.verdict, "silent");
+assert.equal(hb.cause, "stale-only", "창 밖 기록만 존재 = STALE_ONLY");
+// 🔑 seq 경계는 시계를 안 본다: 미래 ts 라도 seq 가 경계 이하면 stale(시간 경계였다면 반대로 나옴).
+hb = assess({ sites: SITE, records: [recSeq(2, "2099-01-01T00:00:00.000Z")], boundarySeq: 2, windowStart: "2026-07-15T00:00:00.000Z" });
+assert.equal(hb.actions, 0, "seq<=경계면 미래 ts 라도 이번 세션 아님(seq 가 시간을 이긴다)");
+// seq 없는 legacy 레코드는 시간 경계로 되돌아간다(경계 seq 있어도).
+hb = assess({ sites: SITE, records: [rec("2026-07-16T01:00:00.000Z")], boundarySeq: 2, windowStart: "2026-07-15T00:00:00.000Z" });
+assert.equal(hb.actions, 1, "seq 없는 레코드는 시간으로 판정(증거를 안 버린다)");
 
 // 창이 없으면 전체를 창으로 본다(하위호환. begin 안 쓰는 사용자).
 h = assess({ sites: SITE, records: [rec("2026-07-03T09:04:42.901Z")], windowStart: null });
@@ -116,5 +137,11 @@ assert.equal(both.verdict, "INCOMPLETE");
 assert.equal(both.reasons.length, 2, "baseline 과 observation 은 다른 축이므로 둘 다 낸다");
 assert.ok(both.reasons.some((r) => r.includes("[no-baseline]")));
 assert.ok(both.reasons.some((r) => r.includes("[observation-silent]")));
+
+// ── P0-3.5 4-1: sessionCreator — 필드 없으면 legacy-unknown(begin/start 로 단정 금지) ──
+assert.equal(sessionCreator(null), "legacy-unknown", "세션 없음 = legacy-unknown");
+assert.equal(sessionCreator({ createdByCommand: "begin" }), "begin");
+assert.equal(sessionCreator({ createdByCommand: "start" }), "start");
+assert.equal(sessionCreator({ baselineHead: "x" }), "legacy-unknown", "🔑 v0.24 이전 세션은 legacy-unknown, 추측 금지");
 
 console.log("observation.test.mjs OK");

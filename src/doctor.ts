@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { loadContract } from "./schema.js";
 import * as g from "./git.js";
 import { DEFAULT_CONTRACT_PATHS, discoverContract } from "./discover.js";
-import { resolveSession } from "./session.js";
+import { resolveSession, loadSession, sessionCreator } from "./session.js";
 import { binaryPath, installedVersion, npmLatest, compareVersions } from "./version.js";
 import { loadObservationHealth, zeroMeaning, ZERO_MEANING_TEXT, OBSERVATION_STATE_CODE, OBSERVATION_CAUSE_TEXT } from "./observation.js";
 
@@ -101,6 +101,15 @@ export function runDoctor(cwd: string = process.cwd()): never {
     }
     console.log(`  기록 파일  : .agent-guard/capture.jsonl ${obs.logExists ? "있음" : "없음"}`);
     console.log(`  측정 창    : ${obs.windowStart ?? "없음(전체 기록을 창으로 봄)"}`);
+    // 출처(P0-3.5): 이 측정 창을 누가·어느 버전으로 만들었나. session 이 있을 때만(없으면 출력 불변 → 골든 안전).
+    // 필드가 없는 옛 세션은 legacy-unknown — 없는 것을 begin/start 로 단정하지 않는다.
+    const sd = loadSession();
+    if (sd) {
+      console.log(`  창 생성 명령: ${sessionCreator(sd)}`);
+      console.log(`  도구 버전  : ${sd.toolVersion ?? "(기록 없음·legacy)"}`);
+      if (sd.captureBoundary) console.log(`  창 경계(seq): ${sd.captureBoundary.seq} (이 seq 초과만 이번 세션 관찰)`);
+      if (sd.observationWindowId) console.log(`  창 식별자  : ${sd.observationWindowId}`);
+    }
     console.log(`  수신 행동  : ${obs.actions}건 (측정 창 안)${obs.degraded ? ` · 열화 마커 ${obs.degraded}건` : ""}`);
     // 창 밖 잔재는 반드시 드러낸다. 이걸 수신으로 세면 죽은 훅이 살아 있어 보인다(2026-07-16 실측 진범).
     if (obs.stale) console.log(`  창 밖 잔재 : ${obs.stale}건 (이전 창 기록이라 이번 세션 관찰이 아님)`);

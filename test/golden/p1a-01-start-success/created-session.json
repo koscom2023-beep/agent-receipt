@@ -2,6 +2,14 @@
   "version": 1,
   "baselineHead": "06f4e1cfbd6a5a4019d7d182ee6f61f757a6354e",
   "createdAt": "<TS>",
+  "createdByCommand": "start",
+  "toolVersion": "<VER>",
+  "observationWindowId": "<WID>",
+  "captureBoundary": {
+    "kind": "sequence",
+    "seq": 0,
+    "entryHash": null
+  },
   "contractId": "p1a-start",
   "gitBranch": "main",
   "unstagedAtStart": [],

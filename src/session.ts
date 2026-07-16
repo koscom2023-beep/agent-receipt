@@ -1,7 +1,15 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { SessionData } from "./start.js";
+import { type SessionData, LEGACY_CREATOR } from "./start.js";
 import * as g from "./git.js";
+
+/**
+ * 세션을 만든 명령(P0-3.5). v0.24 이전 파일엔 필드가 없으므로 legacy-unknown 으로 취급한다.
+ * 없는 것을 begin/start 중 하나로 단정하지 않는다 — 그게 이번 조사가 밝힌 미궁의 원인이었다.
+ */
+export function sessionCreator(s: SessionData | null): SessionData["createdByCommand"] | typeof LEGACY_CREATOR {
+  return s?.createdByCommand ?? LEGACY_CREATOR;
+}
 
 // 경로 분류(isToolOutput 등)는 agentguard.ts 가 단일 원천이다. 소비자는 그쪽에서 직접 가져간다.
 // 여기서 다시 정의하지도, 우회 통로로 다시 내보내지도 않는다(두 입구가 생기면 판정이 갈린다).

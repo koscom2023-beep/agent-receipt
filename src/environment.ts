@@ -55,6 +55,12 @@ function toolVersion(cmd: string, args: string[]): string | null {
   }
 }
 
+// 도구 버전 SSOT. package.json 이 유일 출처 — 임의 상수로 중복 작성하지 않는다(P0-3.5 owner 조건).
+// 못 읽으면 "unknown"(크래시 금지). session.json 출처 필드가 이 값을 쓴다.
+export function selfVersion(): string {
+  return selfPackage()?.version ?? "unknown";
+}
+
 // 설치된 패키지 자신의 package.json(개발 시 repo 루트, 배포 시 dist/ 상위). init.ts 의 templatePath 패턴과 동일.
 function selfPackage(): { name: string; version: string } | null {
   try {
