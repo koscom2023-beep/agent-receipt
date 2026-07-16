@@ -589,6 +589,24 @@ The claim file is plain JSON; every field is optional and only provided fields a
 
 `agent-receipt prompt` already tells the agent to emit exactly this JSON, so the loop is: brief with `prompt` → agent works → agent pastes the claim → `claims --file` reconciles it with git.
 
+## Automatic completion verification (Stop hook)
+
+`claims --file` above is the manual path. With the capture hooks installed (see `capture install` below), the same check runs **automatically at the end of the session**, with no JSON to hand-write.
+
+`agent-receipt capture install` wires a `Stop` hook alongside the `PreToolUse`/`PostToolUse` hooks. Then:
+
+1. `agent-receipt done` seals the **Work Receipt** and drops a pending-completion marker.
+2. When the AI finishes its final answer, the `Stop` hook collects that last message, extracts the **explicit** claims it makes (commits, checks, deploys, with no forced structuring), and verifies each against the real git tree.
+3. It writes a **Completion Verification Receipt**, an `evidence/1` sidecar (`<receipt>.completion.json`) that sits next to the Work Receipt. **The Work Receipt itself is never modified** (byte-identical before and after the Stop).
+
+Each claim lands as `VERIFIED` (for example, the commit exists in the repo), `MISMATCH` (the claimed commit does not exist), or `ABSTAIN` (a deploy or push claim that git cannot independently observe). The **final handoff verdict** rolls these up:
+
+- any `MISMATCH` gives **FAIL**, even if the code work itself stayed within contract. A false completion report is what the client sees, not the clean Work Receipt underneath it.
+- Stop hook not yet installed, or no final message collected, gives **INCOMPLETE** (never a silent PASS).
+- otherwise **PASS**.
+
+The collected final answer is stored **locally only** (never sent to a server, never embedded in the default share-proof). `share-proof` shows the handoff block; if you rendered a share while the verdict was still `PENDING`, the Stop finalization re-renders that same file to the final verdict. Re-processing the same Stop event is idempotent: no duplicate receipts and no change to the Work Receipt.
+
 ## Capture & share-proof (alpha)
 
 Two newer commands extend receipts **beyond the git working tree**.
