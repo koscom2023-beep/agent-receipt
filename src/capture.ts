@@ -825,6 +825,49 @@ export function mergeCaptureHooks(input: SettingsShape): { merged: SettingsShape
   return { merged, changed };
 }
 
+// ── P0-4: Stop 완료 보고 훅 ──
+// 행위 capture(PreToolUse 등)와 다른 이벤트다. HOOK_EVENT_KEYS(관찰 배선 감지)에 넣지 않는다 —
+// 넣으면 관찰 진단이 Stop 을 행위 capture 배선으로 오인한다. 완료 수집은 별도 이벤트·별도 감지.
+export const COMPLETION_HOOK_EVENT = "Stop";
+const COMPLETION_COMMAND = `${CAPTURE_COMMAND_PREFIX} --event stop`;
+
+/** 순수함수: settings 에 Stop 완료 훅을 멱등 추가(기존 항목 보존·matcher 없음). {merged, changed}. */
+export function mergeCompletionHook(input: SettingsShape): { merged: SettingsShape; changed: boolean } {
+  const merged: SettingsShape = JSON.parse(JSON.stringify(input ?? {}));
+  if (!merged.hooks || typeof merged.hooks !== "object") merged.hooks = {};
+  const arr: HookEntry[] = Array.isArray(merged.hooks[COMPLETION_HOOK_EVENT]) ? merged.hooks[COMPLETION_HOOK_EVENT] : [];
+  const ours = arr.find((e) => Array.isArray(e?.hooks) && e.hooks.some((h) => h?.command === COMPLETION_COMMAND));
+  if (ours) return { merged, changed: false };
+  arr.push({ hooks: [{ type: "command", command: COMPLETION_COMMAND }] }); // Stop 은 tool 매칭 없음 → matcher 미기재
+  merged.hooks[COMPLETION_HOOK_EVENT] = arr;
+  return { merged, changed: true };
+}
+
+/** 순수함수: Stop 완료 훅만 제거. {merged, changed}. */
+export function removeCompletionHook(input: SettingsShape): { merged: SettingsShape; changed: boolean } {
+  const merged: SettingsShape = JSON.parse(JSON.stringify(input ?? {}));
+  let changed = false;
+  const arr = merged.hooks?.[COMPLETION_HOOK_EVENT];
+  if (merged.hooks && Array.isArray(arr)) {
+    const kept = arr.filter((e) => {
+      const ours = Array.isArray(e?.hooks) && e.hooks.some((h) => typeof h?.command === "string" && h.command === COMPLETION_COMMAND);
+      if (ours) changed = true;
+      return !ours;
+    });
+    if (kept.length) merged.hooks[COMPLETION_HOOK_EVENT] = kept;
+    else delete merged.hooks[COMPLETION_HOOK_EVENT];
+    if (Object.keys(merged.hooks).length === 0) delete merged.hooks;
+  }
+  return { merged, changed };
+}
+
+/** doctor 용: Stop 완료 훅이 배선됐나(순수 판정). */
+export function detectCompletionHook(settings: SettingsShape | null): boolean {
+  const arr = settings?.hooks?.[COMPLETION_HOOK_EVENT];
+  if (!Array.isArray(arr)) return false;
+  return arr.some((e) => Array.isArray(e?.hooks) && e.hooks.some((h) => typeof h?.command === "string" && h.command.startsWith(CAPTURE_COMMAND_PREFIX)));
+}
+
 /** 순수함수: capture 훅만 제거(우리 command 접두 매칭). {merged, changed}. */
 export function removeCaptureHooks(input: SettingsShape): { merged: SettingsShape; changed: boolean } {
   const merged: SettingsShape = JSON.parse(JSON.stringify(input ?? {}));
@@ -853,10 +896,11 @@ function settingsPath(global: boolean): string {
 /** `agent-receipt capture install [--write] [--global]` — 기본 print(무쓰기), --write 시에만 병합 기록. */
 export function runCaptureInstall(write: boolean, global: boolean): never {
   if (!write) {
-    const { merged } = mergeCaptureHooks({});
+    const { merged } = mergeCompletionHook(mergeCaptureHooks({}).merged); // 행위 capture + Stop 완료 보고
     console.log("\n# .claude/settings.json 에 병합할 hooks (기존 설정 보존):");
     console.log(JSON.stringify(merged, null, 2));
-    console.log("\n자동 병합: agent-receipt capture install --write       (프로젝트 ./.claude/settings.json)");
+    console.log("\n포함: 행위 capture(PreToolUse 등) + Stop 완료 보고 훅(최종 답변을 git·검사와 대조).");
+    console.log("자동 병합: agent-receipt capture install --write       (프로젝트 ./.claude/settings.json)");
     console.log("전역 적용:  agent-receipt capture install --write --global  (~/.claude/settings.json)");
     process.exit(0);
   }
@@ -870,7 +914,10 @@ export function runCaptureInstall(write: boolean, global: boolean): never {
       process.exit(2);
     }
   }
-  const { merged, changed } = mergeCaptureHooks(existing);
+  const beh = mergeCaptureHooks(existing);
+  const comp = mergeCompletionHook(beh.merged); // Stop 완료 보고 훅도 같은 파일에 멱등 병합
+  const merged = comp.merged;
+  const changed = beh.changed || comp.changed;
   if (!changed) {
     console.log(`이미 설치됨(멱등): ${p}`);
     process.exit(0);
@@ -878,7 +925,7 @@ export function runCaptureInstall(write: boolean, global: boolean): never {
   if (global) console.log("⚠️ 전역 설정(~/.claude)을 수정합니다.");
   mkdirSync(dirname(p), { recursive: true });
   writeFileSync(p, JSON.stringify(merged, null, 2) + "\n");
-  console.log(`✅ capture 훅 설치: ${p} (기존 설정 보존·우리 항목만 추가)`);
+  console.log(`✅ capture 훅 설치: ${p} (기존 설정 보존·우리 항목만 추가 — 행위 capture + Stop 완료 보고)`);
   process.exit(0);
 }
 
@@ -896,7 +943,10 @@ export function runCaptureUninstall(write: boolean, global: boolean): never {
     console.error(`✗ ${p} 파싱 실패 — 자동 수정 거부. 직접 제거하세요.`);
     process.exit(2);
   }
-  const { merged, changed } = removeCaptureHooks(existing);
+  const beh = removeCaptureHooks(existing);
+  const comp = removeCompletionHook(beh.merged); // 행위 capture + Stop 완료 보고 둘 다 제거
+  const merged = comp.merged;
+  const changed = beh.changed || comp.changed;
   if (!changed) {
     console.log("제거할 capture 훅 없음.");
     process.exit(0);

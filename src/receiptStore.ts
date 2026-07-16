@@ -21,7 +21,8 @@ export function listReceipts(cwd: string): ReceiptEntry[] {
       (f.endsWith(".json") || f.endsWith(".md")) &&
       !f.endsWith(".sig.json") &&
       !f.endsWith(".approval.json") &&
-      !f.endsWith(".rekor.json"),
+      !f.endsWith(".rekor.json") &&
+      !f.endsWith(".completion.json"), // P0-4: Work Receipt 의 완료 검증 사이드카 — Work Receipt 아님(share/inbox 가 오인하면 안 됨)
   );
   files.sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
   return files.map((f) => ({ name: f, abs: join(dir, f), rel: join(RECEIPTS_REL, f) }));

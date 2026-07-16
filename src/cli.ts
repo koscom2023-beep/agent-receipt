@@ -51,6 +51,7 @@ import { runSelftest } from "./selftest.js";
 import { runIndex } from "./receiptindex.js";
 import { runGenClaim, runGenClaimLlmPrompt, runGenClaimFromLlm } from "./genclaim.js";
 import { runCaptureIngest, runCaptureShow, runCaptureReset, runCaptureInstall, runCaptureUninstall, runCaptureVerify, runCaptureInstallCursor } from "./capture.js";
+import { runCompletionStop } from "./completion.js";
 import { runMcpTap, runTapCli } from "./tap.js";
 import { t } from "./lang.js";
 import { runShareProof, runShareProofFromSaved, runShareTerm, latestReceiptExists } from "./shareproof.js";
@@ -481,6 +482,9 @@ function main(): void {
     const vendorArg = getArg("--vendor");
     const vendor =
       vendorArg === "cursor" || vendorArg === "claude" ? vendorArg : ("auto" as const);
+    // P0-4: Stop 완료 보고 훅(행위 capture 와 다른 이벤트) — 새 top-level 명령 없이 capture --event stop 으로.
+    // async(P0-4F 재렌더 await) — void+return 으로 runCaptureIngest 로 흘러가지 않게 한다.
+    if (getArg("--event") === "stop") { void runCompletionStop(vendor); return; }
     runCaptureIngest(getArg("--event"), vendor);
   }
   // share-proof: --receipt 또는 저장된 receipt 가 있으면 그걸 렌더(계약 불필요·done 시점 그대로).

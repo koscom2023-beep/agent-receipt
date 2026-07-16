@@ -34,6 +34,7 @@ const RUNTIME_DIRS = [
   "decisions/", // note.ts
   "tap/", // mcp-tap 로그·커서·sidecar
   "anchors/", // anchor.ts / predicate.ts
+  "completions/", // completion.ts — Stop 훅이 저장하는 최종 답변 원문·source·claim(로컬 전용)
 ];
 
 // 도구가 실제로 쓰는 단일 파일.
@@ -45,6 +46,7 @@ const RUNTIME_FILES = new Set([
   ".agent-guard/inbox.html", // inbox.ts --out 안내 기본값
   ".agent-guard/capture.jsonl", // capture.ts
   ".agent-guard/capture.head.json", // capture.ts
+  ".agent-guard/pending-completion.json", // completion.ts — done 이 만드는 완료 보고 대기 표식
 ]);
 
 // 사람이 고치는 제어 파일. 조용히 제외하면 안 되는 쪽(에이전트가 심판 규칙을 바꾼 것이므로).

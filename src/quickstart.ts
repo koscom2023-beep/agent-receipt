@@ -58,7 +58,7 @@ export function runQuickstart(write: boolean, cwd: string = process.cwd()): neve
   console.log(line);
   // U2 — capture 는 선택(나중에). 첫 성공에 불필요하므로 항상 인쇄만(--write 여도 자동 실행 안 함).
   console.log(t("qs.captureLater"));
-  console.log("    agent-receipt capture install --write   .claude/settings.json 병합(⚠️ 공유 설정 수정·동시 세션 영향)");
+  console.log("    agent-receipt capture install --write   .claude/settings.json 병합(⚠️ 공유 설정 수정·동시 세션 영향 · 행위 capture + Stop 완료 보고 훅)");
   console.log("    Claude Code 밖(Cursor 등)이면: agent-receipt capture install-cursor");
   console.log(line);
   if (!write) {

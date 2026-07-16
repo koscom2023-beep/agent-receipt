@@ -5,7 +5,11 @@ import * as g from "./git.js";
 import { DEFAULT_CONTRACT_PATHS, discoverContract } from "./discover.js";
 import { resolveSession, loadSession, sessionCreator } from "./session.js";
 import { binaryPath, installedVersion, npmLatest, compareVersions } from "./version.js";
-import { loadObservationHealth, zeroMeaning, ZERO_MEANING_TEXT, OBSERVATION_STATE_CODE, OBSERVATION_CAUSE_TEXT } from "./observation.js";
+import { loadObservationHealth, zeroMeaning, ZERO_MEANING_TEXT, OBSERVATION_STATE_CODE, OBSERVATION_CAUSE_TEXT, settingsCandidates } from "./observation.js";
+import { detectCompletionHook, type SettingsShape } from "./capture.js";
+import { loadPending } from "./completion.js";
+import { readFileSync } from "node:fs";
+import { isAbsolute } from "node:path";
 
 const line = "─".repeat(56);
 
@@ -123,6 +127,31 @@ export function runDoctor(cwd: string = process.cwd()): never {
     }
     console.log(`  원인       : ${OBSERVATION_CAUSE_TEXT[obs.cause]}`);
     if (obs.fix) console.log(`  고치는 법  : ${obs.fix}`);
+    console.log(line);
+  }
+
+  // 완료 보고 상태(P0-4) — 4개 상태를 각각 낸다: 행동 관찰 / 완료 보고 Stop 훅 / 공급자 세션 결합 / 대기 중 완료 보고.
+  // 두 상태를 섞지 않는다: 행동 관찰은 SILENT 여도 완료 보고는 CAPTURED 일 수 있다(별개 신호).
+  if (isRepo) {
+    let hookInstalled = false;
+    for (const p of settingsCandidates(cwd)) {
+      try {
+        const abs = isAbsolute(p) ? p : join(cwd, p);
+        if (detectCompletionHook(JSON.parse(readFileSync(abs, "utf8")) as SettingsShape)) { hookInstalled = true; break; }
+      } catch {
+        /* 없거나 깨진 settings → 미설치로 취급 */
+      }
+    }
+    const pend = loadPending(cwd);
+    console.log("완료 보고 검증(P0-4):");
+    console.log(`  행동 관찰      : ${obs ? OBSERVATION_STATE_CODE[obs.verdict] : "N/A"}`);
+    console.log(`  완료 보고 Stop 훅: ${hookInstalled ? "설치됨" : "미설치 ('capture install --write' 로 함께 설치)"}`);
+    const prov = pend?.providerSession ?? null;
+    console.log(`  공급자 세션     : ${prov ? `${prov.name}${prov.sessionId ? ` / ${prov.sessionId.slice(0, 12)}` : ""}` : "미결합 (Stop 이벤트에서 결합)"}`);
+    if (!pend) console.log("  대기 중 완료 보고: 없음 ('agent-receipt done' 이 대기 표식을 만듭니다)");
+    else if (pend.status === "finalized") console.log(`  대기 중 완료 보고: 확정됨 (completion ${(pend.completionId ?? "").slice(0, 12)})`);
+    else if (pend.lastStopError) console.log(`  대기 중 완료 보고: DEGRADED — ${pend.lastStopError}`);
+    else console.log("  대기 중 완료 보고: 최종 응답 대기 중 (Stop 훅이 수집)");
     console.log(line);
   }
 

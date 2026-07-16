@@ -13,6 +13,7 @@ import { loadPolicySafe } from "./policy.js";
 import { LIMIT_NOTE } from "./disclosure.js";
 import { renderTermCard, useColor } from "./termcard.js";
 import { loadObservationHealth } from "./observation.js";
+import { writePendingCompletion } from "./completion.js";
 
 const line = "─".repeat(56);
 
@@ -79,6 +80,15 @@ export function runDone(
     const cm = writeReceiptFile(r, "client-md", undefined, false);
     console.log(`고객용 보고서: ${cm.rel}`);
   }
+
+  // P0-4A: Work Receipt 봉인 후 완료 보고 대기 표식(pending)을 만든다. Stop 훅이 최종 답변으로 종료한다.
+  //   이건 RUNTIME_OUTPUT(범위 판정 밖)·git 커밋 대상 아님. Work Receipt 는 이미 위에서 봉인됐고 손대지 않는다.
+  //   Stop 훅이 없으면(git 전용 사용자) 이 표식은 남고 최종 전달 판정은 INCOMPLETE 로 유지된다(정직).
+  const pend = writePendingCompletion(r, json.rel, cwd);
+  console.log("작업 영수증: 생성됨");
+  console.log("완료 보고 검증: 최종 응답 대기 중(Stop 훅이 수집)");
+  console.log("최종 전달 판정: PENDING (Stop 이후 확정 — 위 판정은 작업 계약 판정이지 최종 handoff 아님)");
+  if (pend.superseded) console.log(`  ⓘ 이전 대기 완료보고(${pend.superseded.workReceiptId.slice(0, 16)}…)를 이 영수증으로 교체함(조용한 덮어쓰기 아님).`);
 
   // 변경/검사 요약.
   console.log(`변경: touched ${r.touched.length}, untracked ${r.untracked.length}, denied ${r.deniedHits.length}, outOfScope ${r.outOfScope.length}`);

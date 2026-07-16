@@ -15,6 +15,7 @@ import { summarizeCurrentSession } from "./transcript.js";
 import { publicKeyRelPath } from "./keys.js";
 import { loadCaptureRecords } from "./capture.js";
 import { reviewStatusFor, type ReviewRecord } from "./approve.js";
+import { loadCompletionSummary, loadPending, computeHandoffVerdict, HANDOFF_LABEL, recordShareRequest, type CompletionSummary, type HandoffVerdict } from "./completion.js";
 import * as g from "./git.js";
 
 // ── share-proof v0 (council B) — 외주사가 클라이언트에 보내는 로컬 self-contained HTML 증거 ──
@@ -43,6 +44,26 @@ function safeHref(url: string): string {
   return "#";
 }
 
+// P0-4: 완료 claim 상태 정렬 순위(MISMATCH 를 가장 먼저 보인다).
+function rankStatus(s: string): number {
+  return s === "MISMATCH" ? 0 : s === "ABSTAIN" ? 1 : 2;
+}
+// P0-4: 최종 전달 판정 한 줄 설명(사용자 문장 — em dash 금지).
+function handoffExplain(h: HandoffVerdict): string {
+  switch (h) {
+    case "PASS":
+      return "작업 계약 통과 + 완료 보고의 주장이 git·검사와 전부 일치.";
+    case "FAIL":
+      return "작업 계약 실패이거나, 완료 보고의 주장이 실제 증거와 불일치.";
+    case "PASS_WITH_WARNINGS":
+      return "작업 계약은 통과했으나 완료 보고 일부는 독립 확인이 불가(판단 불가 항목 있음).";
+    case "INCOMPLETE":
+      return "완료 보고를 받지 못했거나 손상됨. 최종 전달 판정은 확정되지 않음.";
+    case "PENDING":
+      return "작업 영수증은 생성됐고 최종 응답을 기다리는 중. Stop 이후 확정됨.";
+  }
+}
+
 // ── P2 D5: Evidence 탭 데이터 — vreceipts 디렉터리의 중립 롤업(graph 와 같은 함수 재사용·판단 없음) ──
 export interface ProofEvidence {
   receipts: number;
@@ -69,6 +90,8 @@ export interface ProofExtras {
   timeline?: ProofTimeline | null; // v0.20 결정3 — 세션 타임라인(결정론 렌더)
   client?: boolean; // v0.20 결정5 — 축약판(요약+판정+타임라인 중심·기술 상세 생략·'전체판 별도' 자백)
   review?: ReviewRecord | null; // 배치A-2 — 검토 기록(사이드카·자가보고) 표면화
+  completion?: CompletionSummary | null; // P0-4: AI 완료 보고 검증(사이드카·읽기 전용). 없으면 미수집.
+  handoff?: HandoffVerdict | null; // P0-4: 최종 전달 판정(읽기 전용·저장 안 함). 없으면 표시 생략.
 }
 
 // ── v0.20 결정3: 세션 타임라인 — capture 레코드(ts·seq·op) 결정론 / capture 없으면 git 커밋 시각 축약판 ──
@@ -224,6 +247,41 @@ export function toProofHtml(r: Receipt, anchor?: RekorAnchor | null, extras?: Pr
   ${unbucketed.length ? `<ul class="actions">${unbucketed.map((x) => `<li>${esc(x)}</li>`).join("\n")}</ul>` : ""}
   </section>`;
 
+  // ── P0-4: 최종 전달 판정(handoff) 배너 + 완료 보고 검증 블록 ──
+  // 순서(owner): 1) 최종 전달 판정 2) 작업 계약 판정 3) 완료 보고 검증. 불일치가 있으면 가장 먼저 보인다.
+  // 완료 원문은 여기 넣지 않는다(로컬 전용). 표시하는 claim 문장·근거는 개별로 마스킹한다.
+  const comp = extras?.completion ?? null;
+  const handoff = extras?.handoff ?? null;
+  const HANDOFF_CLS: Record<string, string> = { PASS: "v-pass", FAIL: "v-fail", PASS_WITH_WARNINGS: "v-warn", INCOMPLETE: "v-incomplete", PENDING: "v-incomplete" };
+  const mask = (s: string): string => esc(redactText(s).text);
+  const handoffBanner = handoff
+    ? `<div class="hero ${HANDOFF_CLS[handoff] ?? "v-incomplete"}" style="margin-bottom:.6rem">
+    <span class="doctype" style="margin:0">최종 전달 판정 · Final handoff (작업 계약 + 완료 보고 대조 · 읽기 전용 조립)</span>
+    <span class="hero-badge">${esc(HANDOFF_LABEL[handoff])}</span>
+    <span class="hero-sub">${esc(handoffExplain(handoff))}</span>
+  </div>`
+    : "";
+  const compClaimRows = comp && comp.claims.length
+    ? comp.claims
+        .slice()
+        .sort((a, b) => rankStatus(a.status) - rankStatus(b.status)) // MISMATCH 먼저
+        .map((c) => {
+          const icon = c.status === "MISMATCH" ? "✗" : c.status === "VERIFIED" ? "✓" : "·";
+          const cls = c.status === "MISMATCH" ? "flag" : "";
+          return `<li><span class="${cls}">${icon} ${esc(c.status)}</span> <code>${mask(c.statement)}</code><br><span class="meta">${mask(c.evidence)}</span></li>`;
+        })
+        .join("\n")
+    : "";
+  const completionSection = comp
+    ? `
+  <section>
+  <h2>완료 보고 검증 · AI completion report</h2>
+  <p class="contrast">AI 완료 보고: <strong>수집됨</strong> · 주장 <strong>${comp.claims.length}</strong> · 확인됨 <strong>${comp.verified}</strong>${comp.mismatch ? ` · <strong>불일치 ${comp.mismatch}</strong>` : ""}${comp.abstain ? ` · 판단 불가 ${comp.abstain}` : ""}${comp.extractionStatus === "NO_EXPLICIT_CLAIMS" ? " · (명시 주장 없음)" : ""}</p>
+  ${compClaimRows ? `<ul class="actions">${compClaimRows}</ul>` : `<p class="meta">추출된 명시 주장이 없습니다 — 최종 답변에 검증 가능한 커밋·검사·배포 주장이 없었습니다(억지 구조화 안 함).</p>`}
+  <p class="meta">"최종 답변을 잡았다"는 <strong>reported</strong>입니다. git·해시·검사 재계산 결과만 <strong>verified</strong>. 완료 원문은 로컬에만 저장되고 이 페이지에 포함되지 않습니다.</p>
+</section>`
+    : "";
+
   // ── v0.20 결정3: 세션 타임라인 — capture(행위) / git(커밋 시각 축약판·정직 라벨) ──
   const tl = extras?.timeline ?? null;
   const timelineSection = tl
@@ -291,12 +349,13 @@ ${sharedBase()}
   @media print{.tabs .pane{display:block!important}.tablabels,.tabs>input.tabradio{display:none!important}} /* DA-3: 인쇄=전 패널 펼침(증거 숨김 금지) */
 </style></head><body>
 <div class="wrap">
+  ${handoffBanner}
   <p class="doctype">AI Work Receipt · <code>${esc(r.contractId)}</code>${r.title ? ` — ${esc(r.title)}` : ""}</p>
   <div class="hero ${verdictVisual(r.verdict?.verdict ?? (pass ? "PASS" : "FAIL")).cls}">
     <span class="hero-badge">${verdictVisual(r.verdict?.verdict ?? (pass ? "PASS" : "FAIL")).icon} ${esc(verdictVisual(r.verdict?.verdict ?? (pass ? "PASS" : "FAIL")).label)}</span>
     <span class="hero-sub">${statusTxt}${r.contractSnapshot ? ` · ${esc(renderContractLine(r.contractSnapshot))}` : ""}</span>
     <span class="hero-mag">Changed ${r.touched.length} file(s) · +${r.magnitude.added} / -${r.magnitude.deleted} · Checks ${r.checks.length ? `${checksPassed}/${r.checks.length}` : "none"}${guardDenied ? ` · Guard-denied ${guardDenied}` : ""}</span>
-  </div>${r.verdict ? `\n  <p class="meta">${esc(renderVerdictLine(r.verdict))}</p>` : ""}${execSummary}
+  </div>${r.verdict ? `\n  <p class="meta">${esc(renderVerdictLine(r.verdict))}</p>` : ""}${completionSection}${execSummary}
   <div class="tabs">
   <input class="tabradio" type="radio" name="proof-tab" id="pt-change" checked>
   <input class="tabradio" type="radio" name="proof-tab" id="pt-evidence">
@@ -375,18 +434,45 @@ function buildExtras(opts: ShareProofOpts, cwd: string): ProofExtras {
  * `agent-receipt share-proof [--out <path>] [--redact] [--evidence-dir <d>] [--with-cost]` — receipt 를
  * 클라이언트 전달용 self-contained 3축 탭 HTML 로 저장. exit = ok ? 0 : 1.
  */
-function writeProof(r: Receipt, opts: ShareProofOpts, anchor: RekorAnchor | null, cwd: string, review: ReviewRecord | null = null): never {
-  let html = toProofHtml(r, anchor, { ...buildExtras(opts, cwd), review });
+// P0-4: 완료 검증 사이드카(있으면)를 읽어 최종 전달 판정(handoff)을 읽기 전용 조립한다. Work Receipt 는 손대지 않는다.
+function completionExtras(r: Receipt, receiptAbs: string | null, cwd: string): { completion: CompletionSummary | null; handoff: HandoffVerdict } {
+  const completion = receiptAbs ? loadCompletionSummary(receiptAbs) : null;
+  let handoff = computeHandoffVerdict(r.ok, completion);
+  if (!completion) {
+    const pend = loadPending(cwd);
+    if (pend && pend.status === "pending" && pend.workReceiptContentHash === r.contentHash) handoff = "PENDING"; // Stop 전 = 대기(INCOMPLETE 아님)
+  }
+  return { completion, handoff };
+}
+
+function writeProof(r: Receipt, opts: ShareProofOpts, anchor: RekorAnchor | null, cwd: string, review: ReviewRecord | null = null, receiptAbs: string | null = null): never {
+  const ce = completionExtras(r, receiptAbs, cwd);
+  let html = toProofHtml(r, anchor, { ...buildExtras(opts, cwd), review, completion: ce.completion, handoff: ce.handoff });
   if (opts.redact) html = redactText(html).text;
   const stamp = (r.timestamp ?? "receipt").replace(/[:.]/g, "-");
   const rel = opts.out ?? join(".agent-guard", `proof-${stamp}.html`);
   const out = isAbsolute(rel) ? rel : join(cwd, rel);
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, html);
-  console.log(`share-proof 생성: ${rel} (${r.ok ? "PASS" : "FAIL"})`);
+  // P0-4F: Stop 전에 share 를 냈으면 이 HTML 경로를 pending 에 기록 → Stop 최종화 후 같은 파일을 최종본으로 재렌더.
+  if (ce.handoff === "PENDING") recordShareRequest(rel, cwd);
+  console.log(`share-proof 생성: ${rel} (${r.ok ? "PASS" : "FAIL"}${ce.handoff !== "PENDING" || ce.completion ? ` · handoff ${HANDOFF_LABEL[ce.handoff]}` : " · handoff PENDING(Stop 대기)"})`);
   console.log("  → 브라우저로 열어 확인 후 클라이언트에게 이 파일을 보내세요(로컬 증거·외부 전송 0).");
   console.log(`  ${LIMIT_NOTE}`);
   process.exit(r.ok ? 0 : 1);
+}
+
+/**
+ * P0-4F: HTML 표현물만 재생성(영수증 수정 아님). Stop 최종화 후 completion.ts 가 호출.
+ * 저장된 Work Receipt + 완료 검증 사이드카로 같은 출력 경로를 최종본으로 다시 쓴다.
+ */
+export function rerenderProofTo(workReceiptAbs: string, outAbs: string, cwd: string = process.cwd()): void {
+  const parsed = JSON.parse(readFileSync(workReceiptAbs, "utf8")) as Receipt;
+  const anchor = loadRekorAnchor(workReceiptAbs);
+  const ce = completionExtras(parsed, workReceiptAbs, cwd);
+  const html = toProofHtml(parsed, anchor, { ...buildExtras({}, cwd), review: reviewStatusFor(workReceiptAbs), completion: ce.completion, handoff: ce.handoff });
+  mkdirSync(dirname(outAbs), { recursive: true });
+  writeFileSync(outAbs, html);
 }
 
 // ── P2 D6: proof bundle — 공유용 디렉터리(html + receipt.json + anchor sidecar + public key + VERIFY.md) ──
@@ -425,7 +511,8 @@ export function buildVerifyMd(hasDsse: boolean, hasRekor: boolean, rekorUrl: str
 export function runProofBundle(receiptPath: string | undefined, opts: ShareProofOpts, cwd: string = process.cwd()): never {
   const { abs, receipt: r } = loadSavedReceipt(receiptPath, "share-proof --bundle", cwd); // 저장 receipt 필수(사이드카 정체성)
   const anchor = loadRekorAnchor(abs);
-  let html = toProofHtml(r, anchor, { ...buildExtras(opts, cwd), review: reviewStatusFor(abs) });
+  const ce = completionExtras(r, abs, cwd); // P0-4: 완료 검증 사이드카 연결(읽기 전용)
+  let html = toProofHtml(r, anchor, { ...buildExtras(opts, cwd), review: reviewStatusFor(abs), completion: ce.completion, handoff: ce.handoff });
   let receiptJson = readFileSync(abs, "utf8");
   if (opts.redact) {
     html = redactText(html).text;
@@ -503,5 +590,5 @@ export function runShareTerm(receiptPath: string | undefined, cwd: string = proc
 export function runShareProofFromSaved(receiptPath: string | undefined, opts: ShareProofOpts, cwd: string = process.cwd()): never {
   if (opts.bundle) runProofBundle(receiptPath, opts, cwd);
   const { abs, receipt: r } = loadSavedReceipt(receiptPath, "share-proof", cwd); // 13차 council: 공용 로더
-  writeProof(r, opts, loadRekorAnchor(abs), cwd, reviewStatusFor(abs)); // 배치A-2: 검토 기록 표면화
+  writeProof(r, opts, loadRekorAnchor(abs), cwd, reviewStatusFor(abs), abs); // 배치A-2: 검토 기록 · P0-4: 완료 검증 사이드카 연결
 }
