@@ -12,6 +12,7 @@ import { sessionVerdict, buildContractSnapshot, renderVerdictLine, renderContrac
 import { loadPolicySafe } from "./policy.js";
 import { LIMIT_NOTE } from "./disclosure.js";
 import { renderTermCard, useColor } from "./termcard.js";
+import { loadObservationHealth } from "./observation.js";
 
 const line = "─".repeat(56);
 
@@ -38,7 +39,10 @@ export function runDone(
     ...redFlags.skipOnly.map((s) => `test .only/.skip: ${s.path}(${s.count})`),
     ...redFlags.depsAdded.map((d) => `의존성 추가: ${d}`),
   ];
-  const vr = sessionVerdict(r, { wasteSignal: !!gw, redFlags: redFlagFacts });
+  // P0-1(정본 2026-07-16): 관찰 배선을 판정에 넣는다. 훅을 깔고도 기록이 0이면 PASS 는 과대 주장이다.
+  // 배선 안 하면 죽은 코드가 된다. 실제로 이 도구가 44일간 관찰 0인 채 PASS 를 찍은 것이 그 사고였다.
+  const obs = loadObservationHealth(cwd);
+  const vr = sessionVerdict(r, { wasteSignal: !!gw, redFlags: redFlagFacts, observation: obs });
   const snapshot = buildContractSnapshot(contract, r);
   r.verdict = vr;
   r.contractSnapshot = snapshot;

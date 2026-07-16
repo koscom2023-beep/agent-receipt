@@ -1,5 +1,6 @@
 import type { Receipt } from "./receipt.js";
 import type { Contract } from "./schema.js";
+import type { ObservationHealth } from "./observation.js";
 
 // P0 v0.17 (council 2026-07-07 D1·D2) — 세션 판정 + 계약 스냅샷.
 // P1 v0.18 (council 2026-07-07 D1~D3) — 판정 규칙 명문화:
@@ -12,7 +13,10 @@ import type { Contract } from "./schema.js";
 //   기존 신호(verify ok·denied/outOfScope·checks·critical·policy·waste·redflag·session 상태)의
 //   순수 롤업이며, 각 판정은 항목별 사실(reasons)로 뒷받침되고 그것을 **대체하지 않는다**.
 // 우선순위(결정론): FAIL > INCOMPLETE > PASS_WITH_WARNINGS > PASS.
-//   INCOMPLETE 정의(고정): 계약 위반은 없으나 측정 기반이 불완전 — baseline 없음(begin 미실행) 또는 stale.
+//   INCOMPLETE 정의(고정): 계약 위반은 없으나 측정 기반이 불완전하다. 축이 둘이다.
+//     · 측정 창(baseline): begin 미실행 또는 stale.
+//     · 관찰 배선(observation·P0-1 2026-07-16): 훅을 깔고도 기록이 0(wired-silent)이거나 기록이 손상(degraded).
+//   관찰이 빈 채로 PASS 를 찍으면 영수증이 과대 주장을 한다(2026-07-16 실측: 44일 행동 0건인데 PASS 다수).
 export type SessionVerdict = "PASS" | "PASS_WITH_WARNINGS" | "FAIL" | "INCOMPLETE";
 export interface VerdictResult {
   verdict: SessionVerdict;
@@ -43,6 +47,9 @@ export const VERDICT_RULES: readonly VerdictRule[] = [
   { id: "stale-branch-mismatch", verdict: "INCOMPLETE", when: "begin 때와 다른 브랜치에서 측정됨" },
   { id: "stale-baseline-not-ancestor", verdict: "INCOMPLETE", when: "baseline 커밋이 현재 HEAD 의 조상이 아님(rebase/reset/amend 흔적)" },
   { id: "stale-unknown", verdict: "INCOMPLETE", when: "baseline 미적용(기타·사유 미기록)" },
+  // 관찰 배선 축(P0-1). 측정 창과 별개다. not-wired(훅 미설치)는 정상 상태라 규칙이 아니며 영수증이 범위만 공시한다.
+  { id: "observation-silent", verdict: "INCOMPLETE", when: "capture 훅이 배선됐는데 행동 기록 0건(훅이 실행되지 않음)" },
+  { id: "observation-degraded", verdict: "INCOMPLETE", when: "행동 기록 손상(열화 마커·체인 문제·꼬리 잘림)" },
   // PASS_WITH_WARNINGS — 통과했으나 사람이 봐야 할 신호. 자동 승격 없음(아래 WARN_ESCALATION_NOTE).
   { id: "critical-path", verdict: "PASS_WITH_WARNINGS", when: "계약 critical_paths 에 매치되는 변경이 있음" },
   { id: "policy-forbid", verdict: "PASS_WITH_WARNINGS", when: "policy forbidAlways 에 매치되는 변경이 있음" },
@@ -55,7 +62,8 @@ export const WARN_ESCALATION_NOTE =
   "승격은 사람 판단이며, 원하면 policy fail_on_done 으로 exit 게이트만 opt-in 할 수 있다(판정 자체는 불변).";
 
 // ── P1 D2: INCOMPLETE 사유 세분 — code + 사실 + 고치는 법(고정 매핑·session.ts 의 reason enum 실측 기반) ──
-export type IncompleteCode = "no-baseline" | "stale-branch-mismatch" | "stale-baseline-not-ancestor" | "stale-unknown";
+// P0-1(2026-07-16 정본): 관찰 사유 2종 추가. baseline 이 멀쩡해도 관찰이 비면 PASS 는 과대 주장이다.
+export type IncompleteCode = "no-baseline" | "stale-branch-mismatch" | "stale-baseline-not-ancestor" | "stale-unknown" | "observation-silent" | "observation-degraded";
 export interface IncompleteDetail {
   code: IncompleteCode;
   text: string; // 무엇이 불완전한가(사실)
@@ -107,6 +115,22 @@ type ReceiptLike = Pick<Receipt, "ok" | "deniedHits" | "outOfScope" | "checks" |
 export interface VerdictExtras {
   wasteSignal?: boolean; // done 이 계산한 가드/반복 낭비 1줄 존재 여부(상세는 본문 라인이 보여줌)
   redFlags?: string[]; // reviewfocus 확인 신호(예: test .only · 의존성 추가)
+  // P0-1: 관찰 상태. 미제공(undefined)이면 관찰 판정을 건너뛴다(기존 호출자 판정 불변).
+  observation?: Pick<ObservationHealth, "verdict" | "text" | "fix">;
+}
+
+/**
+ * 관찰 상태 → INCOMPLETE 사유. 트리거를 좁게 잡는다(안전은 트리거 정확성으로).
+ *  - wired-silent: 훅을 깔아놓고 기록이 0 = 진짜 고장 → INCOMPLETE
+ *  - degraded    : 기록 손상 = 숫자를 믿을 수 없음 → INCOMPLETE
+ *  - not-wired   : git 전용 사용자의 정상 상태 → INCOMPLETE 아님(관찰 범위는 영수증이 따로 공시)
+ *  - observed    : 정상
+ */
+export function observationIncomplete(o: VerdictExtras["observation"]): IncompleteDetail | null {
+  if (!o) return null;
+  if (o.verdict === "wired-silent") return { code: "observation-silent", text: o.text, fix: o.fix ?? "훅 승인 후 새 세션에서 재측정" };
+  if (o.verdict === "degraded") return { code: "observation-degraded", text: o.text, fix: o.fix ?? "`agent-receipt capture verify` 로 확인" };
+  return null;
 }
 
 const few = (xs: string[], n = 5): string => xs.slice(0, n).join(", ") + (xs.length > n ? ` 외 ${xs.length - n}` : "");
@@ -125,9 +149,12 @@ export function sessionVerdict(r: ReceiptLike, extra: VerdictExtras = {}): Verdi
     return { verdict: "FAIL", reasons };
   }
   // 2) INCOMPLETE — 위반은 없으나 측정 기반 불완전(D2: code + 고치는 법 병기).
+  //    baseline(측정 창)과 observation(관찰 배선)은 다른 축이다. 둘 다 불완전하면 둘 다 낸다.
   const inc = incompleteDetail(r.session);
-  if (inc) {
-    return { verdict: "INCOMPLETE", reasons: [`[${inc.code}] ${inc.text} · 고치는 법: ${inc.fix}`] };
+  const obsInc = observationIncomplete(extra.observation);
+  if (inc || obsInc) {
+    const reasons = [inc, obsInc].filter((x): x is IncompleteDetail => x !== null).map((x) => `[${x.code}] ${x.text} · 고치는 법: ${x.fix}`);
+    return { verdict: "INCOMPLETE", reasons };
   }
   // 3) PASS_WITH_WARNINGS — 통과했으나 사람이 봐야 할 신호(WARN_RULES·자동 승격 없음).
   const warns: string[] = [];

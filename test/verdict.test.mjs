@@ -129,7 +129,10 @@ import { VERDICT_RULES, WARN_ESCALATION_NOTE, incompleteDetail, VERDICT_SEVERITY
 const ids = VERDICT_RULES.map((r) => r.id);
 assert.equal(new Set(ids).size, ids.length, "rule id 유일");
 assert.equal(VERDICT_RULES.filter((r) => r.verdict === "PASS_WITH_WARNINGS").length, 4, "WARN 규칙 4종");
-assert.equal(VERDICT_RULES.filter((r) => r.verdict === "INCOMPLETE").length, 4, "INCOMPLETE 코드 4종");
+// INCOMPLETE 는 두 축이다: 측정 창(baseline) 4종 + 관찰 배선(observation·P0-1 2026-07-16) 2종.
+// not-wired(훅 미설치)는 규칙이 아니다. git 전용 사용자는 정상 상태다(트리거 정확성).
+assert.equal(VERDICT_RULES.filter((r) => r.verdict === "INCOMPLETE").length, 6, "INCOMPLETE 코드 6종(baseline 4 + observation 2)");
+assert.equal(VERDICT_RULES.filter((r) => r.verdict === "INCOMPLETE" && r.id.startsWith("observation-")).length, 2, "관찰 축 2종");
 assert.ok(WARN_ESCALATION_NOTE.includes("자동 승격되지 않는다"), "승격 없음 명문");
 
 // D1: reason 은 [rule-id] 형식(기계 판독) — 발동한 규칙 id 가 레지스트리에 실재

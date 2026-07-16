@@ -5,6 +5,7 @@ import * as g from "./git.js";
 import { DEFAULT_CONTRACT_PATHS, discoverContract } from "./discover.js";
 import { resolveSession } from "./session.js";
 import { binaryPath, installedVersion, npmLatest, compareVersions } from "./version.js";
+import { loadObservationHealth, zeroMeaning, ZERO_MEANING_TEXT } from "./observation.js";
 
 const line = "─".repeat(56);
 
@@ -46,6 +47,17 @@ export function runDoctor(cwd: string = process.cwd()): never {
     else f.push({ level: "warn", msg: `baseline 무효(${s.reason}) — 'agent-receipt reset' 권장` });
   }
 
+  // 관찰 배선 진단(P0-1 · 2026-07-16 정본)
+  // 이 도구의 가장 큰 실패는 "안 보이는데 보이는 척"이었다. 훅이 죽어 있으면 여기서 말한다.
+  // 판정 자체(INCOMPLETE)는 verdict.ts 가 하고, doctor 는 사람이 고치러 갈 자리를 보여준다.
+  const obs = isRepo ? loadObservationHealth(cwd) : null;
+  if (obs) {
+    if (obs.verdict === "observed") f.push({ level: "ok", msg: `행동 관찰 정상. 기록 ${obs.actions}건 (세션 ${obs.sessions})` });
+    else if (obs.verdict === "wired-silent") f.push({ level: "warn", msg: `행동 관찰 침묵. 훅은 배선됐는데 기록 0건. ${obs.fix}` });
+    else if (obs.verdict === "degraded") f.push({ level: "warn", msg: `행동 관찰 손상. ${obs.text}` });
+    else f.push({ level: "ok", msg: "행동 관찰 미배선. 이 저장소의 영수증은 git 변경 한정이다('capture install --write' 로 확장)" });
+  }
+
   if (hasContract) f.push({ level: "ok", msg: "계약 품질은 'agent-receipt lint' 로 점검" });
 
   console.log("");
@@ -76,6 +88,30 @@ export function runDoctor(cwd: string = process.cwd()): never {
     }
   }
   console.log(line);
+
+  // 관찰 상세(P0-1). "무엇을 볼 수 있었나"를 숫자로 낸다. 0 을 찍을 땐 0 의 뜻을 함께 낸다(P0-2).
+  // 훅 '승인' 여부는 Claude Code 내부 상태라 디스크에서 읽을 수 없다. 그래서 승인됨이라고 주장하지 않고,
+  // 관측 가능한 사실(배선 + 수신)만 낸다. 배선됐는데 수신 0 이면 승인 대기이거나 세션이 배선 전에 시작된 것이다.
+  if (obs) {
+    console.log("관찰(행동 기록):");
+    if (obs.sites.length) {
+      for (const s of obs.sites) console.log(`  훅 배선    : 배선됨 · ${s.path} (${s.events.join(", ")})`);
+    } else {
+      console.log("  훅 배선    : 없음 (이 저장소는 git 변경만 관찰합니다)");
+    }
+    console.log(`  기록 파일  : .agent-guard/capture.jsonl ${obs.logExists ? "있음" : "없음"}`);
+    console.log(`  측정 창    : ${obs.windowStart ?? "없음(전체 기록을 창으로 봄)"}`);
+    console.log(`  수신 행동  : ${obs.actions}건 (측정 창 안)${obs.degraded ? ` · 열화 마커 ${obs.degraded}건` : ""}`);
+    // 창 밖 잔재는 반드시 드러낸다. 이걸 수신으로 세면 죽은 훅이 살아 있어 보인다(2026-07-16 실측 진범).
+    if (obs.stale) console.log(`  창 밖 잔재 : ${obs.stale}건 (이전 창 기록이라 이번 세션 관찰이 아님)`);
+    console.log(`  마지막 수신: ${obs.lastTs ?? "없음"}`);
+    if (obs.actions === 0) {
+      const z = zeroMeaning(obs);
+      console.log(`  0 의 뜻    : ${ZERO_MEANING_TEXT[z]}`);
+    }
+    if (obs.fix) console.log(`  고치는 법  : ${obs.fix}`);
+    console.log(line);
+  }
 
   for (const x of f) console.log(`  ${x.level === "ok" ? "✓" : x.level === "warn" ? "⚠" : "✗"} ${x.msg}`);
   console.log(line);

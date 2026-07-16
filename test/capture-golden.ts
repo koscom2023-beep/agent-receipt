@@ -34,11 +34,15 @@ if (!existsSync(tsxBin)) {
 }
 mkdirSync(goldenDir, { recursive: true });
 
-const HOME = process.env["HOME"] ?? "";
 const TMP = tmpdir();
+// HOME 을 격리 임시 디렉터리로 봉인한다(P0-1 후속).
+//   이유: doctor 의 관찰 진단이 `~/.claude/settings.json` 의 전역 capture 훅을 읽는다(정상 동작이다.
+//   전역 훅은 이 저장소도 실제로 관찰하니까). 그런데 진짜 HOME 을 쓰면 개발자가 전역 훅을 깔았는지에
+//   따라 골든이 달라진다(결정론 붕괴). 격리 HOME 은 비어 있으므로 골든은 픽스처 저장소에만 의존한다.
+const HOME = mkdtempSync(join(TMP, "ag-gold-home-"));
 const FIXED_DATE = "2025-01-01T00:00:00 +0000";
 
-// 호스트 git config·GIT_* 차단 + 고정 DATE 로 결정론화.
+// 호스트 git config·GIT_* 차단 + 고정 DATE + 격리 HOME 으로 결정론화.
 const ENV: NodeJS.ProcessEnv = {
   PATH: process.env["PATH"] ?? "",
   HOME,

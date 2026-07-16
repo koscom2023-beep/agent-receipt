@@ -434,6 +434,10 @@ function safeList(fn: () => string[]): string[] {
     return [];
   }
 }
+/** 누적 capture 레코드. 관찰 진단(observation.ts)이 재사용한다(파서 중복 금지). 파일 없으면 빈 배열. */
+export function readCaptureRecords(): CaptureRecord[] {
+  return readRecords();
+}
 function readRecords(): CaptureRecord[] {
   const f = capFile();
   if (!existsSync(f)) return [];
@@ -756,7 +760,9 @@ export function runCaptureReset(): never {
 // `.` 이 들어가는 순간 matcher 전체가 regex 경로(unanchored test·공식 문서 실측)가 되므로
 // `^(...)$` 로 명시 anchor — unanchored "Read" 가 임의 신규 도구명에 부분매칭하는 사고 방지.
 const HOOK_MATCHER = `^(${COVERED_TOOLS.map((t) => (t === "mcp__*" ? "mcp__.*" : t)).join("|")})$`;
-const captureCommand = (phase: "pre" | "post" | "fail" | "denied"): string => `agent-receipt capture --event ${phase}`;
+/** 우리가 심는 훅 command 의 접두. install/uninstall/관찰진단(observation.ts)이 같은 원천을 쓴다. */
+export const CAPTURE_COMMAND_PREFIX = "agent-receipt capture";
+const captureCommand = (phase: "pre" | "post" | "fail" | "denied"): string => `${CAPTURE_COMMAND_PREFIX} --event ${phase}`;
 
 // 설치가 심는 훅 이벤트 4종의 SSOT. install(mergeCaptureHooks)과 uninstall(removeCaptureHooks)이 같은 목록을 쓴다.
 // v0.24 수정(리뷰 #L3): 이전 uninstall 은 PreToolUse/PostToolUse 2종만 지워 PostToolUseFailure·PermissionDenied 가
@@ -769,7 +775,7 @@ const HOOK_PHASES: Array<["PreToolUse" | "PostToolUse" | "PostToolUseFailure" | 
   // 권한 거부된 시도도 사실(Phase9). 문서의 tool-events 목록에 PermissionDenied 실재(같은 tool_name 매칭).
   ["PermissionDenied", "denied"],
 ];
-const HOOK_EVENT_KEYS: string[] = HOOK_PHASES.map(([k]) => k);
+export const HOOK_EVENT_KEYS: string[] = HOOK_PHASES.map(([k]) => k);
 
 interface HookCmd {
   type?: string;
@@ -815,7 +821,7 @@ export function removeCaptureHooks(input: SettingsShape): { merged: SettingsShap
       const arr = merged.hooks[key];
       if (!Array.isArray(arr)) continue;
       const kept = arr.filter((e) => {
-        const ours = Array.isArray(e?.hooks) && e.hooks.some((h) => typeof h?.command === "string" && h.command.startsWith("agent-receipt capture"));
+        const ours = Array.isArray(e?.hooks) && e.hooks.some((h) => typeof h?.command === "string" && h.command.startsWith(CAPTURE_COMMAND_PREFIX));
         if (ours) changed = true;
         return !ours;
       });

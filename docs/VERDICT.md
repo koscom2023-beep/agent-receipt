@@ -21,12 +21,20 @@
 
 ## INCOMPLETE — 위반은 없으나 측정 기반 불완전 (사유 코드 + 고치는 법)
 
+축이 둘이다. **측정 창**(baseline: 어디서부터 쟀나)과 **관찰 배선**(observation: 무엇을 볼 수 있었나). 둘은 독립이라 동시에 불완전할 수 있고, 그러면 사유를 둘 다 낸다.
+
+관찰 배선이 판정에 들어온 이유: 봉인이 아무리 강해도 관찰이 비면 그 영수증은 증거가 아니다. 2026-07-16 전수 실측에서 행동 기록이 44일간 0건인데도 PASS 가 다수 찍혔다. 자물쇠는 튼튼한데 상자가 비어 있었다.
+
+**`not-wired`(capture 훅 미설치)는 규칙이 아니다.** 훅을 안 깐 git 전용 사용자는 정상 상태이므로 INCOMPLETE 로 내리지 않는다. 대신 그 영수증의 관찰 범위가 git 한정이라는 사실을 따로 공시한다(과대 주장 금지). 트리거를 좁게 잡는 것이 안전 장치다.
+
 | rule id | 발동 조건 | 고치는 법 |
 |---------|-----------|-----------|
 | `no-baseline` | begin 미실행 — 세션 baseline 없음(전체 트리 측정만 수행) | 작업 시작 전 `agent-receipt begin --kind <kind>` |
 | `stale-branch-mismatch` | begin 때와 다른 브랜치에서 측정됨 | begin 한 브랜치로 복귀, 또는 현 브랜치에서 `begin` 재실행 |
 | `stale-baseline-not-ancestor` | baseline 커밋이 현재 HEAD 의 조상이 아님(rebase/reset/amend 흔적) | `begin` 재실행(현재 HEAD 로 새 baseline) |
 | `stale-unknown` | baseline 미적용(기타·사유 미기록) | `begin` 재실행 |
+| `observation-silent` | capture 훅이 배선됐는데 행동 기록 0건(훅이 실행되지 않음) | Claude Code 새 세션 시작 + 훅 승인 확인 후 재측정 |
+| `observation-degraded` | 행동 기록 손상(열화 마커·체인 문제·꼬리 잘림) | `agent-receipt capture verify` 로 확인 후 `begin` 으로 새 창 |
 
 고치는 법은 **고정 매핑**(LLM 추천 아님) — reason 줄에 `· 고치는 법:` 으로 병기된다.
 
