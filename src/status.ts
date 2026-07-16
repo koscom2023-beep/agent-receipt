@@ -1,6 +1,7 @@
 import type { Contract } from "./schema.js";
 import * as g from "./git.js";
-import { resolveSession, isToolOutput } from "./session.js";
+import { resolveSession } from "./session.js";
+import { isToolOutput } from "./agentguard.js";
 
 const line = "─".repeat(56);
 

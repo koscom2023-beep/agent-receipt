@@ -5,7 +5,7 @@ sprint6 audit
 ────────────────────────────────────────────────────────
 브랜치        : main (기대: main) OK
 변경한 파일   : 2개
-   - .agent-guard/policy.yaml  [범위밖]
+   - .agent-guard/policy.yaml  [제어]
    - .env.local  [범위밖]
 stage된 파일  : 0개
 새 파일(untracked): 2개
@@ -17,6 +17,12 @@ NUL 검사      : (대상 없음)
 결과: FAIL ❌  위반 2건
    ! 허용 범위 밖 변경 2건: .agent-guard/policy.yaml, .env.local
    ! 금지 파일 변경 1건: .env.local
+────────────────────────────────────────────────────────
+
+CONTROL_PLANE_TOUCHED
+   판정 규칙에 영향을 주는 제어 파일이 변경됨
+   - .agent-guard/policy.yaml
+   사람 검토 필요
 ────────────────────────────────────────────────────────
 
 상시 규칙(policy):

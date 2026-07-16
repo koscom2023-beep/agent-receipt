@@ -3,7 +3,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { matchGlob } from "./pathmatch.js";
 import type { Contract } from "./schema.js";
 import * as g from "./git.js";
-import { resolveSession, isToolOutput } from "./session.js";
+import { resolveSession } from "./session.js";
+import { isToolOutput, isControlPlane } from "./agentguard.js";
 
 export type CommandResult = {
   name: string;
@@ -23,6 +24,11 @@ export type VerifyResult = {
   untracked: string[];
   outOfScope: string[];
   deniedHits: string[];
+  /**
+   * 판정 규칙에 영향을 주는 제어 파일(contract/policy 등) 변경. 위반이 아니라 별도 신호다.
+   * 일반 out-of-scope 소음에 섞으면 "심판 규칙을 에이전트가 고쳤다"는 사실이 묻힌다.
+   */
+  controlPlaneTouched: string[];
   stagedOutOfScope: string[];
   nulPaths: string[];
   nulBad: string[];
@@ -69,8 +75,8 @@ export function runVerify(contract: Contract, opts: { committedBase?: string } =
   //    제어 파일 .agent-guard/session.json 은 항상 제외(전체 .agent-guard/** 제외는 아님).
   //    유효 session(baseline) 이 있으면 scope 검사는 baseline 이후 신규 변경만 본다.
   //    denied 검사는 안전을 위해 항상 full touched 기준(baseline 으로 절대 안 묻음).
-  // 제어/산출 파일은 verify 에서 제외(session.json/receipts/keys/dashboard.html — session.ts isToolOutput).
-  // contract.yaml/README.md 는 사용자 파일이라 제외 안 함.
+  // 도구가 자동 생성한 실행 출력(RUNTIME_OUTPUT)만 제외한다 — 분류는 agentguard.ts 가 단일 원천.
+  // contract.yaml/policy.yaml/README.md 는 CONTROL_PLANE 이라 제외하지 않고 별도 신호로 올린다(8.5).
   const ex = (arr: string[]): string[] => arr.filter((f) => !isToolOutput(f));
   const curUnstaged = ex(g.unstagedFiles());
   const curStaged = ex(g.stagedFiles());
@@ -147,6 +153,11 @@ export function runVerify(contract: Contract, opts: { committedBase?: string } =
   //     VerifyResult.commands 필드는 output.ts(printReport/toMarkdown) 하위호환을 위해
   //     형태만 유지하고 항상 빈 배열로 둔다. 실제 실행은 runCheck()를 보라.
 
+  // 8.5) 제어 파일 변경(CONTROL_PLANE). 위반이 아니라 별도 신호다.
+  //      contract/policy 는 판정 규칙 자체이므로 에이전트가 고쳤다면 사람이 봐야 한다.
+  //      full touched 기준 — baseline 으로 묻지 않는다(심판 규칙 변경을 창 밖이라고 숨기면 안 됨).
+  const controlPlaneTouched = touchedFull.filter(isControlPlane);
+
   // 9) push 상태 (참고용)
   const aheadBehind = g.aheadBehind("origin/main");
 
@@ -159,6 +170,7 @@ export function runVerify(contract: Contract, opts: { committedBase?: string } =
     untracked,
     outOfScope,
     deniedHits,
+    controlPlaneTouched,
     stagedOutOfScope,
     nulPaths,
     nulBad,

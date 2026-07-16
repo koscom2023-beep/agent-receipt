@@ -60,7 +60,17 @@ export function printReport(r: VerifyResult, contract?: Contract): void {
 
   console.log(`변경한 파일   : ${r.touched.length}개`);
   for (const f of r.touched) {
-    const tag = r.outOfScope.includes(f) ? "  [범위밖]" : r.deniedHits.includes(f) ? "  [금지]" : "";
+    // 태그: 제어 파일만 일반 범위밖 소음에서 분리한다(판정 규칙 자체를 바꾼 것이므로).
+    // 🔴 범위밖/금지 의 기존 우선순위는 건드리지 않는다 — P0-3 범위 밖이고, 둘 다 이미 violations 에 그대로 뜬다.
+    //    (관찰: 금지+범위밖 동시 해당 파일은 예전부터 약한 쪽인 [범위밖] 이 이겼다. 판정은 불변이라 여기서 안 고친다.)
+    const control = r.controlPlaneTouched.includes(f);
+    const tag = r.outOfScope.includes(f) && !control
+      ? "  [범위밖]"
+      : r.deniedHits.includes(f)
+        ? "  [금지]"
+        : control
+          ? "  [제어]"
+          : "";
     console.log(`   - ${f}${tag}`);
   }
 
@@ -94,6 +104,19 @@ export function printReport(r: VerifyResult, contract?: Contract): void {
     for (const v of r.violations) console.log(`   ! ${v}`);
   }
   console.log(line);
+
+  // 제어 파일 변경 신호(present-only). 위반 판정은 위에서 이미 끝났고 여기서 바꾸지 않는다.
+  // 🔴 --json 최상위 키셋(14키)은 고정 spec(test/run-fixtures.ts 가 박제)이라 여기에 키를 더하지 않았다.
+  //    기계 소비자에게도 이 신호가 필요하다면 형식 변경이므로 owner 결재가 먼저다.
+  // 범위 규칙이 이 경로를 허용하더라도 "심판 규칙을 에이전트가 고쳤다"는 사실은 따로 드러나야 한다.
+  if (r.controlPlaneTouched.length) {
+    console.log("");
+    console.log("CONTROL_PLANE_TOUCHED");
+    console.log("   판정 규칙에 영향을 주는 제어 파일이 변경됨");
+    for (const f of r.controlPlaneTouched) console.log(`   - ${f}`);
+    console.log("   사람 검토 필요");
+    console.log(line);
+  }
 
   // N8 트립와이어: policy.yaml 이 있을 때만 상시규칙(forbidAlways/protectAlways/approvalFor) 관찰을 덧붙인다
   //   — policy 없으면 빈 배열이라 기존 출력 불변(golden 안전). verify --json(14키)에는 영향 없음(별도 표면).

@@ -5,7 +5,7 @@
 //   · promptia 는 측정 창이 7/15 인데 capture 마지막 기록이 7/3 이었다 → "기록 2건"이라 정상으로 보였다.
 //     **적은 nonzero 는 0 만큼이나 죽어 있다.** 창 밖 잔재를 수신으로 세면 죽은 훅이 살아 보인다.
 import assert from "node:assert";
-import { assessObservation, detectWiring, zeroMeaning, ZERO_MEANING_TEXT } from "../dist/observation.js";
+import { assessObservation, detectWiring, zeroMeaning, ZERO_MEANING_TEXT, OBSERVATION_STATE_CODE, OBSERVATION_CAUSE_TEXT } from "../dist/observation.js";
 import { sessionVerdict, observationIncomplete } from "../dist/verdict.js";
 
 const SITE = [{ path: ".claude/settings.json", events: ["PreToolUse", "PostToolUse"] }];
@@ -22,24 +22,31 @@ assert.deepEqual(
   "우리 capture 훅 감지",
 );
 
-// ── not-wired: 훅을 안 깐 git 전용 사용자는 정상이다. INCOMPLETE 로 내리지 않는다(트리거 정확성) ──
+// ── UNAVAILABLE: 훅을 안 깐 git 전용 사용자는 정상이다. INCOMPLETE 로 내리지 않는다(트리거 정확성) ──
+// 미배선은 기계가 확인한 사실이므로 원인을 확정해도 된다. 여기가 SILENT 와 갈리는 지점이다.
 let h = assess({ sites: [], records: [] });
-assert.equal(h.verdict, "not-wired");
+assert.equal(h.verdict, "unavailable");
+assert.equal(h.cause, "no-wiring", "기계가 확인한 원인이므로 확정");
 assert.equal(observationIncomplete(h), null, "미배선은 INCOMPLETE 가 아니다. git 전용 사용자는 정상 상태");
 assert.match(h.text, /git 변경 한정/, "다만 관찰 범위는 반드시 공시한다(과대 주장 금지)");
 
-// ── wired-silent: 배선했는데 기록 0 = 진짜 고장 ──
+// ── SILENT: 배선했는데 창 안 기록 0. 못 받은 것은 확정, 원인은 미확정 ──
 h = assess({ sites: SITE, records: [] });
-assert.equal(h.verdict, "wired-silent");
+assert.equal(h.verdict, "silent");
+assert.equal(h.cause, "unknown", "🔑 P0-2 정정: 원인을 단정하지 않는다");
 assert.equal(observationIncomplete(h).code, "observation-silent");
 assert.ok(h.fix, "고장이면 고치는 법을 반드시 낸다");
+// 🔴 회귀 방지: 기계가 증명하지 못한 원인을 단정하면 안 된다(2026-07-16 owner 정정).
+assert.doesNotMatch(h.text, /꺼져|미설치|승인 대기/, "SILENT 에서 원인 단정 금지. 확정한 것은 '못 받았다' 뿐이다");
+assert.match(h.text, /미확정/, "원인이 미확정이라는 사실 자체를 말한다");
 
 // ── 🔴 진범 박제: 창 밖 잔재는 수신이 아니다 ──
 // promptia 실측 재현. 창은 7/15 인데 기록은 7/3 두 건이었다. 예전 코드는 "기록 2건이니 정상"이라 했다.
 h = assess({ sites: SITE, records: [rec("2026-07-03T09:04:42.901Z"), rec("2026-07-03T09:05:00.000Z")], windowStart: "2026-07-15T14:30:40.156Z" });
 assert.equal(h.actions, 0, "창 밖 기록은 이번 세션 관찰이 아니다");
 assert.equal(h.stale, 2, "창 밖 잔재는 숨기지 않고 센다");
-assert.equal(h.verdict, "wired-silent", "적은 nonzero 도 창 밖이면 죽은 것. 여기가 2026-07-16 실측 진범");
+assert.equal(h.verdict, "silent", "적은 nonzero 도 창 밖이면 죽은 것. 여기가 2026-07-16 실측 진범");
+assert.equal(h.cause, "stale-only", "창 밖 기록만 존재 = STALE_ONLY(내부 원인). 대표 상태는 SILENT 로 낸다");
 assert.match(h.text, /잔재 2건/, "잔재 사실을 사람에게 말한다");
 
 // 창 안 기록이 있으면 정상.
@@ -69,13 +76,20 @@ assert.equal(h.verdict, "degraded", "체인 문제 = 손상");
 h = assess({ sites: SITE, records: [rec("2026-07-16T01:00:00.000Z")], truncated: true });
 assert.equal(h.verdict, "degraded", "꼬리 잘림 = 손상");
 
-// ── P0-2: 0 은 네 가지 뜻이 있다. 넷을 구분 못 하는 계기의 0 은 거짓말이다 ──
-assert.equal(zeroMeaning(assess({ sites: SITE, records: [] })), "recorder-off", "배선했는데 0 = 못 봤다");
-assert.equal(zeroMeaning(assess({ sites: [], records: [] })), "recorder-off", "미배선도 못 본 것");
+// ── P0-2: 0 의 뜻을 구분한다. 넷을 구분 못 하는 계기의 0 은 거짓말이다 ──
+// 🔑 2026-07-16 정정: '못 봤다'(not-observed)와 '꺼진 게 확인됐다'(recorder-off)는 다르다.
+//    전자를 후자라고 부르면, 그것도 기계가 증명 못 한 원인 단정이다.
+assert.equal(zeroMeaning(assess({ sites: SITE, records: [] })), "not-observed", "배선했는데 0 = 못 봤다(원인 미확정)");
+assert.equal(zeroMeaning(assess({ sites: [], records: [] })), "recorder-off", "미배선은 기계가 확인 = 원인 확정 가능");
+assert.doesNotMatch(ZERO_MEANING_TEXT["not-observed"], /꺼져/, "미확정을 '꺼짐'이라 부르지 않는다");
 assert.equal(zeroMeaning(assess({ sites: SITE, records: [rec("2026-07-16T01:00:00.000Z"), { ts: "x", phase: "post", tool: "(capture)", op: "capture-degraded" }] })), "corrupted");
 assert.equal(zeroMeaning(assess({ sites: SITE, records: [rec("2026-07-16T01:00:00.000Z")] }), false), "no-input", "입력이 없으면 대조 미실행이지 0 이 아니다");
 assert.equal(zeroMeaning(assess({ sites: SITE, records: [rec("2026-07-16T01:00:00.000Z")] }), true), "no-activity", "기록기 정상 + 입력 있음 = 진짜 없었음");
-for (const k of ["no-activity", "recorder-off", "no-input", "corrupted"]) assert.ok(ZERO_MEANING_TEXT[k], `${k} 사람말 있음`);
+for (const k of ["no-activity", "not-observed", "recorder-off", "no-input", "corrupted"]) assert.ok(ZERO_MEANING_TEXT[k], `${k} 사람말 있음`);
+// 대표 상태 코드 4종과 원인 코드 5종은 사람말이 다 있어야 한다(표시 누락 = 침묵).
+for (const k of ["observed", "silent", "unavailable", "degraded"]) assert.ok(OBSERVATION_STATE_CODE[k], `${k} 코드 있음`);
+for (const k of ["none", "no-wiring", "stale-only", "unknown", "corrupted"]) assert.ok(OBSERVATION_CAUSE_TEXT[k], `${k} 원인말 있음`);
+assert.match(OBSERVATION_CAUSE_TEXT["unknown"], /미확정/, "미확정 원인은 미확정이라고 쓴다");
 
 // ── 판정 통합: 관찰이 비면 PASS 를 안 찍는다 ──
 const base = {

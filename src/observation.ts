@@ -17,11 +17,29 @@ import * as g from "./git.js";
 import { CAPTURE_COMMAND_PREFIX, HOOK_EVENT_KEYS, readCaptureRecords, type CaptureRecord, type SettingsShape } from "./capture.js";
 import { loadSession } from "./session.js";
 
-/** 관찰 판정. 우선순위(결정론): degraded > wired-silent > not-wired > observed. */
-export type ObservationVerdict = "observed" | "not-wired" | "wired-silent" | "degraded";
+/**
+ * 사용자 대표 상태(관찰 상태). 우선순위(결정론): degraded > unavailable > silent > observed.
+ *
+ * 왜 이 어휘인가(2026-07-16 owner 정정): 이전 이름 wired-silent 는 "훅이 배선됐는데 안 돈다"는
+ * 원인 단정을 이름에 박아 넣었다. 기계가 증명한 것은 "창 안 기록을 못 받았다" 뿐이다.
+ *   observed     측정 창 안 행동 기록이 있음
+ *   silent       측정 창 안 기록이 없고 원인은 아직 모름
+ *   unavailable  훅 미설치·비활성·미지원이 기계적으로 확인됨
+ *   degraded     기록이 손상돼 숫자를 믿을 수 없음
+ */
+export type ObservationVerdict = "observed" | "silent" | "unavailable" | "degraded";
 
-/** 0 의 네 가지 뜻. 같은 숫자 0 이라도 병이 다르고 수리 지점이 다르다. */
-export type ZeroMeaning = "no-activity" | "recorder-off" | "no-input" | "corrupted";
+/**
+ * 내부 원인 코드. 대표 상태와 분리한다 — STALE_ONLY 와 SILENT 는 동시에 참일 수 있기 때문이다.
+ * 대표 상태는 사용자가 읽고, 원인 코드는 진단이 읽는다. 확정하지 못한 원인은 unknown 으로 둔다.
+ */
+export type ObservationCause = "none" | "no-wiring" | "stale-only" | "unknown" | "corrupted";
+
+/**
+ * 0 의 뜻. 같은 숫자 0 이라도 병이 다르고 수리 지점이 다르다.
+ * recorder-off 는 기계가 미배선을 확인했을 때만 쓴다. 못 봤을 뿐인 것을 껐다고 부르면 그것도 거짓말이다.
+ */
+export type ZeroMeaning = "no-activity" | "not-observed" | "recorder-off" | "no-input" | "corrupted";
 
 export interface WiringSite {
   path: string; // 훅이 발견된 settings 파일
@@ -29,7 +47,8 @@ export interface WiringSite {
 }
 
 export interface ObservationHealth {
-  verdict: ObservationVerdict;
+  verdict: ObservationVerdict; // 사용자 대표 상태
+  cause: ObservationCause; // 내부 원인 코드(대표 상태와 분리 — 미확정이면 unknown)
   wired: boolean; // capture 훅이 어느 settings 에든 배선돼 있나
   sites: WiringSite[]; // 배선 위치(사람이 고치러 갈 곳)
   logExists: boolean; // .agent-guard/capture.jsonl 존재
@@ -128,36 +147,41 @@ export function assessObservation(i: AssessInput): ObservationHealth {
     return {
       ...base,
       verdict: "degraded",
+      cause: "corrupted",
       text: `행동 관찰 기록이 손상됨(${parts.join(" · ")}). 기록된 숫자를 그대로 믿을 수 없음`,
       fix: "`agent-receipt capture verify` 로 상세 확인 후, 원인 해소하고 `agent-receipt begin` 으로 새 창 시작",
     };
   }
 
-  // 2) wired-silent: 훅은 배선됐는데 측정 창 안에 행동이 없다. 실측으로 확인된 진짜 고장.
-  //    창 밖 잔재(stale)가 있어도 이번 세션 관찰은 0이다. 그 사실을 숨기지 않고 같이 낸다.
-  if (wired && actions === 0) {
-    const staleNote = stale ? ` (측정 창 밖 잔재 ${stale}건은 이전 창 기록이라 이번 세션 관찰이 아님${base.lastTs ? `, 마지막 수신 ${base.lastTs}` : ""})` : "";
-    return {
-      ...base,
-      verdict: "wired-silent",
-      text: `capture 훅이 배선돼 있는데 측정 창 안 행동 기록이 0건. 훅이 실행되지 않고 있음(승인 대기이거나 세션이 배선 이전에 시작됨)${staleNote}`,
-      fix: "Claude Code 를 새 세션으로 다시 시작하고 훅 승인 여부를 확인. 그 뒤 파일을 하나 고쳐 `.agent-guard/capture.jsonl` 이 자라는지 볼 것",
-    };
-  }
-
-  // 3) not-wired: 훅 자체가 없다. git 전용 사용자의 정상 상태이므로 고장이 아니다.
-  //    다만 이 영수증이 git 만 봤다는 사실은 반드시 밝힌다(과대 주장 금지).
+  // 2) unavailable: 훅 자체가 없다. 이건 기계가 확인한 사실이므로 원인을 말해도 된다.
+  //    git 전용 사용자의 정상 상태이므로 고장이 아니다. 다만 관찰 범위가 git 한정이라는 사실은 반드시 밝힌다.
   if (!wired) {
     return {
       ...base,
-      verdict: "not-wired",
-      text: "capture 훅 미배선. 이 영수증의 관찰 범위는 git 변경 한정이며 도구 행동·읽기·네트워크는 측정되지 않음",
+      verdict: "unavailable",
+      cause: "no-wiring",
+      text: "capture 훅 미배선이 확인됨. 이 영수증의 관찰 범위는 git 변경 한정이며 도구 행동·읽기·네트워크는 측정되지 않음",
       fix: "행동까지 남기려면 `agent-receipt capture install --write` 후 새 세션 시작",
     };
   }
 
+  // 3) silent: 훅은 배선됐는데 측정 창 안 행동이 0건.
+  //    🔴 여기서 원인을 단정하지 않는다(2026-07-16 owner 정정). 기계가 아는 것은 "못 받았다" 뿐이고,
+  //    가능한 원인은 미승인·실행 실패·다른 경로 세션 파일·미지원 도구·실제 무행동 등 여러 개다.
+  //    창 밖 잔재(stale)가 있어도 이번 세션 관찰은 0이다. 그 사실을 숨기지 않고 같이 낸다.
+  if (actions === 0) {
+    const staleNote = stale ? ` (측정 창 밖 잔재 ${stale}건은 이전 창 기록이라 이번 세션 관찰이 아님${base.lastTs ? `, 마지막 수신 ${base.lastTs}` : ""})` : "";
+    return {
+      ...base,
+      verdict: "silent",
+      cause: stale ? "stale-only" : "unknown",
+      text: `이번 측정 창에서 행동 관찰 증거를 받지 못함. 원인 미확정${staleNote}`,
+      fix: "`agent-receipt doctor` 로 훅 설치·최근 수신 상태를 확인. 그 뒤 파일을 하나 고쳐 `.agent-guard/capture.jsonl` 이 자라는지 볼 것",
+    };
+  }
+
   // 4) observed: 배선 + 측정 창 안 수신 확인.
-  return { ...base, verdict: "observed", text: `행동 관찰 정상. 측정 창 안 ${actions}건 수신(세션 ${sessions})`, fix: null };
+  return { ...base, verdict: "observed", cause: "none", text: `행동 관찰 정상. 측정 창 안 ${actions}건 수신(세션 ${sessions})`, fix: null };
 }
 
 /**
@@ -166,16 +190,38 @@ export function assessObservation(i: AssessInput): ObservationHealth {
  */
 export function zeroMeaning(h: ObservationHealth, hasInput = true): ZeroMeaning {
   if (h.verdict === "degraded") return "corrupted";
-  if (h.verdict === "not-wired" || h.verdict === "wired-silent") return "recorder-off";
+  if (h.verdict === "unavailable") return "recorder-off"; // 미배선은 기계가 확인함 → 원인 단정 가능
+  if (h.verdict === "silent") return "not-observed"; // 못 받았다는 사실만 확정 → 원인 단정 금지
   if (!hasInput) return "no-input";
   return "no-activity";
 }
 
 export const ZERO_MEANING_TEXT: Record<ZeroMeaning, string> = {
   "no-activity": "실제로 행동이 없었음(기록기 정상)",
-  "recorder-off": "기록기가 꺼져 있었음. 0 은 '없었다'가 아니라 '못 봤다'",
+  "not-observed": "이번 측정 창에서 행동 관찰 증거를 받지 못함. 0 은 '없었다'가 아니라 '못 봤다'",
+  "recorder-off": "capture 훅 미배선이 확인됨. 이 영수증은 git 변경만 관찰함",
   "no-input": "비교할 입력이 제공되지 않음. 대조 미실행",
   corrupted: "기록이 손상됨. 숫자를 믿을 수 없음",
+};
+
+/** 사용자에게 보이는 관찰 상태 코드(대표 상태). */
+export const OBSERVATION_STATE_CODE: Record<ObservationVerdict, string> = {
+  observed: "OBSERVED",
+  silent: "SILENT",
+  unavailable: "UNAVAILABLE",
+  degraded: "DEGRADED",
+};
+
+/**
+ * 원인 줄. 확정한 것만 확정으로 쓴다.
+ * SILENT 에서 가능한 원인을 나열하되 어느 하나를 고르지 않는다 — 고르면 그게 P0-2 가 고친 그 거짓말이다.
+ */
+export const OBSERVATION_CAUSE_TEXT: Record<ObservationCause, string> = {
+  none: "해당 없음",
+  "no-wiring": "확정. 어느 settings 에도 capture 훅이 없음",
+  "stale-only": "미확정. 창 밖 기록만 존재(STALE_ONLY). 훅 설치·승인·최근 수신 상태 확인 필요",
+  unknown: "미확정. 훅 설치·승인·실행 실패·미지원 도구·실제 무행동 중 어느 것인지 아직 모름",
+  corrupted: "확정. 기록 자체가 손상됨",
 };
 
 /** 디스크에서 관찰 상태를 읽는다. 실패는 조용히 흡수한다(진단이 크래시하면 안 됨). */
@@ -196,7 +242,7 @@ export function loadObservationHealth(cwd: string = process.cwd()): ObservationH
 
 export const OBSERVATION_MARK: Record<ObservationVerdict, string> = {
   observed: "✓",
-  "not-wired": "·",
-  "wired-silent": "⚠",
+  unavailable: "·", // 고장이 아니라 범위 공시(git 전용 사용자의 정상 상태)
+  silent: "⚠",
   degraded: "⚠",
 };

@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 import { createHash } from "node:crypto";
 import { redactText, REDACT_NOTE } from "./redact.js";
 import { withFileLock, writeFileAtomic } from "./lock.js";
-import { isToolOutput } from "./session.js";
+import { isToolOutput } from "./agentguard.js";
 import { evalGuard, evalLoopGuard } from "./guard.js";
 import { adaptCursorHookPayload, parseHookStdin } from "./cursor-hook.js";
 import { formatGuardDeny, inferHookVendor, type HookVendor } from "./hook-deny.js";

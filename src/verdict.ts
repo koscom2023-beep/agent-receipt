@@ -15,7 +15,7 @@ import type { ObservationHealth } from "./observation.js";
 // 우선순위(결정론): FAIL > INCOMPLETE > PASS_WITH_WARNINGS > PASS.
 //   INCOMPLETE 정의(고정): 계약 위반은 없으나 측정 기반이 불완전하다. 축이 둘이다.
 //     · 측정 창(baseline): begin 미실행 또는 stale.
-//     · 관찰 배선(observation·P0-1 2026-07-16): 훅을 깔고도 기록이 0(wired-silent)이거나 기록이 손상(degraded).
+//     · 관찰 배선(observation·P0-1 2026-07-16): 훅을 깔고도 창 안 기록이 0(silent)이거나 기록이 손상(degraded).
 //   관찰이 빈 채로 PASS 를 찍으면 영수증이 과대 주장을 한다(2026-07-16 실측: 44일 행동 0건인데 PASS 다수).
 export type SessionVerdict = "PASS" | "PASS_WITH_WARNINGS" | "FAIL" | "INCOMPLETE";
 export interface VerdictResult {
@@ -47,8 +47,8 @@ export const VERDICT_RULES: readonly VerdictRule[] = [
   { id: "stale-branch-mismatch", verdict: "INCOMPLETE", when: "begin 때와 다른 브랜치에서 측정됨" },
   { id: "stale-baseline-not-ancestor", verdict: "INCOMPLETE", when: "baseline 커밋이 현재 HEAD 의 조상이 아님(rebase/reset/amend 흔적)" },
   { id: "stale-unknown", verdict: "INCOMPLETE", when: "baseline 미적용(기타·사유 미기록)" },
-  // 관찰 배선 축(P0-1). 측정 창과 별개다. not-wired(훅 미설치)는 정상 상태라 규칙이 아니며 영수증이 범위만 공시한다.
-  { id: "observation-silent", verdict: "INCOMPLETE", when: "capture 훅이 배선됐는데 행동 기록 0건(훅이 실행되지 않음)" },
+  // 관찰 배선 축(P0-1). 측정 창과 별개다. unavailable(훅 미설치 확인)은 정상 상태라 규칙이 아니며 영수증이 범위만 공시한다.
+  { id: "observation-silent", verdict: "INCOMPLETE", when: "측정 창 안 행동 관찰 증거 0건(원인 미확정, 훅 배선은 있음)" },
   { id: "observation-degraded", verdict: "INCOMPLETE", when: "행동 기록 손상(열화 마커·체인 문제·꼬리 잘림)" },
   // PASS_WITH_WARNINGS — 통과했으나 사람이 봐야 할 신호. 자동 승격 없음(아래 WARN_ESCALATION_NOTE).
   { id: "critical-path", verdict: "PASS_WITH_WARNINGS", when: "계약 critical_paths 에 매치되는 변경이 있음" },
@@ -121,14 +121,14 @@ export interface VerdictExtras {
 
 /**
  * 관찰 상태 → INCOMPLETE 사유. 트리거를 좁게 잡는다(안전은 트리거 정확성으로).
- *  - wired-silent: 훅을 깔아놓고 기록이 0 = 진짜 고장 → INCOMPLETE
+ *  - silent     : 창 안 관찰 증거 0 → INCOMPLETE(원인은 단정하지 않는다. 못 본 것과 없는 것은 다르다)
  *  - degraded    : 기록 손상 = 숫자를 믿을 수 없음 → INCOMPLETE
- *  - not-wired   : git 전용 사용자의 정상 상태 → INCOMPLETE 아님(관찰 범위는 영수증이 따로 공시)
+ *  - unavailable: git 전용 사용자의 정상 상태 → INCOMPLETE 아님(관찰 범위는 영수증이 따로 공시)
  *  - observed    : 정상
  */
 export function observationIncomplete(o: VerdictExtras["observation"]): IncompleteDetail | null {
   if (!o) return null;
-  if (o.verdict === "wired-silent") return { code: "observation-silent", text: o.text, fix: o.fix ?? "훅 승인 후 새 세션에서 재측정" };
+  if (o.verdict === "silent") return { code: "observation-silent", text: o.text, fix: o.fix ?? "`agent-receipt doctor` 로 훅 설치·최근 수신 확인 후 재측정" };
   if (o.verdict === "degraded") return { code: "observation-degraded", text: o.text, fix: o.fix ?? "`agent-receipt capture verify` 로 확인" };
   return null;
 }

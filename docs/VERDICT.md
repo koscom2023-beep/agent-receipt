@@ -33,7 +33,7 @@
 | `stale-branch-mismatch` | begin 때와 다른 브랜치에서 측정됨 | begin 한 브랜치로 복귀, 또는 현 브랜치에서 `begin` 재실행 |
 | `stale-baseline-not-ancestor` | baseline 커밋이 현재 HEAD 의 조상이 아님(rebase/reset/amend 흔적) | `begin` 재실행(현재 HEAD 로 새 baseline) |
 | `stale-unknown` | baseline 미적용(기타·사유 미기록) | `begin` 재실행 |
-| `observation-silent` | capture 훅이 배선됐는데 행동 기록 0건(훅이 실행되지 않음) | Claude Code 새 세션 시작 + 훅 승인 확인 후 재측정 |
+| `observation-silent` | 측정 창 안 행동 관찰 증거 0건(원인 미확정, 훅 배선은 있음) | `agent-receipt doctor` 로 훅 설치·최근 수신 확인 후 재측정 |
 | `observation-degraded` | 행동 기록 손상(열화 마커·체인 문제·꼬리 잘림) | `agent-receipt capture verify` 로 확인 후 `begin` 으로 새 창 |
 
 고치는 법은 **고정 매핑**(LLM 추천 아님) — reason 줄에 `· 고치는 법:` 으로 병기된다.

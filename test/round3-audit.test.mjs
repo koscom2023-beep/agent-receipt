@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { redactText } from "../dist/redact.js";
 import { classifyEvent } from "../dist/capture.js";
 import { extractRekorUuid } from "../dist/anchor.js";
-import { isToolOutput } from "../dist/session.js";
+import { isToolOutput } from "../dist/agentguard.js";
 
 let pass = 0;
 const fail = [];

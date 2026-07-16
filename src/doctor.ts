@@ -5,7 +5,7 @@ import * as g from "./git.js";
 import { DEFAULT_CONTRACT_PATHS, discoverContract } from "./discover.js";
 import { resolveSession } from "./session.js";
 import { binaryPath, installedVersion, npmLatest, compareVersions } from "./version.js";
-import { loadObservationHealth, zeroMeaning, ZERO_MEANING_TEXT } from "./observation.js";
+import { loadObservationHealth, zeroMeaning, ZERO_MEANING_TEXT, OBSERVATION_STATE_CODE, OBSERVATION_CAUSE_TEXT } from "./observation.js";
 
 const line = "─".repeat(56);
 
@@ -53,7 +53,7 @@ export function runDoctor(cwd: string = process.cwd()): never {
   const obs = isRepo ? loadObservationHealth(cwd) : null;
   if (obs) {
     if (obs.verdict === "observed") f.push({ level: "ok", msg: `행동 관찰 정상. 기록 ${obs.actions}건 (세션 ${obs.sessions})` });
-    else if (obs.verdict === "wired-silent") f.push({ level: "warn", msg: `행동 관찰 침묵. 훅은 배선됐는데 기록 0건. ${obs.fix}` });
+    else if (obs.verdict === "silent") f.push({ level: "warn", msg: `행동 관찰 침묵(SILENT). 측정 창 안 관찰 증거 0건, 원인 미확정. ${obs.fix}` });
     else if (obs.verdict === "degraded") f.push({ level: "warn", msg: `행동 관찰 손상. ${obs.text}` });
     else f.push({ level: "ok", msg: "행동 관찰 미배선. 이 저장소의 영수증은 git 변경 한정이다('capture install --write' 로 확장)" });
   }
@@ -105,10 +105,14 @@ export function runDoctor(cwd: string = process.cwd()): never {
     // 창 밖 잔재는 반드시 드러낸다. 이걸 수신으로 세면 죽은 훅이 살아 있어 보인다(2026-07-16 실측 진범).
     if (obs.stale) console.log(`  창 밖 잔재 : ${obs.stale}건 (이전 창 기록이라 이번 세션 관찰이 아님)`);
     console.log(`  마지막 수신: ${obs.lastTs ?? "없음"}`);
+    // 대표 상태 / 의미 / 원인을 분리해서 낸다(2026-07-16 owner 정정).
+    // 기계가 확인한 것과 아직 모르는 것을 한 줄에 뭉치면, 그 줄이 곧 거짓말이 된다.
+    console.log(`  관찰 상태  : ${OBSERVATION_STATE_CODE[obs.verdict]}`);
     if (obs.actions === 0) {
       const z = zeroMeaning(obs);
-      console.log(`  0 의 뜻    : ${ZERO_MEANING_TEXT[z]}`);
+      console.log(`  의미       : ${ZERO_MEANING_TEXT[z]}`);
     }
+    console.log(`  원인       : ${OBSERVATION_CAUSE_TEXT[obs.cause]}`);
     if (obs.fix) console.log(`  고치는 법  : ${obs.fix}`);
     console.log(line);
   }

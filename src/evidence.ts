@@ -1,6 +1,6 @@
 import { matchGlob } from "./pathmatch.js";
 import * as g from "./git.js";
-import { isToolOutput } from "./session.js";
+import { isToolOutput } from "./agentguard.js";
 
 // verify 와 동일하게 tool 산출물(session.json / receipts / keys / dashboard.html)은 증거 집계에서 제외한다.
 const isToolFile = isToolOutput;
